@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse - Analytics That Move You Forward</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --primary: #6C5CE7;
+    --primary-dark: #5A4BD1;
+    --accent: #00D2FF;
+    --dark: #0F0E17;
+    --gray: #A7A9BE;
+    --light: #FFFFFE;
+    --card-bg: #1A1928;
+    --gradient: linear-gradient(135deg, #6C5CE7 0%, #00D2FF 100%);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--dark);
+    color: var(--light);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* ─── NAV ─── */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 60px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+    background: rgba(15,14,23,0.8);
+    border-bottom: 1px solid rgba(108,92,231,0.15);
+  }
+
+  .logo {
+    font-size: 24px;
+    font-weight: 800;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+
+  .nav-links { display: flex; gap: 32px; align-items: center; }
+  .nav-links a {
+    color: var(--gray);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--light); }
+
+  .nav-cta {
+    background: var(--gradient) !important;
+    color: var(--light) !important;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .nav-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(108,92,231,0.4);
+  }
+
+  /* ─── HERO ─── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 60px 80px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, rgba(108,92,231,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: rgba(108,92,231,0.12);
+    border: 1px solid rgba(108,92,231,0.25);
+    border-radius: 100px;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 24px;
+  }
+
+  .hero h1 {
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -2px;
+    max-width: 720px;
+    margin-bottom: 20px;
+  }
+
+  .hero h1 span {
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: var(--gray);
+    max-width: 520px;
+    margin-bottom: 40px;
+  }
+
+  .hero-actions { display: flex; gap: 16px; }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 32px;
+    background: var(--gradient);
+    color: var(--light);
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(108,92,231,0.4);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 32px;
+    background: transparent;
+    color: var(--light);
+    border: 1px solid rgba(167,169,190,0.25);
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    text-decoration: none;
+  }
+  .btn-secondary:hover {
+    border-color: var(--primary);
+    background: rgba(108,92,231,0.08);
+  }
+
+  /* ─── FEATURES ─── */
+  .features {
+    padding: 100px 60px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+  .section-header h2 {
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+  }
+  .section-header p {
+    color: var(--gray);
+    font-size: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .feature-card {
+    background: var(--card-bg);
+    border: 1px solid rgba(167,169,190,0.08);
+    border-radius: 16px;
+    padding: 32px;
+    transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
+  }
+  .feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(108,92,231,0.35);
+    box-shadow: 0 12px 40px rgba(108,92,231,0.12);
+  }
+
+  .feature-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin-bottom: 20px;
+    background: rgba(108,92,231,0.12);
+  }
+
+  .feature-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .feature-card p {
+    font-size: 14px;
+    color: var(--gray);
+    line-height: 1.6;
+  }
+
+  /* ─── PRICING ─── */
+  .pricing {
+    padding: 100px 60px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .price-card {
+    background: var(--card-bg);
+    border: 1px solid rgba(167,169,190,0.08);
+    border-radius: 16px;
+    padding: 36px 28px;
+    text-align: center;
+    transition: transform 0.3s, border-color 0.3s;
+    position: relative;
+  }
+  .price-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(108,92,231,0.35);
+  }
+  .price-card.featured {
+    border-color: var(--primary);
+    box-shadow: 0 0 60px rgba(108,92,231,0.15);
+  }
+  .price-card.featured::before {
+    content: 'Popular';
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gradient);
+    padding: 4px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .price-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--gray);
+  }
+  .price-amount {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    margin-bottom: 4px;
+  }
+  .price-period {
+    font-size: 14px;
+    color: var(--gray);
+    margin-bottom: 24px;
+  }
+  .price-features {
+    list-style: none;
+    margin-bottom: 28px;
+    text-align: left;
+  }
+  .price-features li {
+    padding: 8px 0;
+    font-size: 14px;
+    color: var(--gray);
+    border-bottom: 1px solid rgba(167,169,190,0.06);
+  }
+  .price-features li::before {
+    content: '\2713';
+    color: var(--accent);
+    margin-right: 10px;
+    font-weight: 700;
+  }
+
+  .price-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+    text-decoration: none;
+    border: none;
+  }
+  .price-btn:hover { transform: translateY(-1px); }
+  .price-btn.primary {
+    background: var(--gradient);
+    color: var(--light);
+  }
+  .price-btn.outline {
+    background: transparent;
+    border: 1px solid rgba(167,169,190,0.25);
+    color: var(--light);
+  }
+
+  /* ─── CTA ─── */
+  .cta {
+    padding: 100px 60px;
+    text-align: center;
+  }
+  .cta-box {
+    max-width: 600px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border: 1px solid rgba(108,92,231,0.2);
+    border-radius: 20px;
+    padding: 60px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-box::before {
+    content: '';
+    position: absolute;
+    top: -100px;
+    right: -100px;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(108,92,231,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .cta-box h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .cta-box p {
+    color: var(--gray);
+    margin-bottom: 28px;
+    font-size: 15px;
+  }
+
+  .cta-form {
+    display: flex;
+    gap: 12px;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+  .cta-form input {
+    flex: 1;
+    padding: 12px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(167,169,190,0.2);
+    background: rgba(255,255,255,0.04);
+    color: var(--light);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .cta-form input::placeholder { color: var(--gray); }
+  .cta-form input:focus { border-color: var(--primary); }
+  .cta-form button {
+    padding: 12px 28px;
+    background: var(--gradient);
+    color: var(--light);
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .cta-form button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(108,92,231,0.4);
+  }
+
+  /* ─── FOOTER ─── */
+  footer {
+    padding: 40px 60px;
+    text-align: center;
+    color: var(--gray);
+    font-size: 13px;
+    border-top: 1px solid rgba(167,169,190,0.06);
+  }
+
+  /* ─── RESPONSIVE (Mobile) ─── */
+  @media (max-width: 600px) {
+    nav { padding: 14px 20px; }
+    .nav-links { gap: 12px; }
+    .nav-links a { font-size: 12px; }
+    .nav-cta { padding: 8px 14px; font-size: 12px; }
+    .logo { font-size: 20px; }
+
+    .hero { padding: 100px 24px 60px; min-height: auto; }
+    .hero h1 { font-size: 32px; letter-spacing: -1px; }
+    .hero p { font-size: 15px; }
+    .hero-actions { flex-direction: column; align-items: center; gap: 10px; }
+    .btn-primary, .btn-secondary { padding: 12px 24px; font-size: 14px; width: 100%; justify-content: center; }
+
+    .features { padding: 60px 20px; }
+    .section-header h2 { font-size: 28px; }
+    .section-header p { font-size: 14px; }
+    .feature-grid { grid-template-columns: 1fr; gap: 16px; }
+    .feature-card { padding: 24px; }
+
+    .pricing { padding: 60px 20px; }
+    .pricing-grid { grid-template-columns: 1fr; gap: 16px; }
+    .price-card { padding: 28px 20px; }
+    .price-amount { font-size: 36px; }
+
+    .cta { padding: 60px 20px; }
+    .cta-box { padding: 36px 24px; }
+    .cta-box h2 { font-size: 24px; }
+    .cta-form { flex-direction: column; }
+    .cta-form input, .cta-form button { width: 100%; }
+
+    footer { padding: 24px 20px; }
+  }
+
+  @media (min-width: 601px) and (max-width: 1024px) {
+    nav { padding: 16px 32px; }
+    .hero { padding: 120px 32px 80px; }
+    .hero h1 { font-size: 48px; }
+    .features { padding: 80px 32px; }
+    .feature-grid { grid-template-columns: repeat(2, 1fr); }
+    .pricing { padding: 80px 32px; }
+    .pricing-grid { grid-template-columns: repeat(2, 1fr); }
+    .price-card:last-child { grid-column: span 2; max-width: 50%; justify-self: center; }
+    .cta { padding: 80px 32px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">Pulse</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#cta">Contact</a>
+    <a href="#cta" class="nav-cta">Get Started</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="badge">New: Real-time collaboration</div>
+  <h1>Analytics that <span>move you forward</span></h1>
+  <p>Track, analyze, and act on your product data with dashboards that update in real time. Built for teams that ship fast.</p>
+  <div class="hero-actions">
+    <a href="#cta" class="btn-primary" id="hero-cta">Start Free Trial</a>
+    <a href="#features" class="btn-secondary">See Features</a>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-header">
+    <h2>Everything you need</h2>
+    <p>Powerful tools to understand your users and grow faster.</p>
+  </div>
+  <div class="feature-grid">
+    <div class="feature-card" id="feature-1">
+      <div class="feature-icon">&#x26A1;</div>
+      <h3>Real-time Events</h3>
+      <p>See every click, scroll, and conversion as it happens. Zero latency, zero compromise.</p>
+    </div>
+    <div class="feature-card" id="feature-2">
+      <div class="feature-icon">&#x1F4CA;</div>
+      <h3>Smart Dashboards</h3>
+      <p>AI-powered dashboards that surface insights before you even ask the right question.</p>
+    </div>
+    <div class="feature-card" id="feature-3">
+      <div class="feature-icon">&#x1F510;</div>
+      <h3>Privacy First</h3>
+      <p>GDPR, CCPA, and SOC2 compliant out of the box. Your users' data stays safe.</p>
+    </div>
+    <div class="feature-card" id="feature-4">
+      <div class="feature-icon">&#x1F4E6;</div>
+      <h3>One-line Setup</h3>
+      <p>Drop in a single script tag and start collecting events. No build step required.</p>
+    </div>
+    <div class="feature-card" id="feature-5">
+      <div class="feature-icon">&#x1F504;</div>
+      <h3>Funnel Analysis</h3>
+      <p>Build multi-step funnels and find exactly where users drop off in seconds.</p>
+    </div>
+    <div class="feature-card" id="feature-6">
+      <div class="feature-icon">&#x1F680;</div>
+      <h3>Team Collaboration</h3>
+      <p>Share dashboards, set alerts, and annotate events with your whole team.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="section-header">
+    <h2>Simple pricing</h2>
+    <p>Start free, scale when you're ready.</p>
+  </div>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <h3>Starter</h3>
+      <div class="price-amount">$0</div>
+      <div class="price-period">per month</div>
+      <ul class="price-features">
+        <li>10k events/month</li>
+        <li>3 dashboards</li>
+        <li>7-day retention</li>
+        <li>Email support</li>
+      </ul>
+      <button class="price-btn outline">Get Started</button>
+    </div>
+    <div class="price-card featured">
+      <h3>Pro</h3>
+      <div class="price-amount">$29</div>
+      <div class="price-period">per month</div>
+      <ul class="price-features">
+        <li>1M events/month</li>
+        <li>Unlimited dashboards</li>
+        <li>12-month retention</li>
+        <li>Priority support</li>
+      </ul>
+      <button class="price-btn primary" id="pricing-cta">Start Free Trial</button>
+    </div>
+    <div class="price-card">
+      <h3>Enterprise</h3>
+      <div class="price-amount">Custom</div>
+      <div class="price-period">contact us</div>
+      <ul class="price-features">
+        <li>Unlimited events</li>
+        <li>SSO &amp; SAML</li>
+        <li>Dedicated infra</li>
+        <li>SLA guarantee</li>
+      </ul>
+      <button class="price-btn outline">Contact Sales</button>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="cta">
+  <div class="cta-box">
+    <h2>Ready to get started?</h2>
+    <p>Join 2,000+ teams already using Pulse to ship smarter.</p>
+    <form class="cta-form" id="signup-form" onsubmit="return false;">
+      <input type="email" id="email-input" placeholder="you@company.com" autocomplete="off" />
+      <button type="submit" id="submit-btn">Get Access</button>
+    </form>
+  </div>
+</section>
+
+<footer>
+  &copy; 2025 Pulse Inc. All rights reserved.
+</footer>
+
+</body>
+</html>

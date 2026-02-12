@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #6C5CE7;
+    --accent: #00D2FF;
+    --bg: #0F0E17;
+    --sidebar: #1A1928;
+    --card: #1E1D2F;
+    --border: rgba(167,169,190,0.08);
+    --text: #FFFFFE;
+    --gray: #A7A9BE;
+    --green: #00E676;
+    --red: #FF5252;
+    --yellow: #FFD740;
+    --gradient: linear-gradient(135deg, #6C5CE7 0%, #00D2FF 100%);
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* Layout */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 230px;
+    background: var(--sidebar);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-logo {
+    padding: 0 24px 24px;
+    font-size: 22px;
+    font-weight: 800;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 24px;
+    color: var(--gray);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover, .nav-item.active {
+    color: var(--text);
+    background: rgba(108,92,231,0.08);
+    border-left-color: var(--primary);
+  }
+  .nav-icon { width: 20px; text-align: center; font-size: 15px; }
+  .nav-divider { height: 1px; background: var(--border); margin: 12px 24px; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* Topbar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(15,14,23,0.95);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .page-title { font-size: 18px; font-weight: 700; }
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    width: 260px;
+  }
+  .search-box input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    width: 100%;
+  }
+  .search-box input::placeholder { color: var(--gray); }
+  .search-icon { color: var(--gray); font-size: 13px; }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .notif-btn {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 11px;
+    color: var(--gray);
+    cursor: pointer;
+    font-size: 15px;
+    transition: all 0.2s;
+  }
+  .notif-btn:hover { border-color: var(--primary); }
+  .notif-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 16px; height: 16px;
+    background: var(--red);
+    border-radius: 50%;
+    font-size: 9px;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700;
+  }
+  .avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--gradient);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .avatar:hover { transform: scale(1.08); }
+
+  /* Notification dropdown */
+  .notif-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    width: 300px;
+    background: var(--sidebar);
+    border: 1px solid rgba(108,92,231,0.2);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    z-index: 50;
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .notif-dropdown.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .notif-dropdown-header {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+  }
+  .notif-dropdown-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .notif-dropdown-item:last-child { border-bottom: none; }
+  .notif-dropdown-item:hover { background: rgba(108,92,231,0.06); }
+  .notif-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .notif-dropdown-text { font-size: 12px; color: var(--gray); line-height: 1.4; }
+  .notif-dropdown-text strong { color: var(--text); }
+  .notif-dropdown-time { font-size: 10px; color: rgba(167,169,190,0.6); margin-top: 2px; }
+
+  /* Content */
+  .content { padding: 22px 28px; }
+
+  /* Stat card fade-in animation */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Stats */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    transition: all 0.3s;
+    opacity: 0;
+    animation: fadeInUp 0.5s ease forwards;
+  }
+  .stat-card:nth-child(1) { animation-delay: 0.05s; }
+  .stat-card:nth-child(2) { animation-delay: 0.12s; }
+  .stat-card:nth-child(3) { animation-delay: 0.19s; }
+  .stat-card:nth-child(4) { animation-delay: 0.26s; }
+  .stat-card:hover {
+    border-color: rgba(108,92,231,0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(108,92,231,0.1);
+  }
+  .stat-label { font-size: 12px; color: var(--gray); margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-weight: 800; letter-spacing: -1px; margin-bottom: 2px; }
+  .stat-change { font-size: 11px; display: flex; align-items: center; gap: 4px; }
+  .stat-change.up { color: var(--green); }
+  .stat-change.down { color: var(--red); }
+
+  /* Chart */
+  .chart-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .chart-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .chart-title { font-size: 15px; font-weight: 600; }
+  .chart-tabs { display: flex; gap: 4px; }
+  .chart-tab {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--gray);
+    background: transparent;
+    border: none;
+    transition: all 0.2s;
+  }
+  .chart-tab:hover { color: var(--text); }
+  .chart-tab.active { background: var(--primary); color: var(--text); }
+  .chart-area {
+    height: 180px;
+    display: flex;
+    align-items: flex-end;
+    gap: 5px;
+    padding: 0 4px;
+  }
+  .chart-bar {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    min-height: 8px;
+  }
+  .chart-bar:hover { opacity: 0.8; filter: brightness(1.2); }
+  .chart-labels {
+    display: flex; justify-content: space-between;
+    margin-top: 6px; padding: 0 4px;
+  }
+  .chart-label { font-size: 10px; color: var(--gray); }
+
+  /* Table */
+  .table-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-title { font-size: 15px; font-weight: 600; }
+  .btn-new {
+    padding: 7px 18px;
+    background: var(--gradient);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-new:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(108,92,231,0.3); }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    padding: 10px 20px;
+    text-align: left;
+    font-size: 11px;
+    color: var(--gray);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:hover td { background: rgba(108,92,231,0.04); }
+  .status-badge {
+    display: inline-flex;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .status-badge.active { background: rgba(0,230,118,0.1); color: var(--green); }
+  .status-badge.pending { background: rgba(255,215,64,0.1); color: var(--yellow); }
+  .status-badge.closed { background: rgba(167,169,190,0.1); color: var(--gray); }
+  .btn-view {
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--gray);
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-view:hover { border-color: var(--primary); color: var(--text); }
+  .user-cell { display: flex; align-items: center; gap: 8px; }
+  .user-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; color: white;
+  }
+
+  /* Activity section */
+  .activity-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .activity-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .activity-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .activity-text { font-size: 13px; flex: 1; }
+  .activity-text strong { font-weight: 600; }
+  .activity-time { font-size: 11px; color: var(--gray); white-space: nowrap; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--sidebar);
+    border: 1px solid rgba(108,92,231,0.2);
+    border-radius: 16px;
+    padding: 28px;
+    width: 440px;
+    max-width: 90vw;
+  }
+  .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 18px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; color: var(--gray); margin-bottom: 5px; }
+  .form-group input, .form-group textarea {
+    width: 100%;
+    padding: 9px 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group textarea:focus { border-color: var(--primary); }
+  .form-group textarea { resize: vertical; min-height: 70px; font-family: inherit; }
+  .form-group input::placeholder, .form-group textarea::placeholder { color: var(--gray); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .btn-cancel {
+    padding: 9px 20px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--gray);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-cancel:hover { border-color: var(--gray); color: var(--text); }
+  .btn-create {
+    padding: 9px 20px;
+    background: var(--gradient);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-create:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(108,92,231,0.3); }
+
+  /* Toast notification */
+  @keyframes toastSlideIn {
+    from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  }
+  @keyframes toastFadeOut {
+    from { transform: translateX(-50%) translateY(0); opacity: 1; }
+    to { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+  }
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #00E676, #00C853);
+    color: #0a2e1a;
+    padding: 12px 28px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,230,118,0.3);
+    animation: toastSlideIn 0.3s ease forwards;
+    pointer-events: none;
+  }
+  .toast.fade-out {
+    animation: toastFadeOut 0.4s ease forwards;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .sidebar { display: none; }
+    .topbar { padding: 10px 14px; }
+    .search-box { width: 160px; }
+    .page-title { font-size: 15px; }
+    .content { padding: 14px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-value { font-size: 20px; }
+    .chart-area { height: 130px; }
+    .table-section { overflow-x: auto; }
+    table { min-width: 560px; }
+    .modal { padding: 20px; }
+    .notif-dropdown { width: 260px; right: -40px; }
+  }
+  @media (min-width: 601px) and (max-width: 1024px) {
+    .sidebar { width: 190px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .search-box { width: 200px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo">Pulse</div>
+    <nav>
+      <div class="nav-item active" id="nav-dashboard">
+        <span class="nav-icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" id="nav-analytics">
+        <span class="nav-icon">📈</span> Analytics
+      </div>
+      <div class="nav-item" id="nav-projects">
+        <span class="nav-icon">📁</span> Projects
+      </div>
+      <div class="nav-item" id="nav-team">
+        <span class="nav-icon">👥</span> Team
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-item" id="nav-reports">
+        <span class="nav-icon">📋</span> Reports
+      </div>
+      <div class="nav-item" id="nav-settings">
+        <span class="nav-icon">⚙️</span> Settings
+      </div>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">Dashboard</h1>
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="Search metrics, projects..." autocomplete="off" />
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="notif-btn" id="notif-btn" style="position:relative;">
+          🔔<span class="notif-badge">3</span>
+          <div class="notif-dropdown" id="notif-dropdown">
+            <div class="notif-dropdown-header">Notifications</div>
+            <div class="notif-dropdown-item">
+              <div class="notif-dot" style="background:var(--green)"></div>
+              <div>
+                <div class="notif-dropdown-text"><strong>Sarah J.</strong> completed the Website Redesign milestone</div>
+                <div class="notif-dropdown-time">2 minutes ago</div>
+              </div>
+            </div>
+            <div class="notif-dropdown-item">
+              <div class="notif-dot" style="background:var(--accent)"></div>
+              <div>
+                <div class="notif-dropdown-text"><strong>Mike K.</strong> pushed 14 commits to Mobile App v2.0</div>
+                <div class="notif-dropdown-time">18 minutes ago</div>
+              </div>
+            </div>
+            <div class="notif-dropdown-item">
+              <div class="notif-dot" style="background:var(--yellow)"></div>
+              <div>
+                <div class="notif-dropdown-text"><strong>Emma C.</strong> requested review on API Integration</div>
+                <div class="notif-dropdown-time">1 hour ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="avatar" id="avatar-btn">SJ</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card" id="stat-users">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value">12,486</div>
+          <div class="stat-change up">↑ 12.5% from last month</div>
+        </div>
+        <div class="stat-card" id="stat-revenue">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value">$48.2K</div>
+          <div class="stat-change up">↑ 8.3% from last month</div>
+        </div>
+        <div class="stat-card" id="stat-conversion">
+          <div class="stat-label">Conversion Rate</div>
+          <div class="stat-value">4.28%</div>
+          <div class="stat-change up">↑ 0.6% from last month</div>
+        </div>
+        <div class="stat-card" id="stat-active">
+          <div class="stat-label">Active Projects</div>
+          <div class="stat-value">342</div>
+          <div class="stat-change down">↓ 2.1% from last month</div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="chart-section">
+        <div class="chart-header">
+          <h3 class="chart-title">Revenue Overview</h3>
+          <div class="chart-tabs">
+            <button class="chart-tab" id="tab-daily">Daily</button>
+            <button class="chart-tab active" id="tab-weekly">Weekly</button>
+            <button class="chart-tab" id="tab-monthly">Monthly</button>
+          </div>
+        </div>
+        <div class="chart-area" id="chart-area"></div>
+        <div class="chart-labels">
+          <span class="chart-label">Mon</span>
+          <span class="chart-label">Tue</span>
+          <span class="chart-label">Wed</span>
+          <span class="chart-label">Thu</span>
+          <span class="chart-label">Fri</span>
+          <span class="chart-label">Sat</span>
+          <span class="chart-label">Sun</span>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-section">
+        <div class="table-header">
+          <h3 class="table-title">Recent Projects</h3>
+          <button class="btn-new" id="btn-new-project">+ New Project</button>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Project</th><th>Owner</th><th>Status</th><th>Progress</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr id="row-1">
+              <td><strong>Website Redesign</strong></td>
+              <td><div class="user-cell"><span class="user-avatar" style="background:#6C5CE7">SJ</span> Sarah J.</div></td>
+              <td><span class="status-badge active">Active</span></td>
+              <td>78%</td>
+              <td><button class="btn-view" id="btn-view-1">View</button></td>
+            </tr>
+            <tr id="row-2">
+              <td><strong>Mobile App v2.0</strong></td>
+              <td><div class="user-cell"><span class="user-avatar" style="background:#00D2FF">MK</span> Mike K.</div></td>
+              <td><span class="status-badge active">Active</span></td>
+              <td>45%</td>
+              <td><button class="btn-view" id="btn-view-2">View</button></td>
+            </tr>
+            <tr id="row-3">
+              <td><strong>API Integration</strong></td>
+              <td><div class="user-cell"><span class="user-avatar" style="background:#FFD740;color:#333">EC</span> Emma C.</div></td>
+              <td><span class="status-badge pending">Pending</span></td>
+              <td>12%</td>
+              <td><button class="btn-view" id="btn-view-3">View</button></td>
+            </tr>
+            <tr id="row-4">
+              <td><strong>Q4 Analytics Report</strong></td>
+              <td><div class="user-cell"><span class="user-avatar" style="background:#00E676;color:#333">DL</span> David L.</div></td>
+              <td><span class="status-badge closed">Closed</span></td>
+              <td>100%</td>
+              <td><button class="btn-view" id="btn-view-4">View</button></td>
+            </tr>
+            <tr id="row-5">
+              <td><strong>Payment Gateway</strong></td>
+              <td><div class="user-cell"><span class="user-avatar" style="background:#FF5252">AL</span> Amy L.</div></td>
+              <td><span class="status-badge active">Active</span></td>
+              <td>63%</td>
+              <td><button class="btn-view" id="btn-view-5">View</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Activity -->
+      <div class="activity-section" id="activity-section">
+        <h3 class="activity-title">Recent Activity</h3>
+        <div class="activity-item">
+          <div class="activity-dot" style="background:var(--green)"></div>
+          <div class="activity-text"><strong>Sarah J.</strong> completed Website Redesign milestone</div>
+          <span class="activity-time">2 min ago</span>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot" style="background:var(--accent)"></div>
+          <div class="activity-text"><strong>Mike K.</strong> pushed 14 commits to Mobile App v2.0</div>
+          <span class="activity-time">18 min ago</span>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot" style="background:var(--yellow)"></div>
+          <div class="activity-text"><strong>Emma C.</strong> created API Integration project</div>
+          <span class="activity-time">1 hour ago</span>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot" style="background:var(--primary)"></div>
+          <div class="activity-text"><strong>David L.</strong> exported Q4 Analytics Report</div>
+          <span class="activity-time">3 hours ago</span>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot" style="background:var(--red)"></div>
+          <div class="activity-text"><strong>Amy L.</strong> flagged Payment Gateway issue #42</div>
+          <span class="activity-time">5 hours ago</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3>Create New Project</h3>
+    <div class="form-group">
+      <label>Project Name</label>
+      <input type="text" id="project-name" placeholder="Enter project name" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="project-desc" placeholder="Brief project description..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Team Lead</label>
+      <input type="text" id="project-lead" placeholder="Assign a team lead" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-cancel">Cancel</button>
+      <button class="btn-create" id="btn-create">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Generate chart bars with animated height
+  const data = [65, 82, 48, 91, 73, 56, 88];
+  const area = document.getElementById('chart-area');
+  data.forEach((v, i) => {
+    const b = document.createElement('div');
+    b.className = 'chart-bar';
+    b.style.height = '0%';
+    b.dataset.target = v;
+    b.style.background = i % 2 === 0
+      ? 'linear-gradient(180deg, #6C5CE7, rgba(108,92,231,0.25))'
+      : 'linear-gradient(180deg, #00D2FF, rgba(0,210,255,0.25))';
+    area.appendChild(b);
+  });
+  // Animate bars after short delay
+  setTimeout(() => {
+    document.querySelectorAll('.chart-bar').forEach(bar => {
+      bar.style.height = bar.dataset.target + '%';
+    });
+  }, 100);
+
+  // Chart tabs
+  document.querySelectorAll('.chart-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      // Reset to 0 then animate to new values
+      document.querySelectorAll('.chart-bar').forEach(bar => {
+        bar.style.height = '0%';
+      });
+      setTimeout(() => {
+        document.querySelectorAll('.chart-bar').forEach(bar => {
+          bar.style.height = (25 + Math.random() * 65) + '%';
+        });
+      }, 80);
+    });
+  });
+
+  // Sidebar nav
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+
+  // Notification dropdown toggle
+  const notifBtn = document.getElementById('notif-btn');
+  const notifDropdown = document.getElementById('notif-dropdown');
+  notifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    notifDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', () => {
+    notifDropdown.classList.remove('open');
+  });
+
+  // Toast helper
+  function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.classList.add('fade-out'); }, 1600);
+    setTimeout(() => { toast.remove(); }, 2000);
+  }
+
+  // Modal
+  document.getElementById('btn-new-project').addEventListener('click', () => {
+    document.getElementById('modal-overlay').classList.add('open');
+  });
+  document.getElementById('btn-cancel').addEventListener('click', () => {
+    document.getElementById('modal-overlay').classList.remove('open');
+  });
+  document.getElementById('btn-create').addEventListener('click', () => {
+    document.getElementById('modal-overlay').classList.remove('open');
+    showToast('Project created successfully!');
+  });
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+  });
+</script>
+</body>
+</html>

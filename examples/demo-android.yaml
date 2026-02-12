@@ -1,0 +1,139 @@
+name: "Pulse Android Demo"
+description: "Android 목업 — 모바일 대시보드 (~26초)"
+
+viewport:
+  width: 412
+  height: 915
+
+effects:
+  zoom:
+    enabled: true
+    scale: 1.5
+    duration: 500
+    autoZoom:
+      followCursor: true
+      maxScale: 1.7
+      transitionDuration: 300
+  cursor:
+    enabled: true
+    size: 16
+    smoothing: true
+    clickEffect: true
+    clickColor: "rgba(0, 210, 255, 0.35)"
+    highlight: true
+    highlightRadius: 28
+    highlightColor: "rgba(0, 210, 255, 0.15)"
+  background:
+    type: gradient
+    value: "linear-gradient(135deg, #0d1117 0%, #161b22 50%, #21262d 100%)"
+    padding: 56
+    borderRadius: 14
+    shadow: true
+  deviceFrame:
+    enabled: true
+    type: android
+    darkMode: true
+  keystroke:
+    enabled: true
+    position: bottom-center
+    fontSize: 14
+    backgroundColor: "rgba(0, 0, 0, 0.85)"
+    textColor: "#e0e0e0"
+    fadeAfter: 1500
+  watermark:
+    enabled: true
+    text: "PlayShot"
+    position: bottom-right
+    opacity: 0.3
+    fontSize: 11
+    color: "#ffffff"
+
+output:
+  format: mp4
+  width: 540
+  height: 1080
+  fps: 30
+  quality: 80
+
+steps:
+  - name: "Load"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: navigate
+        url: "demo-site/dashboard.html"
+        waitUntil: load
+
+  - name: "Hover Conversion"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#stat-conversion"
+
+  - name: "Hover Active Projects"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#stat-active"
+
+  - name: "Scroll to chart"
+    captureDelay: 80
+    holdDuration: 500
+    actions:
+      - action: scroll
+        y: 260
+        smooth: true
+
+  - name: "Switch to Daily chart"
+    captureDelay: 50
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#tab-daily"
+
+  - name: "Scroll to table"
+    captureDelay: 80
+    holdDuration: 500
+    transition: fade
+    actions:
+      - action: scroll
+        y: 360
+        smooth: true
+
+  - name: "Hover row"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#row-2"
+
+  - name: "Open modal"
+    captureDelay: 80
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#btn-new-project"
+
+  - name: "Type name"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-name"
+      - action: type
+        selector: "#project-name"
+        text: "Android v3"
+        delay: 18
+
+  - name: "Type desc"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-desc"
+      - action: type
+        selector: "#project-desc"
+        text: "Material You redesign"
+        delay: 16

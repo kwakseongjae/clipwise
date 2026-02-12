@@ -1,0 +1,60 @@
+{
+  "name": "playshot",
+  "version": "0.1.0",
+  "description": "Playwright-based cinematic screen recorder for product demos - like Screen Studio, but scriptable",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "playshot": "dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "playwright",
+    "screen-recorder",
+    "demo",
+    "video",
+    "screenshot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0",
+    "yaml": "^2.7.0",
+    "sharp": "^0.33.0",
+    "commander": "^13.0.0",
+    "ora": "^8.0.0",
+    "chalk": "^5.4.0",
+    "zod": "^3.24.0",
+    "gifenc": "^1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsup": "^8.0.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0"
+  }
+}

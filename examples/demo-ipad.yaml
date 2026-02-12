@@ -1,0 +1,180 @@
+name: "Pulse iPad Demo"
+description: "iPad Pro 목업 — 태블릿 대시보드 (~28초)"
+
+viewport:
+  width: 1024
+  height: 768
+
+effects:
+  zoom:
+    enabled: true
+    scale: 1.6
+    duration: 500
+    autoZoom:
+      followCursor: true
+      maxScale: 1.8
+      transitionDuration: 300
+  cursor:
+    enabled: true
+    size: 18
+    smoothing: true
+    clickEffect: true
+    clickColor: "rgba(108, 92, 231, 0.35)"
+    trail: true
+    trailLength: 5
+    trailColor: "rgba(108, 92, 231, 0.18)"
+    highlight: true
+    highlightRadius: 32
+    highlightColor: "rgba(108, 92, 231, 0.12)"
+  background:
+    type: gradient
+    value: "linear-gradient(145deg, #2d1b69 0%, #11998e 100%)"
+    padding: 52
+    borderRadius: 14
+    shadow: true
+  deviceFrame:
+    enabled: true
+    type: ipad
+    darkMode: false
+  keystroke:
+    enabled: true
+    position: bottom-center
+    fontSize: 15
+    backgroundColor: "rgba(0, 0, 0, 0.8)"
+    textColor: "#e0e0e0"
+    fadeAfter: 1500
+  watermark:
+    enabled: true
+    text: "PlayShot"
+    position: bottom-right
+    opacity: 0.3
+    fontSize: 12
+    color: "#ffffff"
+
+output:
+  format: mp4
+  width: 1280
+  height: 960
+  fps: 30
+  quality: 80
+
+steps:
+  - name: "Load"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: navigate
+        url: "demo-site/dashboard.html"
+        waitUntil: load
+
+  - name: "Hover Users"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#stat-users"
+
+  - name: "Hover Revenue"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#stat-revenue"
+
+  - name: "Switch to Monthly chart"
+    captureDelay: 50
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#tab-monthly"
+
+  - name: "Switch to Daily chart"
+    captureDelay: 50
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#tab-daily"
+
+  - name: "Search"
+    captureDelay: 50
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#search-input"
+      - action: type
+        selector: "#search-input"
+        text: "projects"
+        delay: 18
+
+  - name: "Scroll to projects"
+    captureDelay: 80
+    holdDuration: 500
+    transition: fade
+    actions:
+      - action: scroll
+        y: 350
+        smooth: true
+
+  - name: "Hover row"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: hover
+        selector: "#row-1"
+
+  - name: "Click View"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: click
+        selector: "#btn-view-1"
+
+  - name: "Open modal"
+    captureDelay: 80
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#btn-new-project"
+
+  - name: "Type name"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-name"
+      - action: type
+        selector: "#project-name"
+        text: "iPad App"
+        delay: 18
+
+  - name: "Type desc"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-desc"
+      - action: type
+        selector: "#project-desc"
+        text: "Multitasking split-view support"
+        delay: 15
+
+  - name: "Create (toast)"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#btn-create"
+
+  - name: "Click notification bell"
+    captureDelay: 80
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#notif-btn"
+
+  - name: "Navigate to Team"
+    captureDelay: 50
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#nav-team"

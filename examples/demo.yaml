@@ -1,0 +1,242 @@
+name: "Pulse Dashboard Demo"
+description: "SaaS 대시보드 시연 — 브라우저 프레임 (~30초)"
+
+viewport:
+  width: 1280
+  height: 800
+
+effects:
+  zoom:
+    enabled: true
+    scale: 1.8
+    duration: 500
+    autoZoom:
+      followCursor: true
+      maxScale: 2.0
+      transitionDuration: 300
+  cursor:
+    enabled: true
+    size: 20
+    smoothing: true
+    clickEffect: true
+    clickColor: "rgba(108, 92, 231, 0.35)"
+    trail: true
+    trailLength: 6
+    trailColor: "rgba(108, 92, 231, 0.2)"
+    highlight: true
+    highlightRadius: 35
+    highlightColor: "rgba(108, 92, 231, 0.15)"
+  background:
+    type: gradient
+    value: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)"
+    padding: 48
+    borderRadius: 14
+    shadow: true
+  deviceFrame:
+    enabled: true
+    type: browser
+    darkMode: true
+  keystroke:
+    enabled: true
+    position: bottom-center
+    fontSize: 16
+    backgroundColor: "rgba(0, 0, 0, 0.8)"
+    textColor: "#e0e0e0"
+    fadeAfter: 1500
+  watermark:
+    enabled: true
+    text: "PlayShot"
+    position: bottom-right
+    opacity: 0.35
+    fontSize: 13
+    color: "#ffffff"
+
+output:
+  format: mp4
+  width: 1280
+  height: 800
+  fps: 30
+  quality: 80
+
+steps:
+  - name: "Load dashboard"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: navigate
+        url: "demo-site/dashboard.html"
+        waitUntil: load
+
+  - name: "Hover Total Users"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#stat-users"
+
+  - name: "Hover Revenue"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: hover
+        selector: "#stat-revenue"
+
+  - name: "Hover Conversion"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: hover
+        selector: "#stat-conversion"
+
+  - name: "Hover Active Projects"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: hover
+        selector: "#stat-active"
+
+  - name: "Switch to Monthly chart"
+    captureDelay: 80
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#tab-monthly"
+
+  - name: "Switch to Daily chart"
+    captureDelay: 80
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#tab-daily"
+
+  - name: "Search"
+    captureDelay: 50
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#search-input"
+      - action: type
+        selector: "#search-input"
+        text: "conversion"
+        delay: 18
+
+  - name: "Scroll to projects"
+    captureDelay: 100
+    holdDuration: 500
+    transition: fade
+    actions:
+      - action: scroll
+        y: 420
+        smooth: true
+
+  - name: "Hover Website Redesign"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: hover
+        selector: "#row-1"
+
+  - name: "Hover Mobile App"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: hover
+        selector: "#row-2"
+
+  - name: "Click View"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: click
+        selector: "#btn-view-2"
+
+  - name: "Open New Project modal"
+    captureDelay: 100
+    holdDuration: 700
+    actions:
+      - action: click
+        selector: "#btn-new-project"
+
+  - name: "Type project name"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-name"
+      - action: type
+        selector: "#project-name"
+        text: "Q1 Launch Campaign"
+        delay: 16
+
+  - name: "Type description"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-desc"
+      - action: type
+        selector: "#project-desc"
+        text: "Sprint planning and launch prep for Q1"
+        delay: 15
+
+  - name: "Type team lead"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#project-lead"
+      - action: type
+        selector: "#project-lead"
+        text: "Sarah J."
+        delay: 18
+
+  - name: "Create project (toast)"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#btn-create"
+
+  - name: "Scroll back to top"
+    captureDelay: 80
+    holdDuration: 500
+    actions:
+      - action: scroll
+        y: -800
+        smooth: true
+
+  - name: "Click notification bell"
+    captureDelay: 80
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#notif-btn"
+
+  - name: "Click Analytics"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: click
+        selector: "#nav-analytics"
+
+  - name: "Click Projects"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: click
+        selector: "#nav-projects"
+
+  - name: "Scroll to activity"
+    captureDelay: 100
+    holdDuration: 600
+    actions:
+      - action: scroll
+        y: 600
+        smooth: true
+
+  - name: "Hover activity item"
+    captureDelay: 50
+    holdDuration: 800
+    actions:
+      - action: hover
+        selector: "#activity-section"
