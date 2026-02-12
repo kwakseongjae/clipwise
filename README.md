@@ -4,7 +4,9 @@
 
 Scriptable cinematic screen recorder for product demos — YAML in, polished MP4 out. Powered by Playwright CDP.
 
-![Clipwise Demo](https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif)
+<p align="center">
+  <img src="https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif" width="100%" alt="Clipwise Demo" />
+</p>
 
 > *Generated with `npx clipwise demo` — zero config, one command.*
 

@@ -4,7 +4,9 @@
 
 YAML 시나리오를 작성하면 시네마틱 데모 영상(MP4/GIF)을 자동으로 만들어주는 스크린 레코더. Playwright CDP 기반.
 
-![Clipwise Demo](https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif)
+<p align="center">
+  <img src="https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif" width="100%" alt="Clipwise Demo" />
+</p>
 
 > *`npx clipwise demo` 한 줄로 생성된 영상입니다.*
 
