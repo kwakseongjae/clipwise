@@ -1,5 +1,5 @@
 // Core recorder
-export { PlayShotRecorder } from "./core/recorder.js";
+export { ClipwiseRecorder } from "./core/recorder.js";
 
 // Composition & encoding
 export { CanvasRenderer } from "./compose/canvas-renderer.js";

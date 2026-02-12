@@ -45,7 +45,7 @@ effects:
     fadeAfter: 1500
   watermark:
     enabled: true
-    text: "PlayShot"
+    text: "Clipwise"
     position: bottom-right
     opacity: 0.3
     fontSize: 12

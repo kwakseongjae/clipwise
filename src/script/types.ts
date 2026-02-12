@@ -165,7 +165,7 @@ export const OutputConfigSchema = z.object({
   fps: z.number().min(1).max(60).default(15),
   quality: z.number().min(1).max(100).default(80),
   outputDir: z.string().default("./output"),
-  filename: z.string().default("playshot-recording"),
+  filename: z.string().default("clipwise-recording"),
 });
 
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;

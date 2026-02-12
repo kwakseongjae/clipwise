@@ -4,7 +4,7 @@ import ora from "ora";
 import chalk from "chalk";
 import { loadScenario } from "../script/parser.js";
 import { validateScenario } from "../script/validator.js";
-import { PlayShotRecorder } from "../core/recorder.js";
+import { ClipwiseRecorder } from "../core/recorder.js";
 import { CanvasRenderer } from "../compose/canvas-renderer.js";
 import { encodeGif, encodeMp4, savePngSequence } from "../compose/video-encoder.js";
 import { writeFile, mkdir, access } from "fs/promises";
@@ -14,7 +14,7 @@ import { pathToFileURL } from "url";
 const program = new Command();
 
 program
-  .name("playshot")
+  .name("clipwise")
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
@@ -101,7 +101,7 @@ program
       spinner.start(
         `Recording ${scenario.steps.length} steps...`,
       );
-      const recorder = new PlayShotRecorder();
+      const recorder = new ClipwiseRecorder();
       const session = await recorder.record(scenario);
       spinner.succeed(
         `Recorded ${session.frames.length} frames`,
@@ -231,13 +231,13 @@ program
 
 program
   .command("init")
-  .description("Create a template playshot.yaml in the current directory")
+  .description("Create a template clipwise.yaml in the current directory")
   .action(async () => {
-    const targetPath = resolve("playshot.yaml");
+    const targetPath = resolve("clipwise.yaml");
 
     try {
       await access(targetPath);
-      console.log(chalk.yellow("Warning: playshot.yaml already exists in this directory."));
+      console.log(chalk.yellow("Warning: clipwise.yaml already exists in this directory."));
       console.log(chalk.yellow("Remove it first if you want to generate a fresh template.\n"));
       process.exit(1);
     } catch {
@@ -288,17 +288,17 @@ steps:
 
     await writeFile(targetPath, template, "utf-8");
 
-    console.log(chalk.green("Created playshot.yaml\n"));
+    console.log(chalk.green("Created clipwise.yaml\n"));
     console.log("Next steps:");
-    console.log(`  1. Edit ${chalk.bold("playshot.yaml")} — change the URL to your site`);
-    console.log(`  2. Run ${chalk.bold("playshot record playshot.yaml -f mp4")} to record`);
+    console.log(`  1. Edit ${chalk.bold("clipwise.yaml")} — change the URL to your site`);
+    console.log(`  2. Run ${chalk.bold("clipwise record clipwise.yaml -f mp4")} to record`);
     console.log(`  3. Find your output in ${chalk.bold("./output/")}`);
-    console.log(`\nOr try the built-in demo: ${chalk.bold("playshot demo")}\n`);
+    console.log(`\nOr try the built-in demo: ${chalk.bold("clipwise demo")}\n`);
   });
 
 program
   .command("demo")
-  .description("Record a demo video of the PlayShot showcase dashboard")
+  .description("Record a demo video of the Clipwise showcase dashboard")
   .option("-o, --output <dir>", "Output directory", "./output")
   .option(
     "-f, --format <format>",
@@ -377,7 +377,7 @@ program
         { name: "Type name", captureDelay: 50, holdDuration: 600,
           actions: [
             { action: "click", selector: "#project-name" },
-            { action: "type", selector: "#project-name", text: "PlayShot Demo", delay: 20 },
+            { action: "type", selector: "#project-name", text: "Clipwise Demo", delay: 20 },
           ] },
         { name: "Type desc", captureDelay: 50, holdDuration: 600,
           actions: [
@@ -389,7 +389,7 @@ program
       ];
 
       const scenarioObj = {
-        name: `PlayShot Demo (${device})`,
+        name: `Clipwise Demo (${device})`,
         viewport: { width: vpWidth, height: vpHeight },
         effects: {
           zoom: { enabled: true, scale: 1.8, duration: 500,
@@ -402,13 +402,13 @@ program
           deviceFrame: { enabled: true, type: device, darkMode: true },
           keystroke: { enabled: true, position: "bottom-center",
             fontSize: isMobile ? 14 : 16 },
-          watermark: { enabled: true, text: "PlayShot", position: "bottom-right",
+          watermark: { enabled: true, text: "Clipwise", position: "bottom-right",
             opacity: 0.35, fontSize: 13 },
         },
         output: {
           format: options.format, width: outWidth, height: outHeight,
           fps: 30, quality: 80,
-          outputDir: options.output, filename: `playshot-demo-${device}`,
+          outputDir: options.output, filename: `clipwise-demo-${device}`,
         },
         steps,
       };
@@ -437,7 +437,7 @@ program
 
       // Record
       spinner.start(`Recording ${scenario.steps.length} steps...`);
-      const recorder = new PlayShotRecorder();
+      const recorder = new ClipwiseRecorder();
       const session = await recorder.record(scenario);
       spinner.succeed(`Recorded ${session.frames.length} frames`);
 
@@ -450,7 +450,7 @@ program
       // Encode
       await mkdir(options.output, { recursive: true });
       const ext = scenario.output.format === "gif" ? "gif" : "mp4";
-      const outputPath = join(options.output, `playshot-demo-${device}.${ext}`);
+      const outputPath = join(options.output, `clipwise-demo-${device}.${ext}`);
 
       if (ext === "gif") {
         spinner.start("Encoding GIF...");

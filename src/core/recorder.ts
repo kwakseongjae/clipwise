@@ -34,7 +34,7 @@ interface ClickEvent {
   timestamp: number;
 }
 
-export class PlayShotRecorder {
+export class ClipwiseRecorder {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;

@@ -66,7 +66,7 @@ export async function encodeMp4(
   }
 
   // Create temp directory for PNG sequence
-  const tmpDir = await mkdtemp(join(tmpdir(), "playshot-"));
+  const tmpDir = await mkdtemp(join(tmpdir(), "clipwise-"));
 
   try {
     // Write frames as PNG sequence

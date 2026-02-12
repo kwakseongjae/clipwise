@@ -1,20 +1,20 @@
-# PlayShot
+# Clipwise
 
-Playwright-based cinematic screen recorder for product demos. Write a YAML scenario, PlayShot records the browser via CDP, applies visual effects (cursor, zoom, device frames, backgrounds), and encodes to MP4/GIF.
+Scriptable cinematic screen recorder for product demos — YAML in, polished MP4 out. Powered by Playwright CDP.
 
 ## Quick Start
 
 ```bash
 # Install
-npm install -D playshot
+npm install -D clipwise
 
 # Try the built-in demo instantly
-npx playshot demo
+npx clipwise demo
 
 # Or create your own scenario
-npx playshot init                              # Creates playshot.yaml template
-# Edit playshot.yaml — change URL to your site
-npx playshot record playshot.yaml -f mp4       # Record!
+npx clipwise init                              # Creates clipwise.yaml template
+# Edit clipwise.yaml — change URL to your site
+npx clipwise record clipwise.yaml -f mp4       # Record!
 ```
 
 ## Requirements
@@ -40,33 +40,30 @@ choco install ffmpeg
 
 ```bash
 # Instant demo — records the built-in dashboard showcase
-npx playshot demo                          # Browser frame, MP4
-npx playshot demo --device iphone          # iPhone mockup
-npx playshot demo --device android         # Android mockup
-npx playshot demo --device ipad            # iPad mockup
-npx playshot demo --url https://my-app.com # Your deployed site
+npx clipwise demo                          # Browser frame, MP4
+npx clipwise demo --device iphone          # iPhone mockup
+npx clipwise demo --device android         # Android mockup
+npx clipwise demo --device ipad            # iPad mockup
+npx clipwise demo --url https://my-app.com # Your deployed site
 
 # Record from YAML scenario
-npx playshot record <scenario.yaml> -f mp4 -o ./output
-npx playshot record <scenario.yaml> -f gif -o ./output
+npx clipwise record <scenario.yaml> -f mp4 -o ./output
+npx clipwise record <scenario.yaml> -f gif -o ./output
 
 # Initialize a template
-npx playshot init
+npx clipwise init
 
 # Validate without recording
-npx playshot validate <scenario.yaml>
-
-# Disable all effects (raw capture)
-node dist/cli/index.js record <scenario.yaml> --no-effects -o ./output
+npx clipwise validate <scenario.yaml>
 ```
 
 ### Programmatic API
 
 ```typescript
-import { PlayShotRecorder, CanvasRenderer, encodeMp4, loadScenario } from "playshot";
+import { ClipwiseRecorder, CanvasRenderer, encodeMp4, loadScenario } from "clipwise";
 
 const scenario = await loadScenario("my-scenario.yaml");
-const recorder = new PlayShotRecorder();
+const recorder = new ClipwiseRecorder();
 const session = await recorder.record(scenario);
 
 const renderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
@@ -155,12 +152,13 @@ zoom:
 
 ### Cursor
 
-Custom cursor with click ripple, trail, and glow highlight.
+Custom cursor with click ripple, trail, glow highlight, and speed control.
 
 ```yaml
 cursor:
   enabled: true
   size: 20
+  speed: "fast"        # fast (~72ms) | normal (~144ms) | slow (~288ms)
   clickEffect: true
   clickColor: "rgba(59, 130, 246, 0.3)"
   trail: true
@@ -219,7 +217,7 @@ Text overlay at a corner.
 ```yaml
 watermark:
   enabled: true
-  text: "PlayShot"
+  text: "Clipwise"
   position: bottom-right
   opacity: 0.5
 ```
@@ -256,24 +254,6 @@ ffmpeg -i input.mp4 -c:v libx264 -crf 26 -preset slow -movflags +faststart outpu
 
 # Convert to WebM (smaller, web-native)
 ffmpeg -i input.mp4 -c:v libvpx-vp9 -crf 30 -b:v 0 output.webm
-```
-
-## Examples
-
-The `examples/` directory includes ready-to-run demos:
-
-```bash
-# Desktop browser demo (19 steps, ~30s)
-node dist/cli/index.js record examples/demo.yaml -f mp4 -o ./output
-
-# iPhone mockup demo (12 steps, ~28s)
-node dist/cli/index.js record examples/demo-iphone.yaml -f mp4 -o ./output
-
-# Android mockup demo (10 steps, ~26s)
-node dist/cli/index.js record examples/demo-android.yaml -f mp4 -o ./output
-
-# iPad mockup demo (13 steps, ~28s)
-node dist/cli/index.js record examples/demo-ipad.yaml -f mp4 -o ./output
 ```
 
 ## Writing Your Own Scenario
@@ -332,7 +312,7 @@ steps:
 3. **Record**:
 
 ```bash
-node dist/cli/index.js record my-scenario.yaml -f mp4 -o ./output
+npx clipwise record my-scenario.yaml -f mp4 -o ./output
 ```
 
 ### Tips
@@ -345,25 +325,25 @@ node dist/cli/index.js record my-scenario.yaml -f mp4 -o ./output
 
 ## Hosting the Demo Site (GitHub Pages)
 
-PlayShot includes a demo dashboard in `docs/index.html`. To host it on GitHub Pages:
+Clipwise includes a demo dashboard in `docs/index.html`. To host it:
 
-1. Push this repo to GitHub
+1. Push to GitHub: `git push origin main`
 2. Go to **Settings > Pages**
 3. Set source to **Deploy from a branch**, select `main`, folder `/docs`
-4. Your demo will be live at `https://<username>.github.io/<repo>/`
+4. Demo goes live at `https://kwakseongjae.github.io/clipwise/`
 
-Then anyone can record your demo site:
+Then anyone can record the demo site:
 
 ```bash
-npx playshot demo --url https://username.github.io/repo/
+npx clipwise demo --url https://kwakseongjae.github.io/clipwise/
 ```
 
 ## Security
 
-- **Selector validation**: All CSS selectors in YAML are validated against a safe character allowlist to prevent injection
+- **Selector validation**: All CSS selectors in YAML are validated against a safe character allowlist
 - **URL handling**: Only `http://`, `https://`, and `file://` schemes are accepted
 - **Chromium sandbox**: Playwright runs Chromium with default sandboxing
-- **No network access**: Recordings are processed locally — frames never leave your machine
+- **Local processing**: Recordings are processed locally — frames never leave your machine
 
 ## Development
 
