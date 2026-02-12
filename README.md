@@ -2,6 +2,10 @@
 
 Scriptable cinematic screen recorder for product demos — YAML in, polished MP4 out. Powered by Playwright CDP.
 
+<video src="https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/clipwise-demo-browser.mp4" autoplay loop muted playsinline width="100%"></video>
+
+> *Generated with `npx clipwise demo` — zero config, one command.*
+
 ## Quick Start
 
 ```bash
@@ -322,6 +326,10 @@ npx clipwise record my-scenario.yaml -f mp4 -o ./output
 - Use `waitUntil: "networkidle"` for pages with API calls
 - Keep `type.delay` at 15-25ms for a fast but readable typing effect
 - Use `transition: fade` between major sections for cinematic cuts
+
+### Writing Scenarios with AI
+
+See [PROMPTS.md](./PROMPTS.md) for a ready-to-use prompt template. Copy-paste it to ChatGPT or Claude with your site URL, and get a working YAML scenario back.
 
 ## Hosting the Demo Site (GitHub Pages)
 
