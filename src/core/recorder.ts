@@ -51,6 +51,7 @@ export class ClipwiseRecorder {
   private isCapturing = false;
   private targetFps = 30;
   private cursorSpeed: keyof typeof CURSOR_SPEED_PRESETS = "fast";
+  private firstContentTimestamp = 0;
 
   /**
    * Launch the browser and create a page with the scenario viewport.
@@ -77,6 +78,7 @@ export class ClipwiseRecorder {
     this.currentStepIndex = 0;
     this.cursorPosition = { x: 0, y: 0 };
     this.isCapturing = false;
+    this.firstContentTimestamp = 0;
   }
 
   /**
@@ -253,7 +255,14 @@ export class ClipwiseRecorder {
     switch (action.action) {
       case "navigate": {
         await this.page.goto(action.url, { waitUntil: action.waitUntil });
-        // Small pause for page to settle after navigation
+        // Wait for actual paint — double rAF ensures content is rendered
+        await this.page.evaluate(() =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+        ).catch(() => {});
+        // Mark when first content is available (trims pre-navigate white frames)
+        if (this.firstContentTimestamp === 0) {
+          this.firstContentTimestamp = Date.now();
+        }
         await this.waitWithRepaints(300);
         break;
       }
@@ -421,7 +430,14 @@ export class ClipwiseRecorder {
   private buildCapturedFrames(): CapturedFrame[] {
     if (this.rawFrames.length === 0) return [];
 
-    return this.rawFrames.map((raw, index) => {
+    // Trim frames captured before first page content was rendered (white screen)
+    const contentStart = this.firstContentTimestamp;
+    const trimmed = contentStart > 0
+      ? this.rawFrames.filter((f) => f.timestamp >= contentStart)
+      : this.rawFrames;
+    if (trimmed.length === 0) return [];
+
+    return trimmed.map((raw, index) => {
       const cursorPos = this.interpolateCursorAt(raw.timestamp);
 
       const clickEvent = this.clickTimeline.find(

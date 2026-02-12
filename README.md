@@ -1,3 +1,5 @@
+[English](./README.md) | [한국어](./README.ko.md)
+
 # Clipwise
 
 Scriptable cinematic screen recorder for product demos — YAML in, polished MP4 out. Powered by Playwright CDP.
