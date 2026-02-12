@@ -307,7 +307,7 @@ program
   )
   .option(
     "--url <url>",
-    "Custom demo site URL (default: bundled demo site)",
+    "Custom URL to record (default: Clipwise demo dashboard)",
   )
   .option(
     "--device <device>",
@@ -318,27 +318,7 @@ program
     const spinner = ora();
 
     try {
-      // Determine the demo URL
-      let demoUrl = options.url;
-      if (!demoUrl) {
-        // Use the bundled demo site from the package
-        const pkgDir = dirname(dirname(resolve(import.meta.url.replace("file://", ""))));
-        const demoPath = join(pkgDir, "examples", "demo-site", "dashboard.html");
-        try {
-          await access(demoPath);
-          demoUrl = pathToFileURL(demoPath).href;
-        } catch {
-          // Fallback: try relative to cwd
-          const cwdDemo = resolve("examples", "demo-site", "dashboard.html");
-          try {
-            await access(cwdDemo);
-            demoUrl = pathToFileURL(cwdDemo).href;
-          } catch {
-            console.error(chalk.red("Demo site not found. Provide a URL with --url"));
-            process.exit(1);
-          }
-        }
-      }
+      const demoUrl = options.url ?? "https://kwakseongjae.github.io/clipwise/";
 
       const device = options.device as string;
       const isMobile = device === "iphone" || device === "android";
