@@ -234,13 +234,14 @@ speedRamp:
 
 [PROMPTS.md](./PROMPTS.md)에 바로 사용할 수 있는 AI 프롬프트 템플릿이 있습니다. ChatGPT나 Claude에 복붙하고 내 사이트 URL만 넣으면 YAML 시나리오를 생성해줍니다.
 
-## 데모 사이트 호스팅 (GitHub Pages)
+## GitHub Pages
 
-`docs/index.html`에 데모 대시보드가 포함되어 있습니다:
+`docs/` 폴더에 문서 사이트와 라이브 데모 대시보드가 포함되어 있습니다:
 
 1. GitHub에 push: `git push origin main`
 2. **Settings > Pages** > source: `main`, folder: `/docs`
-3. `https://username.github.io/clipwise/`에서 라이브
+3. 문서: `https://username.github.io/clipwise/`
+4. 데모: `https://username.github.io/clipwise/demo/`
 
 ## 보안
 

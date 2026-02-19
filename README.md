@@ -335,19 +335,20 @@ npx clipwise record my-scenario.yaml -f mp4 -o ./output
 
 See [PROMPTS.md](./PROMPTS.md) for a ready-to-use prompt template. Copy-paste it to ChatGPT or Claude with your site URL, and get a working YAML scenario back.
 
-## Hosting the Demo Site (GitHub Pages)
+## GitHub Pages
 
-Clipwise includes a demo dashboard in `docs/index.html`. To host it:
+Clipwise includes a documentation site and a live demo dashboard in the `docs/` folder. To host it:
 
 1. Push to GitHub: `git push origin main`
 2. Go to **Settings > Pages**
 3. Set source to **Deploy from a branch**, select `main`, folder `/docs`
-4. Demo goes live at `https://kwakseongjae.github.io/clipwise/`
+4. Docs go live at `https://kwakseongjae.github.io/clipwise/`
+5. Demo dashboard at `https://kwakseongjae.github.io/clipwise/demo/`
 
 Then anyone can record the demo site:
 
 ```bash
-npx clipwise demo --url https://kwakseongjae.github.io/clipwise/
+npx clipwise demo --url https://kwakseongjae.github.io/clipwise/demo/
 ```
 
 ## Security
