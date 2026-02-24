@@ -15,6 +15,61 @@ const LANG_MAP = {
   json: 'language-json',
 };
 
+/**
+ * Extract page content as clean markdown-like text for AI consumption.
+ * Walks all sections, converts headings/tables/code blocks into a format
+ * that AI tools can parse without HTML noise.
+ */
+function extractPageText() {
+  const parts = [];
+  const sections = document.querySelectorAll('.hero, .section');
+
+  sections.forEach(section => {
+    // Headings
+    section.querySelectorAll('h1, h2, h3, .section-label').forEach(el => {
+      const tag = el.tagName;
+      const prefix = tag === 'H1' ? '# ' : tag === 'H2' ? '## ' : tag === 'H3' ? '### ' : '#### ';
+      parts.push(prefix + el.textContent.trim());
+    });
+
+    // Paragraphs and descriptions
+    section.querySelectorAll('.hero-sub, .section-sub, .feature-desc, .effect-desc, .step-desc, .ai-ready-desc, p').forEach(el => {
+      const text = el.textContent.trim();
+      if (text) parts.push(text);
+    });
+
+    // Feature/effect cards — titles
+    section.querySelectorAll('.feature-title, .effect-title').forEach(el => {
+      parts.push('- ' + el.textContent.trim());
+    });
+
+    // Tables → markdown table
+    section.querySelectorAll('table').forEach(table => {
+      const rows = [];
+      table.querySelectorAll('tr').forEach(tr => {
+        const cells = Array.from(tr.querySelectorAll('th, td')).map(c => c.textContent.trim());
+        rows.push('| ' + cells.join(' | ') + ' |');
+        // Add separator after header row
+        if (tr.querySelector('th') && rows.length === 1) {
+          rows.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+        }
+      });
+      parts.push(rows.join('\n'));
+    });
+
+    // Code blocks → fenced
+    section.querySelectorAll('.code-block').forEach(block => {
+      const header = block.querySelector('.code-header');
+      const code = block.querySelector('pre > code');
+      if (!code) return;
+      const lang = header ? header.textContent.trim().split('—')[0].trim().toLowerCase() : '';
+      parts.push('```' + lang + '\n' + code.textContent.trimEnd() + '\n```');
+    });
+  });
+
+  return parts.filter(Boolean).join('\n\n');
+}
+
 async function copyText(text, btn) {
   try {
     await navigator.clipboard.writeText(text);
@@ -54,6 +109,25 @@ document.addEventListener('DOMContentLoaded', () => {
   if (schemaBtn && schemaEl) {
     schemaBtn.addEventListener('click', () => {
       copyText(schemaEl.innerText, schemaBtn);
+    });
+  }
+
+  // ── Copy Page FAB ──────────────────────────────────
+  const fab = document.getElementById('copy-page-fab');
+  if (fab) {
+    fab.addEventListener('click', () => {
+      const text = extractPageText();
+      navigator.clipboard.writeText(text).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      });
+      fab.classList.add('copied');
+      setTimeout(() => fab.classList.remove('copied'), 2500);
     });
   }
 
