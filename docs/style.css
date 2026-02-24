@@ -579,6 +579,66 @@ code, pre {
 }
 .footer-links a:hover { color: var(--t2); }
 
+/* ── AI-Ready Section ────────────────────────────────── */
+.ai-ready-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ai-ready-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.copy-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--bdr2);
+  background: rgba(108,92,231,0.08);
+  color: var(--p2);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  letter-spacing: -0.2px;
+}
+.copy-all-btn:hover {
+  background: rgba(108,92,231,0.16);
+  border-color: var(--p);
+  color: var(--t);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(108,92,231,0.3);
+}
+.copy-all-btn.copied {
+  background: rgba(34,197,94,0.12);
+  border-color: rgba(34,197,94,0.3);
+  color: var(--g);
+}
+
+.ai-ready-desc {
+  font-size: 13px;
+  color: var(--t3);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.action-group-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 24px 0 8px;
+  color: var(--t);
+}
+.action-group-title:first-of-type { margin-top: 8px; }
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 768px) {
   .nav { padding: 0 16px; }

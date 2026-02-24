@@ -114,15 +114,57 @@ steps:
 
 ### 액션
 
-| 액션 | 파라미터 | 설명 |
-|------|---------|------|
-| `navigate` | `url`, `waitUntil?` | URL로 이동 |
-| `click` | `selector`, `delay?` | 요소 클릭 |
-| `type` | `selector`, `text`, `delay?` | 텍스트 입력 (한 글자씩) |
-| `hover` | `selector` | 요소에 마우스 올리기 |
-| `scroll` | `y?`, `x?`, `selector?`, `smooth?` | 스크롤 |
-| `wait` | `duration` | 대기 (ms) |
-| `screenshot` | `name?`, `fullPage?` | 캡처 마커 |
+#### 기본 액션
+
+| 액션 | 파라미터 | 기본값 | 설명 |
+|------|---------|--------|------|
+| `navigate` | `url`, `waitUntil?` | `waitUntil: "networkidle"` | URL로 이동 |
+| `click` | `selector`, `delay?`, `timeout?` | | 요소 클릭 |
+| `type` | `selector`, `text`, `delay?`, `timeout?` | `delay: 50` | 텍스트 입력 (한 글자씩) |
+| `hover` | `selector`, `timeout?` | | 요소에 마우스 올리기 |
+| `scroll` | `y?`, `x?`, `selector?`, `smooth?`, `timeout?` | `y: 0`, `x: 0`, `smooth: true` | 스크롤 |
+| `wait` | `duration` | | 대기 (ms) |
+| `screenshot` | `name?`, `fullPage?` | `fullPage: false` | 캡처 마커 |
+
+#### 비동기 대기 액션
+
+| 액션 | 파라미터 | 기본값 | 설명 |
+|------|---------|--------|------|
+| `waitForSelector` | `selector`, `state?`, `timeout?` | `state: "visible"`, `timeout: 15000` | 요소 상태 대기 |
+| `waitForNavigation` | `waitUntil?`, `timeout?` | `waitUntil: "networkidle"`, `timeout: 15000` | 페이지 로드 대기 |
+| `waitForURL` | `url`, `timeout?` | `timeout: 15000` | URL 매칭 대기 |
+| `waitForFunction` | `expression`, `polling?`, `timeout?` | `polling: "raf"`, `timeout: 30000` | JS 표현식이 truthy가 될 때까지 대기 |
+| `waitForResponse` | `url`, `status?`, `timeout?` | `timeout: 30000` | 네트워크 응답 대기 (URL 부분 문자열 매칭) |
+
+**`waitUntil`** 옵션: `"load"`, `"domcontentloaded"`, `"networkidle"` (기본)
+**`state`** 옵션: `"visible"` (기본), `"attached"`, `"hidden"`
+**`polling`** 옵션: `"raf"` (requestAnimationFrame, 기본) 또는 밀리초 숫자 (예: `500`)
+
+#### 비동기 대기 예시
+
+```yaml
+# 요소가 나타날 때까지 대기
+- action: waitForSelector
+  selector: ".result-panel"
+  state: visible
+  timeout: 20000
+
+# AI 스트리밍 응답 완료 대기
+- action: waitForFunction
+  expression: "document.querySelector('.ai-response')?.dataset.done === 'true'"
+  timeout: 60000
+
+# API 응답 완료 대기
+- action: waitForResponse
+  url: "/api/chat/completions"
+  status: 200
+  timeout: 60000
+
+# 동적 콘텐츠 길이 대기
+- action: waitForFunction
+  expression: "document.querySelector('.output')?.textContent?.length > 100"
+  polling: 500
+```
 
 ### 타이밍 팁
 

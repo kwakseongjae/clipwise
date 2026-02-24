@@ -48,6 +48,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── AI Schema copy-all button ───────────────────────
+  const schemaBtn = document.getElementById('copy-schema-btn');
+  const schemaEl = document.getElementById('ai-schema-content');
+  if (schemaBtn && schemaEl) {
+    schemaBtn.addEventListener('click', () => {
+      copyText(schemaEl.innerText, schemaBtn);
+    });
+  }
+
   // ── Syntax highlighting ──────────────────────────────
   document.querySelectorAll('.code-block').forEach(block => {
     const header = block.querySelector('.code-header');

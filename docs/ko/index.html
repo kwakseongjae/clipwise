@@ -17,6 +17,7 @@
     <a href="#features" class="nav-link">기능</a>
     <a href="#quickstart" class="nav-link">빠른 시작</a>
     <a href="#effects" class="nav-link">이펙트</a>
+    <a href="#ai-schema" class="nav-link">AI-Ready</a>
     <a href="../demo/" class="nav-link">데모</a>
     <div class="nav-lang">
       <a href="../" class="lang-btn">EN</a>
@@ -206,26 +207,229 @@ steps:
     transition: none        # none | fade</code></pre>
   </div>
 
-  <h3 style="font-size:16px;font-weight:700;margin:28px 0 12px;">액션</h3>
+  <h3 class="action-group-title">기본 액션</h3>
   <div style="overflow-x:auto;">
     <table class="doc-table">
       <thead>
         <tr>
           <th>액션</th>
           <th>파라미터</th>
+          <th>기본값</th>
           <th>설명</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td><code>navigate</code></td><td><code>url</code>, <code>waitUntil?</code></td><td>URL로 이동</td></tr>
-        <tr><td><code>click</code></td><td><code>selector</code>, <code>delay?</code></td><td>요소 클릭</td></tr>
-        <tr><td><code>type</code></td><td><code>selector</code>, <code>text</code>, <code>delay?</code></td><td>텍스트 입력 (한 글자씩)</td></tr>
-        <tr><td><code>hover</code></td><td><code>selector</code></td><td>요소에 마우스 올리기</td></tr>
-        <tr><td><code>scroll</code></td><td><code>y?</code>, <code>x?</code>, <code>selector?</code>, <code>smooth?</code></td><td>스크롤</td></tr>
-        <tr><td><code>wait</code></td><td><code>duration</code></td><td>대기 (ms)</td></tr>
-        <tr><td><code>screenshot</code></td><td><code>name?</code>, <code>fullPage?</code></td><td>캡처 마커</td></tr>
+        <tr><td><code>navigate</code></td><td><code>url</code>, <code>waitUntil?</code></td><td><code>networkidle</code></td><td>URL로 이동</td></tr>
+        <tr><td><code>click</code></td><td><code>selector</code>, <code>delay?</code>, <code>timeout?</code></td><td></td><td>요소 클릭</td></tr>
+        <tr><td><code>type</code></td><td><code>selector</code>, <code>text</code>, <code>delay?</code>, <code>timeout?</code></td><td><code>delay: 50</code></td><td>텍스트 입력 (한 글자씩)</td></tr>
+        <tr><td><code>hover</code></td><td><code>selector</code>, <code>timeout?</code></td><td></td><td>요소에 마우스 올리기</td></tr>
+        <tr><td><code>scroll</code></td><td><code>y?</code>, <code>x?</code>, <code>selector?</code>, <code>smooth?</code>, <code>timeout?</code></td><td><code>smooth: true</code></td><td>스크롤</td></tr>
+        <tr><td><code>wait</code></td><td><code>duration</code></td><td></td><td>대기 (ms)</td></tr>
+        <tr><td><code>screenshot</code></td><td><code>name?</code>, <code>fullPage?</code></td><td><code>fullPage: false</code></td><td>캡처 마커</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <h3 class="action-group-title">비동기 대기 액션</h3>
+  <div style="overflow-x:auto;">
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>액션</th>
+          <th>파라미터</th>
+          <th>기본값</th>
+          <th>설명</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>waitForSelector</code></td><td><code>selector</code>, <code>state?</code>, <code>timeout?</code></td><td><code>visible</code>, <code>15s</code></td><td>요소 상태 대기</td></tr>
+        <tr><td><code>waitForNavigation</code></td><td><code>waitUntil?</code>, <code>timeout?</code></td><td><code>networkidle</code>, <code>15s</code></td><td>페이지 로드 대기</td></tr>
+        <tr><td><code>waitForURL</code></td><td><code>url</code>, <code>timeout?</code></td><td><code>15s</code></td><td>URL 매칭 대기</td></tr>
+        <tr><td><code>waitForFunction</code></td><td><code>expression</code>, <code>polling?</code>, <code>timeout?</code></td><td><code>raf</code>, <code>30s</code></td><td>JS 표현식이 truthy가 될 때까지 대기</td></tr>
+        <tr><td><code>waitForResponse</code></td><td><code>url</code>, <code>status?</code>, <code>timeout?</code></td><td><code>30s</code></td><td>네트워크 응답 대기 (URL 부분 문자열 매칭)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block" style="margin-top:20px;">
+    <div class="code-header">yaml — 비동기 대기 예시</div>
+    <pre><code># API 호출 후 요소 대기
+- action: waitForSelector
+  selector: ".result-panel"
+  state: visible
+  timeout: 20000
+
+# AI 스트리밍 완료 대기
+- action: waitForFunction
+  expression: "document.querySelector('.ai-response')?.dataset.done === 'true'"
+  timeout: 60000
+
+# 특정 API 응답 대기
+- action: waitForResponse
+  url: "/api/chat/completions"
+  status: 200
+  timeout: 60000</code></pre>
+  </div>
+</section>
+
+<!-- AI-Ready 스키마 레퍼런스 -->
+<section class="section" id="ai-schema">
+  <div class="section-label">AI-Ready</div>
+  <h2 class="section-title">AI 도구를 위한 전체 스키마</h2>
+  <p class="section-sub">전체 YAML 스키마 레퍼런스를 복사하세요. Claude Code, Cursor, ChatGPT 등 AI 도구에 붙여넣으면 즉시 시나리오를 생성할 수 있습니다.</p>
+
+  <div class="ai-ready-header">
+    <h3>전체 스키마 레퍼런스</h3>
+    <button class="copy-all-btn" id="copy-schema-btn" aria-label="전체 스키마 복사">
+      <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
+      전체 스키마 클립보드에 복사
+    </button>
+  </div>
+  <p class="ai-ready-desc">이 블록에는 AI가 필요한 모든 정보가 담겨 있습니다: 12종 액션 타입, 파라미터, 기본값, 이펙트 설정, 출력 옵션, 사용 규칙.</p>
+
+  <div class="code-block">
+    <div class="code-header">yaml — Clipwise 전체 스키마 레퍼런스</div>
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.1.2)
+# 스크립터블 시네마틱 스크린 레코더 — YAML 작성, MP4 출력
+# 설치: npm install -D clipwise
+# 녹화: npx clipwise record scenario.yaml -f mp4
+
+# ─── 최상위 구조 ──────────────────────────────────────
+name: "시나리오 이름"             # 필수
+description: "설명"              # 선택
+viewport:
+  width: 1280                    # 기본: 1280
+  height: 800                    # 기본: 800
+
+# ─── 출력 ─────────────────────────────────────────────
+output:
+  format: mp4                    # mp4 | gif | png-sequence
+  fps: 30                        # 1-60 (기본: 15)
+  quality: 80                    # 1-100 (기본: 80, MP4: CRF에 매핑)
+  width: 1280                    # 기본: 1280
+  height: 800                    # 기본: 800
+
+# ─── 스텝 ─────────────────────────────────────────────
+steps:
+  - name: "스텝 이름"            # 선택
+    captureDelay: 200            # 액션 후 대기 ms (기본: 300)
+    holdDuration: 800            # 결과 화면 유지 ms (기본: 1500)
+    transition: none             # none | fade (기본: none)
+    actions:
+      # --- 기본 액션 (7종) ---
+      - action: navigate
+        url: "https://example.com"
+        waitUntil: networkidle   # load | domcontentloaded | networkidle (기본)
+
+      - action: click
+        selector: "#btn"         # CSS 셀렉터 (유니코드/한국어 OK)
+        delay: 0                 # 선택. 클릭 딜레이 (ms)
+        timeout: 15000           # 선택. 요소 대기 타임아웃 (ms)
+
+      - action: type
+        selector: "#input"
+        text: "hello"
+        delay: 50                # 글자당 딜레이 ms (기본: 50)
+        timeout: 15000           # 선택. 요소 대기 타임아웃 (ms)
+
+      - action: hover
+        selector: ".menu"
+        timeout: 15000           # 선택
+
+      - action: scroll
+        y: 400                   # 수직 px (기본: 0)
+        x: 0                     # 수평 px (기본: 0)
+        selector: ".container"   # 선택. 대상 요소
+        smooth: true             # 기본: true
+        timeout: 15000           # 선택
+
+      - action: wait
+        duration: 1000           # ms
+
+      - action: screenshot
+        name: "결과"             # 선택
+        fullPage: false          # 기본: false
+
+      # --- 비동기 대기 액션 (5종) ---
+      - action: waitForSelector
+        selector: ".result"
+        state: visible           # visible (기본) | attached | hidden
+        timeout: 15000           # 기본: 15000
+
+      - action: waitForNavigation
+        waitUntil: networkidle   # load | domcontentloaded | networkidle (기본)
+        timeout: 15000           # 기본: 15000
+
+      - action: waitForURL
+        url: "https://example.com/dashboard"
+        timeout: 15000           # 기본: 15000
+
+      - action: waitForFunction
+        expression: "document.querySelector('.done') !== null"
+        polling: raf             # raf (기본) 또는 밀리초 숫자 (예: 500)
+        timeout: 30000           # 기본: 30000
+
+      - action: waitForResponse
+        url: "/api/chat"         # URL 부분 문자열 매칭
+        status: 200              # 선택. HTTP 상태코드 필터 (100-599)
+        timeout: 30000           # 기본: 30000
+
+# ─── 이펙트 ───────────────────────────────────────────
+effects:
+  zoom:
+    enabled: true                # 기본: true
+    scale: 1.8                   # 1-5 (기본: 1.8)
+    duration: 600                # ms (기본: 600)
+    autoZoom:
+      followCursor: true         # 기본: true
+      maxScale: 2.0              # 기본: 2.0
+      padding: 200               # px (기본: 200)
+  cursor:
+    enabled: true                # 기본: true
+    size: 20                     # px (기본: 20)
+    color: "#000000"             # 기본: #000000
+    speed: fast                  # fast | normal | slow (기본: fast)
+    clickEffect: true            # 기본: true
+    clickColor: "rgba(59,130,246,0.3)"
+    trail: false                 # 기본: false
+    trailLength: 8               # 기본: 8
+    highlight: false             # 기본: false
+    highlightRadius: 40          # 기본: 40
+  background:
+    type: gradient               # gradient | solid | image (기본: gradient)
+    value: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    padding: 60                  # px (기본: 60)
+    borderRadius: 12             # px (기본: 12)
+    shadow: true                 # 기본: true
+  deviceFrame:
+    enabled: false               # 기본: false
+    type: browser                # browser | iphone | ipad | android | none
+    darkMode: false              # 기본: false
+  keystroke:
+    enabled: false               # 기본: false
+    position: bottom-center      # bottom-center | bottom-left | bottom-right
+    fontSize: 18                 # 기본: 18
+    fadeAfter: 1500              # ms (기본: 1500)
+  speedRamp:
+    enabled: false               # 기본: false
+    idleSpeed: 3.0               # 기본: 3.0
+    actionSpeed: 0.8             # 기본: 0.8
+  watermark:
+    enabled: false               # 기본: false
+    text: ""
+    position: bottom-right       # top-left | top-right | bottom-left | bottom-right
+    opacity: 0.5                 # 0-1 (기본: 0.5)
+
+# ─── 규칙 ─────────────────────────────────────────────
+# - 셀렉터: CSS 선택자 (#id, .class, [data-*], [aria-label="..."])
+# - 유니코드/한국어 셀렉터 지원
+# - 클릭/타이핑 전 요소가 화면에 보여야 함 — 필요하면 scroll 먼저
+# - type 전에 click으로 input 포커스
+# - 고정 wait보다 비동기 대기 액션 우선 사용 (더 안정적)
+# - waitForFunction: AI 스트리밍, 동적 콘텐츠, DOM 변화 감지
+# - waitForResponse: 트리거 액션 전에 자동으로 리스너 등록됨
+# - 타이밍: captureDelay 50-100ms, holdDuration 500-800ms (빠른 데모)</code></pre>
   </div>
 </section>
 

@@ -2,10 +2,13 @@ import { z } from "zod";
 
 // ─── Selector Validation ────────────────────────────────
 
-const SafeSelectorSchema = z.string().regex(
-  /^[a-zA-Z0-9\-_#.\[\]="':\s~^$|*,>+()@]+$/,
-  "Selector contains invalid characters"
-);
+const SafeSelectorSchema = z
+  .string()
+  .min(1, "Selector must not be empty")
+  .regex(
+    /^[^\x00-\x1f\x7f;`\\{}]+$/,
+    "Selector contains invalid characters (control chars, semicolons, backticks, or backslashes are not allowed)"
+  );
 
 // ─── Step Actions ───────────────────────────────────────
 
@@ -21,6 +24,7 @@ export const ClickActionSchema = z.object({
   action: z.literal("click"),
   selector: SafeSelectorSchema,
   delay: z.number().optional(),
+  timeout: z.number().min(0).optional(),
 });
 
 export const TypeActionSchema = z.object({
@@ -28,6 +32,7 @@ export const TypeActionSchema = z.object({
   selector: SafeSelectorSchema,
   text: z.string(),
   delay: z.number().default(50),
+  timeout: z.number().min(0).optional(),
 });
 
 export const ScrollActionSchema = z.object({
@@ -36,6 +41,7 @@ export const ScrollActionSchema = z.object({
   y: z.number().default(0),
   x: z.number().default(0),
   smooth: z.boolean().default(true),
+  timeout: z.number().min(0).optional(),
 });
 
 export const WaitActionSchema = z.object({
@@ -46,12 +52,46 @@ export const WaitActionSchema = z.object({
 export const HoverActionSchema = z.object({
   action: z.literal("hover"),
   selector: SafeSelectorSchema,
+  timeout: z.number().min(0).optional(),
 });
 
 export const ScreenshotActionSchema = z.object({
   action: z.literal("screenshot"),
   name: z.string().optional(),
   fullPage: z.boolean().default(false),
+});
+
+export const WaitForSelectorActionSchema = z.object({
+  action: z.literal("waitForSelector"),
+  selector: SafeSelectorSchema,
+  state: z.enum(["visible", "attached", "hidden"]).default("visible"),
+  timeout: z.number().min(0).default(15000),
+});
+
+export const WaitForNavigationActionSchema = z.object({
+  action: z.literal("waitForNavigation"),
+  waitUntil: z.enum(["load", "domcontentloaded", "networkidle"]).default("networkidle"),
+  timeout: z.number().min(0).default(15000),
+});
+
+export const WaitForURLActionSchema = z.object({
+  action: z.literal("waitForURL"),
+  url: z.string().min(1),
+  timeout: z.number().min(0).default(15000),
+});
+
+export const WaitForFunctionActionSchema = z.object({
+  action: z.literal("waitForFunction"),
+  expression: z.string().min(1),
+  polling: z.union([z.literal("raf"), z.number().min(0)]).default("raf"),
+  timeout: z.number().min(0).default(30000),
+});
+
+export const WaitForResponseActionSchema = z.object({
+  action: z.literal("waitForResponse"),
+  url: z.string().min(1),
+  status: z.number().min(100).max(599).optional(),
+  timeout: z.number().min(0).default(30000),
 });
 
 export const StepActionSchema = z.discriminatedUnion("action", [
@@ -62,6 +102,11 @@ export const StepActionSchema = z.discriminatedUnion("action", [
   WaitActionSchema,
   HoverActionSchema,
   ScreenshotActionSchema,
+  WaitForSelectorActionSchema,
+  WaitForNavigationActionSchema,
+  WaitForURLActionSchema,
+  WaitForFunctionActionSchema,
+  WaitForResponseActionSchema,
 ]);
 
 export type StepAction = z.infer<typeof StepActionSchema>;

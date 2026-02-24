@@ -52,6 +52,7 @@ export class ClipwiseRecorder {
   private targetFps = 30;
   private cursorSpeed: keyof typeof CURSOR_SPEED_PRESETS = "fast";
   private firstContentTimestamp = 0;
+  private pendingResponsePromises: Map<number, Promise<unknown>> = new Map();
 
   /**
    * Launch the browser and create a page with the scenario viewport.
@@ -157,8 +158,9 @@ export class ClipwiseRecorder {
       for (let si = 0; si < scenario.steps.length; si++) {
         const step = scenario.steps[si];
         this.currentStepIndex = si;
-        for (const action of step.actions) {
-          await this.executeAction(action);
+        this.preRegisterResponseListeners(step.actions);
+        for (let ai = 0; ai < step.actions.length; ai++) {
+          await this.executeAction(step.actions[ai], ai);
         }
 
         // captureDelay: wait with forced repaints for page to settle
@@ -244,10 +246,35 @@ export class ClipwiseRecorder {
   }
 
   /**
+   * Pre-register waitForResponse listeners at the start of each step.
+   * This ensures the listener is active before any preceding action
+   * (e.g. click) triggers the request, preventing race conditions
+   * where the response arrives before the listener is set up.
+   */
+  private preRegisterResponseListeners(actions: StepAction[]): void {
+    this.pendingResponsePromises.clear();
+    if (!this.page) return;
+    for (let i = 0; i < actions.length; i++) {
+      const action = actions[i];
+      if (action.action === "waitForResponse") {
+        this.pendingResponsePromises.set(
+          i,
+          this.page.waitForResponse(
+            (response) =>
+              response.url().includes(action.url) &&
+              (action.status === undefined || response.status() === action.status),
+            { timeout: action.timeout },
+          ),
+        );
+      }
+    }
+  }
+
+  /**
    * Execute a single action. CDP screencast captures frames continuously
    * in the background while actions are performed.
    */
-  private async executeAction(action: StepAction): Promise<void> {
+  private async executeAction(action: StepAction, actionIndex: number = 0): Promise<void> {
     if (!this.page) {
       throw new Error("Page not initialized. Call init() first.");
     }
@@ -268,7 +295,7 @@ export class ClipwiseRecorder {
       }
 
       case "click": {
-        const target = await getElementCenter(this.page, action.selector);
+        const target = await getElementCenter(this.page, action.selector, action.timeout);
 
         // Smooth cursor movement to the click target
         await this.moveCursorSmooth(target);
@@ -290,6 +317,7 @@ export class ClipwiseRecorder {
         const inputTarget = await getElementCenter(
           this.page,
           action.selector,
+          action.timeout,
         );
 
         // Move cursor to the input field
@@ -315,7 +343,7 @@ export class ClipwiseRecorder {
 
       case "scroll": {
         const scrollTarget = action.selector
-          ? await getElementCenter(this.page, action.selector)
+          ? await getElementCenter(this.page, action.selector, action.timeout)
           : null;
 
         await this.page.evaluate(
@@ -372,6 +400,7 @@ export class ClipwiseRecorder {
         const hoverTarget = await getElementCenter(
           this.page,
           action.selector,
+          action.timeout,
         );
 
         // Smooth cursor movement to hover target
@@ -383,6 +412,38 @@ export class ClipwiseRecorder {
       case "screenshot": {
         // CDP screencast captures continuously - just pause briefly
         await this.waitWithRepaints(100);
+        break;
+      }
+
+      case "waitForSelector": {
+        const locator = this.page.locator(action.selector).first();
+        await locator.waitFor({ state: action.state, timeout: action.timeout });
+        break;
+      }
+
+      case "waitForNavigation": {
+        await this.page.waitForLoadState(action.waitUntil, { timeout: action.timeout });
+        break;
+      }
+
+      case "waitForURL": {
+        await this.page.waitForURL(action.url, { timeout: action.timeout });
+        break;
+      }
+
+      case "waitForFunction": {
+        await this.page.waitForFunction(action.expression, undefined, {
+          polling: action.polling,
+          timeout: action.timeout,
+        });
+        break;
+      }
+
+      case "waitForResponse": {
+        const pending = this.pendingResponsePromises.get(actionIndex);
+        if (pending) {
+          await pending;
+        }
         break;
       }
     }

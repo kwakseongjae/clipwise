@@ -31,6 +31,8 @@ export async function captureScreenshot(
   return Buffer.from(buffer);
 }
 
+const DEFAULT_ELEMENT_TIMEOUT = 5000;
+
 /**
  * Get the center coordinates of an element on the page.
  * Throws if the element is not found or not visible.
@@ -38,13 +40,14 @@ export async function captureScreenshot(
 export async function getElementCenter(
   page: Page,
   selector: string,
+  timeout?: number,
 ): Promise<{ x: number; y: number }> {
-  if (!/^[\w\-#.\[\]="':\s,>+~*()@^$|]+$/.test(selector)) {
+  if (/[\x00-\x1f\x7f;`\\{}]/.test(selector) || selector.length === 0) {
     throw new Error(`Invalid selector: ${selector}`);
   }
 
   const element = page.locator(selector).first();
-  await element.waitFor({ state: "visible", timeout: 5000 });
+  await element.waitFor({ state: "visible", timeout: timeout ?? DEFAULT_ELEMENT_TIMEOUT });
   const box = await element.boundingBox();
 
   if (!box) {

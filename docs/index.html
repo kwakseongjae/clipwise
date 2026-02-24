@@ -17,6 +17,7 @@
     <a href="#features" class="nav-link">Features</a>
     <a href="#quickstart" class="nav-link">Quick Start</a>
     <a href="#effects" class="nav-link">Effects</a>
+    <a href="#ai-schema" class="nav-link">AI-Ready</a>
     <a href="./demo/" class="nav-link">Demo</a>
     <div class="nav-lang">
       <span class="lang-btn active">EN</span>
@@ -206,26 +207,229 @@ steps:
     transition: none        # none | fade</code></pre>
   </div>
 
-  <h3 style="font-size:16px;font-weight:700;margin:28px 0 12px;">Actions</h3>
+  <h3 class="action-group-title">Basic Actions</h3>
   <div style="overflow-x:auto;">
     <table class="doc-table">
       <thead>
         <tr>
           <th>Action</th>
           <th>Parameters</th>
+          <th>Default</th>
           <th>Description</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td><code>navigate</code></td><td><code>url</code>, <code>waitUntil?</code></td><td>Navigate to URL</td></tr>
-        <tr><td><code>click</code></td><td><code>selector</code>, <code>delay?</code></td><td>Click an element</td></tr>
-        <tr><td><code>type</code></td><td><code>selector</code>, <code>text</code>, <code>delay?</code></td><td>Type text (char-by-char)</td></tr>
-        <tr><td><code>hover</code></td><td><code>selector</code></td><td>Hover over element</td></tr>
-        <tr><td><code>scroll</code></td><td><code>y?</code>, <code>x?</code>, <code>selector?</code>, <code>smooth?</code></td><td>Scroll by offset</td></tr>
-        <tr><td><code>wait</code></td><td><code>duration</code></td><td>Wait (ms)</td></tr>
-        <tr><td><code>screenshot</code></td><td><code>name?</code>, <code>fullPage?</code></td><td>Capture marker</td></tr>
+        <tr><td><code>navigate</code></td><td><code>url</code>, <code>waitUntil?</code></td><td><code>networkidle</code></td><td>Navigate to URL</td></tr>
+        <tr><td><code>click</code></td><td><code>selector</code>, <code>delay?</code>, <code>timeout?</code></td><td></td><td>Click an element</td></tr>
+        <tr><td><code>type</code></td><td><code>selector</code>, <code>text</code>, <code>delay?</code>, <code>timeout?</code></td><td><code>delay: 50</code></td><td>Type text (char-by-char)</td></tr>
+        <tr><td><code>hover</code></td><td><code>selector</code>, <code>timeout?</code></td><td></td><td>Hover over element</td></tr>
+        <tr><td><code>scroll</code></td><td><code>y?</code>, <code>x?</code>, <code>selector?</code>, <code>smooth?</code>, <code>timeout?</code></td><td><code>smooth: true</code></td><td>Scroll by offset</td></tr>
+        <tr><td><code>wait</code></td><td><code>duration</code></td><td></td><td>Wait (ms)</td></tr>
+        <tr><td><code>screenshot</code></td><td><code>name?</code>, <code>fullPage?</code></td><td><code>fullPage: false</code></td><td>Capture marker</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <h3 class="action-group-title">Async Wait Actions</h3>
+  <div style="overflow-x:auto;">
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>Action</th>
+          <th>Parameters</th>
+          <th>Default</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>waitForSelector</code></td><td><code>selector</code>, <code>state?</code>, <code>timeout?</code></td><td><code>visible</code>, <code>15s</code></td><td>Wait for element state</td></tr>
+        <tr><td><code>waitForNavigation</code></td><td><code>waitUntil?</code>, <code>timeout?</code></td><td><code>networkidle</code>, <code>15s</code></td><td>Wait for page load</td></tr>
+        <tr><td><code>waitForURL</code></td><td><code>url</code>, <code>timeout?</code></td><td><code>15s</code></td><td>Wait for URL match</td></tr>
+        <tr><td><code>waitForFunction</code></td><td><code>expression</code>, <code>polling?</code>, <code>timeout?</code></td><td><code>raf</code>, <code>30s</code></td><td>Wait for JS expression to be truthy</td></tr>
+        <tr><td><code>waitForResponse</code></td><td><code>url</code>, <code>status?</code>, <code>timeout?</code></td><td><code>30s</code></td><td>Wait for network response (URL substring match)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block" style="margin-top:20px;">
+    <div class="code-header">yaml — Async wait examples</div>
+    <pre><code># Wait for element to appear after API call
+- action: waitForSelector
+  selector: ".result-panel"
+  state: visible
+  timeout: 20000
+
+# Wait for AI streaming to complete
+- action: waitForFunction
+  expression: "document.querySelector('.ai-response')?.dataset.done === 'true'"
+  timeout: 60000
+
+# Wait for specific API response
+- action: waitForResponse
+  url: "/api/chat/completions"
+  status: 200
+  timeout: 60000</code></pre>
+  </div>
+</section>
+
+<!-- AI-Ready Schema Reference -->
+<section class="section" id="ai-schema">
+  <div class="section-label">AI-Ready</div>
+  <h2 class="section-title">Full schema for AI tools</h2>
+  <p class="section-sub">Copy the complete YAML schema reference. Paste into Claude Code, Cursor, ChatGPT, or any AI assistant to generate scenarios instantly.</p>
+
+  <div class="ai-ready-header">
+    <h3>Complete Schema Reference</h3>
+    <button class="copy-all-btn" id="copy-schema-btn" aria-label="Copy entire schema">
+      <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
+      Copy entire schema to clipboard
+    </button>
+  </div>
+  <p class="ai-ready-desc">This block contains everything an AI needs: all 12 action types with parameters, defaults, effects config, output options, and usage rules.</p>
+
+  <div class="code-block">
+    <div class="code-header">yaml — Clipwise Full Schema Reference</div>
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.1.2)
+# Scriptable cinematic screen recorder — YAML in, MP4 out
+# Install: npm install -D clipwise
+# Record:  npx clipwise record scenario.yaml -f mp4
+
+# ─── Top-Level Structure ──────────────────────────────
+name: "Scenario Name"            # required
+description: "Optional"          # optional
+viewport:
+  width: 1280                    # default: 1280
+  height: 800                    # default: 800
+
+# ─── Output ───────────────────────────────────────────
+output:
+  format: mp4                    # mp4 | gif | png-sequence
+  fps: 30                        # 1-60 (default: 15)
+  quality: 80                    # 1-100 (default: 80, MP4: maps to CRF)
+  width: 1280                    # default: 1280
+  height: 800                    # default: 800
+
+# ─── Steps ────────────────────────────────────────────
+steps:
+  - name: "Step Name"            # optional
+    captureDelay: 200            # ms after actions (default: 300)
+    holdDuration: 800            # ms to hold result (default: 1500)
+    transition: none             # none | fade (default: none)
+    actions:
+      # --- Basic Actions (7) ---
+      - action: navigate
+        url: "https://example.com"
+        waitUntil: networkidle   # load | domcontentloaded | networkidle (default)
+
+      - action: click
+        selector: "#btn"         # CSS selector (Unicode/CJK OK)
+        delay: 0                 # optional click delay (ms)
+        timeout: 15000           # optional element wait timeout (ms)
+
+      - action: type
+        selector: "#input"
+        text: "hello"
+        delay: 50                # per-char delay ms (default: 50)
+        timeout: 15000           # optional element wait timeout (ms)
+
+      - action: hover
+        selector: ".menu"
+        timeout: 15000           # optional
+
+      - action: scroll
+        y: 400                   # vertical px (default: 0)
+        x: 0                     # horizontal px (default: 0)
+        selector: ".container"   # optional target element
+        smooth: true             # default: true
+        timeout: 15000           # optional
+
+      - action: wait
+        duration: 1000           # ms
+
+      - action: screenshot
+        name: "result"           # optional label
+        fullPage: false          # default: false
+
+      # --- Async Wait Actions (5) ---
+      - action: waitForSelector
+        selector: ".result"
+        state: visible           # visible (default) | attached | hidden
+        timeout: 15000           # default: 15000
+
+      - action: waitForNavigation
+        waitUntil: networkidle   # load | domcontentloaded | networkidle (default)
+        timeout: 15000           # default: 15000
+
+      - action: waitForURL
+        url: "https://example.com/dashboard"
+        timeout: 15000           # default: 15000
+
+      - action: waitForFunction
+        expression: "document.querySelector('.done') !== null"
+        polling: raf             # raf (default) or ms number (e.g. 500)
+        timeout: 30000           # default: 30000
+
+      - action: waitForResponse
+        url: "/api/chat"         # URL substring match
+        status: 200              # optional HTTP status filter (100-599)
+        timeout: 30000           # default: 30000
+
+# ─── Effects ──────────────────────────────────────────
+effects:
+  zoom:
+    enabled: true                # default: true
+    scale: 1.8                   # 1-5 (default: 1.8)
+    duration: 600                # ms (default: 600)
+    autoZoom:
+      followCursor: true         # default: true
+      maxScale: 2.0              # default: 2.0
+      padding: 200               # px (default: 200)
+  cursor:
+    enabled: true                # default: true
+    size: 20                     # px (default: 20)
+    color: "#000000"             # default: #000000
+    speed: fast                  # fast | normal | slow (default: fast)
+    clickEffect: true            # default: true
+    clickColor: "rgba(59,130,246,0.3)"
+    trail: false                 # default: false
+    trailLength: 8               # default: 8
+    highlight: false             # default: false
+    highlightRadius: 40          # default: 40
+  background:
+    type: gradient               # gradient | solid | image (default: gradient)
+    value: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    padding: 60                  # px (default: 60)
+    borderRadius: 12             # px (default: 12)
+    shadow: true                 # default: true
+  deviceFrame:
+    enabled: false               # default: false
+    type: browser                # browser | iphone | ipad | android | none
+    darkMode: false              # default: false
+  keystroke:
+    enabled: false               # default: false
+    position: bottom-center      # bottom-center | bottom-left | bottom-right
+    fontSize: 18                 # default: 18
+    fadeAfter: 1500              # ms (default: 1500)
+  speedRamp:
+    enabled: false               # default: false
+    idleSpeed: 3.0               # default: 3.0
+    actionSpeed: 0.8             # default: 0.8
+  watermark:
+    enabled: false               # default: false
+    text: ""
+    position: bottom-right       # top-left | top-right | bottom-left | bottom-right
+    opacity: 0.5                 # 0-1 (default: 0.5)
+
+# ─── Rules ────────────────────────────────────────────
+# - Selectors: CSS selectors (#id, .class, [data-*], [aria-label="..."])
+# - Unicode/CJK characters in selectors are supported
+# - Click/type elements must be visible — scroll first if needed
+# - Focus input with click before type action
+# - Prefer async wait actions over fixed wait for reliability
+# - waitForFunction: use for AI streaming, dynamic content, DOM changes
+# - waitForResponse: set up before triggering action (auto-handled)
+# - Timing: captureDelay 50-100ms, holdDuration 500-800ms for snappy demos</code></pre>
   </div>
 </section>
 

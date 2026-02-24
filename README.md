@@ -114,17 +114,57 @@ steps:
 
 ### Actions
 
-| Action | Parameters | Description |
-|--------|-----------|-------------|
-| `navigate` | `url`, `waitUntil?` | Navigate to URL |
-| `click` | `selector`, `delay?` | Click an element |
-| `type` | `selector`, `text`, `delay?` | Type text (char-by-char) |
-| `hover` | `selector` | Hover over element |
-| `scroll` | `y?`, `x?`, `selector?`, `smooth?` | Scroll by offset |
-| `wait` | `duration` | Wait (ms) |
-| `screenshot` | `name?`, `fullPage?` | Capture marker |
+#### Basic Actions
+
+| Action | Parameters | Default | Description |
+|--------|-----------|---------|-------------|
+| `navigate` | `url`, `waitUntil?` | `waitUntil: "networkidle"` | Navigate to URL |
+| `click` | `selector`, `delay?`, `timeout?` | | Click an element |
+| `type` | `selector`, `text`, `delay?`, `timeout?` | `delay: 50` | Type text (char-by-char) |
+| `hover` | `selector`, `timeout?` | | Hover over element |
+| `scroll` | `y?`, `x?`, `selector?`, `smooth?`, `timeout?` | `y: 0`, `x: 0`, `smooth: true` | Scroll by offset |
+| `wait` | `duration` | | Wait (ms) |
+| `screenshot` | `name?`, `fullPage?` | `fullPage: false` | Capture marker |
+
+#### Async Wait Actions
+
+| Action | Parameters | Default | Description |
+|--------|-----------|---------|-------------|
+| `waitForSelector` | `selector`, `state?`, `timeout?` | `state: "visible"`, `timeout: 15000` | Wait for element state |
+| `waitForNavigation` | `waitUntil?`, `timeout?` | `waitUntil: "networkidle"`, `timeout: 15000` | Wait for page load |
+| `waitForURL` | `url`, `timeout?` | `timeout: 15000` | Wait for URL match |
+| `waitForFunction` | `expression`, `polling?`, `timeout?` | `polling: "raf"`, `timeout: 30000` | Wait for JS expression to be truthy |
+| `waitForResponse` | `url`, `status?`, `timeout?` | `timeout: 30000` | Wait for network response (URL substring match) |
 
 **`waitUntil`** options: `"load"`, `"domcontentloaded"`, `"networkidle"` (default)
+**`state`** options: `"visible"` (default), `"attached"`, `"hidden"`
+**`polling`** options: `"raf"` (requestAnimationFrame, default) or milliseconds (e.g. `500`)
+
+#### Async Wait Examples
+
+```yaml
+# Wait for element to appear
+- action: waitForSelector
+  selector: ".result-panel"
+  state: visible
+  timeout: 20000
+
+# Wait for AI streaming response to complete
+- action: waitForFunction
+  expression: "document.querySelector('.ai-response')?.dataset.done === 'true'"
+  timeout: 60000
+
+# Wait for API response
+- action: waitForResponse
+  url: "/api/chat/completions"
+  status: 200
+  timeout: 60000
+
+# Wait for dynamic content length
+- action: waitForFunction
+  expression: "document.querySelector('.output')?.textContent?.length > 100"
+  polling: 500
+```
 
 ### Timing Tips
 

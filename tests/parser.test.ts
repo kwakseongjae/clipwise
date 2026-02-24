@@ -79,6 +79,231 @@ steps:
     expect(scenario.steps[0].actions).toHaveLength(4);
   });
 
+  it("accepts Korean/CJK unicode selectors", () => {
+    const scenario = parseScenario(`
+name: "Unicode selectors"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: click
+        selector: "[data-label='한국어']"
+      - action: click
+        selector: ".日本語-class"
+      - action: click
+        selector: "#中文id"
+`);
+    expect(scenario.steps[0].actions).toHaveLength(4);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "click",
+      selector: "[data-label='한국어']",
+    });
+  });
+
+  it("rejects selectors with control characters", () => {
+    expect(() =>
+      parseScenario(`
+name: "Bad selector"
+steps:
+  - actions:
+      - action: click
+        selector: "div\\x00"
+`),
+    ).toThrow("Scenario validation failed");
+  });
+
+  it("rejects selectors with semicolons or backticks", () => {
+    expect(() =>
+      parseScenario(`
+name: "Bad selector"
+steps:
+  - actions:
+      - action: click
+        selector: "div; rm -rf /"
+`),
+    ).toThrow("Scenario validation failed");
+  });
+
+  it("parses timeout on click/type/hover/scroll actions", () => {
+    const scenario = parseScenario(`
+name: "With timeout"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: click
+        selector: "#btn"
+        timeout: 10000
+      - action: type
+        selector: "#input"
+        text: "hello"
+        timeout: 8000
+      - action: hover
+        selector: "#menu"
+        timeout: 5000
+`);
+    const actions = scenario.steps[0].actions;
+    expect(actions[1]).toMatchObject({ action: "click", timeout: 10000 });
+    expect(actions[2]).toMatchObject({ action: "type", timeout: 8000 });
+    expect(actions[3]).toMatchObject({ action: "hover", timeout: 5000 });
+  });
+
+  it("parses waitForSelector action", () => {
+    const scenario = parseScenario(`
+name: "Wait for selector"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForSelector
+        selector: "#dynamic-element"
+        state: attached
+        timeout: 20000
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForSelector",
+      selector: "#dynamic-element",
+      state: "attached",
+      timeout: 20000,
+    });
+  });
+
+  it("parses waitForNavigation action", () => {
+    const scenario = parseScenario(`
+name: "Wait for navigation"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForNavigation
+        waitUntil: load
+        timeout: 10000
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForNavigation",
+      waitUntil: "load",
+      timeout: 10000,
+    });
+  });
+
+  it("parses waitForURL action", () => {
+    const scenario = parseScenario(`
+name: "Wait for URL"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForURL
+        url: "https://example.com/dashboard"
+        timeout: 12000
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForURL",
+      url: "https://example.com/dashboard",
+      timeout: 12000,
+    });
+  });
+
+  it("applies defaults for waitForSelector/waitForNavigation", () => {
+    const scenario = parseScenario(`
+name: "Defaults"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForSelector
+        selector: ".item"
+      - action: waitForNavigation
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForSelector",
+      state: "visible",
+      timeout: 15000,
+    });
+    expect(scenario.steps[0].actions[2]).toMatchObject({
+      action: "waitForNavigation",
+      waitUntil: "networkidle",
+      timeout: 15000,
+    });
+  });
+
+  it("parses waitForFunction with defaults", () => {
+    const scenario = parseScenario(`
+name: "Wait for function"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForFunction
+        expression: "document.querySelector('.done') !== null"
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForFunction",
+      expression: "document.querySelector('.done') !== null",
+      polling: "raf",
+      timeout: 30000,
+    });
+  });
+
+  it("parses waitForFunction with numeric polling", () => {
+    const scenario = parseScenario(`
+name: "Wait for function polling"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForFunction
+        expression: "document.querySelector('.output')?.textContent?.length > 100"
+        polling: 500
+        timeout: 60000
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForFunction",
+      expression: "document.querySelector('.output')?.textContent?.length > 100",
+      polling: 500,
+      timeout: 60000,
+    });
+  });
+
+  it("parses waitForResponse with status", () => {
+    const scenario = parseScenario(`
+name: "Wait for response"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForResponse
+        url: "/api/chat/completions"
+        status: 200
+        timeout: 60000
+`);
+    expect(scenario.steps[0].actions[1]).toMatchObject({
+      action: "waitForResponse",
+      url: "/api/chat/completions",
+      status: 200,
+      timeout: 60000,
+    });
+  });
+
+  it("parses waitForResponse with defaults", () => {
+    const scenario = parseScenario(`
+name: "Wait for response defaults"
+steps:
+  - actions:
+      - action: navigate
+        url: "https://example.com"
+      - action: waitForResponse
+        url: "/api/generate"
+`);
+    const action = scenario.steps[0].actions[1];
+    expect(action).toMatchObject({
+      action: "waitForResponse",
+      url: "/api/generate",
+      timeout: 30000,
+    });
+    expect((action as any).status).toBeUndefined();
+  });
+
   it("parses effects configuration", () => {
     const scenario = parseScenario(`
 name: "With effects"

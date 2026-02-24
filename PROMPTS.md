@@ -48,34 +48,75 @@ steps: []             # 스텝 배열 (아래 참조)
   transition: none    # none | fade
   actions:            # 액션 배열
 
-### 사용 가능한 액션
+### 사용 가능한 액션 (12종)
+
+#### 기본 액션 (7종)
 1. navigate — 페이지 이동
    - action: navigate
      url: "http://localhost:3000/dashboard"
-     waitUntil: load    # load | domcontentloaded | networkidle
+     waitUntil: load    # load | domcontentloaded | networkidle (기본: networkidle)
 
 2. click — 요소 클릭
    - action: click
      selector: "#login-btn"
+     timeout: 15000     # 선택. 요소 대기 타임아웃(ms)
 
 3. type — 텍스트 입력 (한 글자씩)
    - action: type
      selector: "#email-input"
      text: "user@example.com"
-     delay: 18          # 글자당 딜레이(ms). 15-25 권장
+     delay: 18          # 글자당 딜레이(ms). 15-25 권장 (기본: 50)
+     timeout: 15000     # 선택. 요소 대기 타임아웃(ms)
 
 4. hover — 요소에 마우스 올리기
    - action: hover
      selector: ".card:first-child"
+     timeout: 15000     # 선택. 요소 대기 타임아웃(ms)
 
 5. scroll — 스크롤
    - action: scroll
-     y: 400             # 아래로 400px
-     smooth: true
+     y: 400             # 아래로 400px (기본: 0)
+     x: 0               # 기본: 0
+     smooth: true       # 기본: true
+     timeout: 15000     # 선택. 요소 대기 타임아웃(ms)
 
 6. wait — 대기
    - action: wait
      duration: 1000     # 1초 대기
+
+7. screenshot — 캡처 마커
+   - action: screenshot
+     name: "결과 화면"   # 선택
+     fullPage: false     # 기본: false
+
+#### 비동기 대기 액션 (5종) — API 호출, 동적 콘텐츠 등 비동기 작업 대기
+8. waitForSelector — 요소 상태 대기
+   - action: waitForSelector
+     selector: ".result-panel"
+     state: visible      # visible(기본) | attached | hidden
+     timeout: 15000      # 기본: 15000
+
+9. waitForNavigation — 페이지 로드 대기
+   - action: waitForNavigation
+     waitUntil: networkidle  # load | domcontentloaded | networkidle(기본)
+     timeout: 15000          # 기본: 15000
+
+10. waitForURL — 특정 URL 대기
+    - action: waitForURL
+      url: "https://example.com/dashboard"
+      timeout: 15000     # 기본: 15000
+
+11. waitForFunction — JS 표현식 평가 대기 (truthy가 될 때까지)
+    - action: waitForFunction
+      expression: "document.querySelector('.done') !== null"
+      polling: raf       # raf(기본, requestAnimationFrame) 또는 밀리초 숫자(예: 500)
+      timeout: 30000     # 기본: 30000
+
+12. waitForResponse — 네트워크 응답 대기 (URL 부분 문자열 매칭)
+    - action: waitForResponse
+      url: "/api/chat/completions"
+      status: 200        # 선택. HTTP 상태코드 필터 (100-599)
+      timeout: 30000     # 기본: 30000
 
 ### 이펙트 설정
 effects:
@@ -106,9 +147,12 @@ effects:
     text: "My App"
 
 ### 중요한 규칙
-- selector는 CSS 선택자 사용 (#id, .class, [data-testid="..."])
+- selector는 CSS 선택자 사용 (#id, .class, [data-testid="..."], [aria-label="..."]) — 한국어/유니코드 OK
 - 클릭/호버 전에 해당 요소가 화면에 보여야 함 → 필요하면 scroll 먼저
 - type 전에 input 요소를 click으로 포커스해야 함
+- API 호출 결과를 기다려야 하면 waitForSelector, waitForFunction, waitForResponse 사용
+- 고정 시간 wait 대신 비동기 대기 액션을 우선 사용 (더 안정적)
+- AI 스트리밍 응답은 waitForFunction으로 DOM 변화를 감지
 - 스텝은 많을수록 영상이 풍성함 (15-25개 스텝이 30초 분량에 적절)
 - holdDuration은 500-800ms가 스피디한 느낌
 - type.delay는 15-25ms가 자연스럽고 빠른 타이핑
