@@ -50,20 +50,20 @@
     "node": ">=18"
   },
   "dependencies": {
-    "playwright": "^1.50.0",
-    "yaml": "^2.7.0",
-    "sharp": "^0.33.0",
-    "commander": "^13.0.0",
-    "ora": "^8.0.0",
     "chalk": "^5.4.0",
-    "zod": "^3.24.0",
-    "gifenc": "^1.0.3"
+    "commander": "^13.0.0",
+    "gifenc": "^1.0.3",
+    "ora": "^8.0.0",
+    "playwright": "^1.50.0",
+    "sharp": "^0.33.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
-    "tsup": "^8.0.0",
-    "vitest": "^3.0.0",
     "@types/node": "^22.0.0",
-    "eslint": "^9.0.0"
+    "eslint": "^10.0.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }
