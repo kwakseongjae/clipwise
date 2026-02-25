@@ -100,7 +100,7 @@ output:
   width: 1280
   height: 800
   fps: 30                  # 1-60
-  quality: 80              # 1-100 (MP4: maps to CRF)
+  preset: social           # social | balanced | archive
 
 steps:
   - name: "Step name"
@@ -283,21 +283,40 @@ speedRamp:
 
 ## Output Compression
 
-MP4 output uses `libx264` with `slow` preset and `animation` tuning for best quality-per-byte. The `quality` field maps to CRF:
+Use the `preset` field to control quality and file size:
 
-| quality | CRF | Use case |
-|---------|-----|----------|
-| 90-100 | 0-5 | Lossless / archival |
-| 70-85 | 8-15 | High quality demos |
-| 50-70 | 15-26 | Web sharing |
-| 30-50 | 26-36 | Small file size |
+```yaml
+output:
+  format: mp4
+  fps: 30
+  preset: social      # social | balanced | archive
+```
 
-**Recommended**: `quality: 80` for most demos (CRF ~10, good visual quality, ~3-7 MB for 30s).
+| Preset | libx264 CRF | HEVC VideoToolbox q:v | Target use case |
+|--------|-------------|----------------------|-----------------|
+| `social` | 22 | 60 | Twitter, LinkedIn, Loom-style sharing (~2-4 MB / 30s) |
+| `balanced` | 18 | 70 | General purpose, portfolio sites (~4-6 MB / 30s) |
+| `archive` | 13 | 80 | High-fidelity storage, source masters (uncapped) |
+
+**Recommended**: `preset: balanced` for most demos.
+
+> **Legacy**: `quality: 1-100` still works and maps to the nearest preset (`>= 75` → social, `>= 45` → balanced, `< 45` → archive). Prefer `preset` for clarity.
+
+### macOS — Hardware Acceleration
+
+On **Apple Silicon and Intel Mac**, Clipwise automatically uses `hevc_videotoolbox` (HEVC/H.265) for hardware-accelerated encoding. This delivers **~5–10× faster encoding** than software `libx264` with no setup required.
+
+```
+macOS (HEVC VideoToolbox)  →  ~3 min wall time for a 44s, 1280×800 demo
+Linux / Windows            →  ~8–12 min wall time (libx264, same quality)
+```
+
+VideoToolbox is detected at runtime — no config needed. If VideoToolbox is unavailable, it falls back to `libx264` automatically.
 
 For further compression after export:
 
 ```bash
-# Re-encode with tighter CRF
+# Re-encode with tighter settings
 ffmpeg -i input.mp4 -c:v libx264 -crf 26 -preset slow -movflags +faststart output.mp4
 
 # Convert to WebM (smaller, web-native)
@@ -327,7 +346,7 @@ effects:
 output:
   format: mp4
   fps: 30
-  quality: 80
+  preset: social    # social | balanced | archive
 
 steps:
   - name: "Open app"

@@ -195,7 +195,7 @@ output:
   width: 1280
   height: 800
   fps: 30                  # 1-60
-  quality: 80              # 1-100 (MP4: maps to CRF)
+  preset: balanced         # social | balanced | archive
 
 steps:
   - name: "Step name"
@@ -290,7 +290,7 @@ steps:
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise Full Schema Reference</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.1.2)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.3.0)
 # Scriptable cinematic screen recorder — YAML in, MP4 out
 # Install: npm install -D clipwise
 # Record:  npx clipwise record scenario.yaml -f mp4
@@ -305,8 +305,9 @@ viewport:
 # ─── Output ───────────────────────────────────────────
 output:
   format: mp4                    # mp4 | gif | png-sequence
-  fps: 30                        # 1-60 (default: 15)
-  quality: 80                    # 1-100 (default: 80, MP4: maps to CRF)
+  fps: 30                        # 1-60 (default: 30)
+  preset: balanced               # social | balanced | archive (default: balanced)
+  # quality: 80                  # DEPRECATED — use preset instead
   width: 1280                    # default: 1280
   height: 800                    # default: 800
 

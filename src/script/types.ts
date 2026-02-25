@@ -207,8 +207,13 @@ export const OutputConfigSchema = z.object({
   format: z.enum(["gif", "mp4", "webm", "png-sequence"]).default("gif"),
   width: z.number().default(1280),
   height: z.number().default(800),
-  fps: z.number().min(1).max(60).default(15),
+  fps: z.number().min(1).max(60).default(30),
   quality: z.number().min(1).max(100).default(80),
+  // Encoding preset for MP4 output. Overrides quality when set.
+  // social   — optimized for Twitter/X and YouTube (CRF 25, capped bitrate)
+  // balanced — general-purpose, good quality/size trade-off (CRF 20)
+  // archive  — high-fidelity storage, larger file (CRF 15)
+  preset: z.enum(["social", "balanced", "archive"]).optional(),
   outputDir: z.string().default("./output"),
   filename: z.string().default("clipwise-recording"),
 });
@@ -258,6 +263,8 @@ export interface CapturedFrame {
   clickPosition: { x: number; y: number } | null;
   clickProgress?: number;
   viewport: { width: number; height: number };
+  /** Device pixel ratio used during capture (1 = normal, 2 = Retina/HiDPI). */
+  deviceScaleFactor?: number;
   stepName?: string;
   stepIndex?: number;
   actionType?: string;

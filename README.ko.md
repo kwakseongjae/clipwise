@@ -100,7 +100,7 @@ output:
   width: 1280
   height: 800
   fps: 30                  # 1-60
-  quality: 80              # 1-100 (MP4: CRF에 매핑)
+  preset: social           # social | balanced | archive
 
 steps:
   - name: "스텝 이름"
@@ -271,6 +271,38 @@ speedRamp:
   idleSpeed: 3.0
   actionSpeed: 0.8
 ```
+
+## 출력 압축
+
+`preset` 필드로 화질과 파일 크기를 조절합니다:
+
+```yaml
+output:
+  format: mp4
+  fps: 30
+  preset: social      # social | balanced | archive
+```
+
+| 프리셋 | libx264 CRF | HEVC VideoToolbox q:v | 용도 |
+|--------|-------------|----------------------|------|
+| `social` | 22 | 60 | Twitter, LinkedIn 등 소셜 공유 (~2-4 MB / 30초) |
+| `balanced` | 18 | 70 | 범용, 포트폴리오 (~4-6 MB / 30초) |
+| `archive` | 13 | 80 | 고화질 보관, 소스 마스터 (무제한) |
+
+**권장**: 대부분의 데모에는 `preset: balanced`.
+
+> **레거시**: `quality: 1-100`은 계속 작동하며 가장 가까운 프리셋으로 매핑됩니다 (`>= 75` → social, `>= 45` → balanced, `< 45` → archive). 명확성을 위해 `preset` 사용을 권장합니다.
+
+### macOS — 하드웨어 가속
+
+**Apple Silicon 및 Intel Mac**에서 Clipwise는 자동으로 `hevc_videotoolbox` (HEVC/H.265) 하드웨어 인코더를 사용합니다. 별도 설정 없이 소프트웨어 인코딩 대비 **~5–10× 빠른 인코딩** 속도를 제공합니다.
+
+```
+macOS (HEVC VideoToolbox)  →  44초짜리 1280×800 데모 기준 약 3분
+Linux / Windows            →  동일 품질 기준 약 8–12분 (libx264)
+```
+
+VideoToolbox는 런타임에 자동 감지되며, 사용 불가 시 `libx264`로 자동 폴백합니다.
 
 ## AI로 시나리오 작성
 

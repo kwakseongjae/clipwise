@@ -267,7 +267,7 @@ effects:
 output:
   format: mp4
   fps: 30
-  quality: 80
+  preset: balanced  # social | balanced | archive
 
 steps:
   - name: "Open app"
@@ -387,7 +387,7 @@ program
         },
         output: {
           format: options.format, width: outWidth, height: outHeight,
-          fps: 30, quality: 80,
+          fps: 30, preset: "social" as const,
           outputDir: options.output, filename: `clipwise-demo-${device}`,
         },
         steps,
