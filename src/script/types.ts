@@ -209,6 +209,11 @@ export const OutputConfigSchema = z.object({
   height: z.number().default(800),
   fps: z.number().min(1).max(60).default(30),
   quality: z.number().min(1).max(100).default(80),
+  // Encoding preset for MP4 output. Overrides quality when set.
+  // social   — optimized for Twitter/X and YouTube (CRF 25, capped bitrate)
+  // balanced — general-purpose, good quality/size trade-off (CRF 20)
+  // archive  — high-fidelity storage, larger file (CRF 15)
+  preset: z.enum(["social", "balanced", "archive"]).optional(),
   outputDir: z.string().default("./output"),
   filename: z.string().default("clipwise-recording"),
 });

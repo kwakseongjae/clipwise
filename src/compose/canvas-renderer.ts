@@ -1,4 +1,7 @@
-import sharp from "sharp";
+import { Worker } from "worker_threads";
+import os from "os";
+import { existsSync } from "fs";
+import { fileURLToPath } from "url";
 import type {
   CapturedFrame,
   ComposedFrame,
@@ -6,45 +9,36 @@ import type {
   OutputConfig,
   Step,
 } from "../script/types.js";
-import { applyDeviceFrame } from "../effects/frame.js";
-import {
-  renderCursor,
-  renderClickEffect,
-  renderCursorTrail,
-  renderCursorHighlight,
-} from "../effects/cursor.js";
-import { applyZoom, calculateAdaptiveZoom } from "../effects/zoom.js";
-import { applyBackground } from "../effects/background.js";
-import { renderKeystrokeHud } from "../effects/keystroke.js";
+import { composeFrame, getFrameOffset } from "./compose-frame.js";
+import type { FrameContext } from "./compose-frame.js";
+import { calculateAdaptiveZoom } from "../effects/zoom.js";
 import { applyCrossfade } from "../effects/transition.js";
-import { renderWatermark } from "../effects/watermark.js";
 
-/**
- * Return the pixel offset that a device frame adds to the top-left of the
- * screenshot content.  Zoom focus points are in viewport coordinates and need
- * to be shifted by these amounts after the device frame is composited.
- */
-function getFrameOffset(config: EffectsConfig["deviceFrame"]): { left: number; top: number } {
-  if (!config.enabled) return { left: 0, top: 0 };
+export type { FrameContext };
 
-  switch (config.type) {
-    case "browser":
-      return { left: 0, top: 40 };
-    case "iphone":
-      return { left: 12, top: 50 };
-    case "ipad":
-      return { left: 20, top: 24 };
-    case "android":
-      return { left: 8, top: 32 };
-    default:
-      return { left: 0, top: 0 };
+// Minimum frames per worker to justify thread overhead
+const MIN_FRAMES_PER_WORKER = 4;
+
+// Resolve worker path once, regardless of which bundle we're running in
+let cachedWorkerUrl: URL | null = null;
+function getWorkerUrl(): URL {
+  if (cachedWorkerUrl) return cachedWorkerUrl;
+  const base = import.meta.url;
+  // Worker is compiled to dist/compose/frame-worker.js.
+  // The bundle can be at dist/cli/index.js, dist/index.js, etc.
+  const candidates = [
+    new URL("./frame-worker.js", base),           // from dist/compose/
+    new URL("../compose/frame-worker.js", base),  // from dist/cli/
+    new URL("./compose/frame-worker.js", base),   // from dist/
+  ];
+  for (const url of candidates) {
+    if (existsSync(fileURLToPath(url))) {
+      cachedWorkerUrl = url;
+      return url;
+    }
   }
-}
-
-export interface FrameContext {
-  zoomScale: number;
-  clickProgress: number | null;
-  cursorTrail: Array<{ x: number; y: number }>;
+  cachedWorkerUrl = candidates[1]; // safe fallback
+  return cachedWorkerUrl;
 }
 
 export class CanvasRenderer {
@@ -59,163 +53,14 @@ export class CanvasRenderer {
   }
 
   /**
-   * Apply the full effects pipeline to a single captured frame.
-   *
-   * Pipeline order:
-   *  1. Device frame (browser chrome / mobile mockup)
-   *  2. Cursor highlight (Screen Studio glow)
-   *  3. Cursor trail
-   *  4. Cursor rendering
-   *  5. Click ripple effect (animated progress)
-   *  6. Keystroke HUD
-   *  7. Zoom (adaptive, cursor-following)
-   *  8. Background (padding, gradient, rounded corners)
-   *  9. Watermark overlay
-   *  10. Final resize
+   * Apply the full effects pipeline to a single frame.
+   * Delegates to the standalone composeFrame function.
    */
   async composeFrame(
     frame: CapturedFrame,
     context?: Partial<FrameContext>,
   ): Promise<ComposedFrame> {
-    let buffer = frame.screenshot;
-    let width = frame.viewport.width;
-    let height = frame.viewport.height;
-
-    const ctx: FrameContext = {
-      zoomScale: context?.zoomScale ?? 1,
-      clickProgress: context?.clickProgress ?? null,
-      cursorTrail: context?.cursorTrail ?? [],
-    };
-
-    // 1. Device frame
-    if (this.effects.deviceFrame.enabled) {
-      buffer = await applyDeviceFrame(
-        buffer,
-        this.effects.deviceFrame,
-        width,
-        height,
-      );
-      const meta = await sharp(buffer).metadata();
-      width = meta.width ?? width;
-      height = meta.height ?? height;
-    }
-
-    // 2. Cursor highlight (Screen Studio style glow)
-    if (
-      this.effects.cursor.enabled &&
-      this.effects.cursor.highlight &&
-      frame.cursorPosition
-    ) {
-      buffer = await renderCursorHighlight(
-        buffer,
-        frame.cursorPosition,
-        this.effects.cursor,
-        width,
-        height,
-      );
-    }
-
-    // 3. Cursor trail
-    if (
-      this.effects.cursor.enabled &&
-      this.effects.cursor.trail &&
-      ctx.cursorTrail.length >= 2
-    ) {
-      buffer = await renderCursorTrail(
-        buffer,
-        ctx.cursorTrail,
-        this.effects.cursor,
-        width,
-        height,
-      );
-    }
-
-    // 4. Cursor rendering
-    if (this.effects.cursor.enabled && frame.cursorPosition) {
-      buffer = await renderCursor(
-        buffer,
-        frame.cursorPosition,
-        this.effects.cursor,
-        width,
-        height,
-      );
-    }
-
-    // 5. Click ripple effect
-    if (
-      this.effects.cursor.enabled &&
-      this.effects.cursor.clickEffect &&
-      frame.clickPosition
-    ) {
-      const progress =
-        ctx.clickProgress ?? frame.clickProgress ?? 0.5;
-      buffer = await renderClickEffect(
-        buffer,
-        frame.clickPosition,
-        this.effects.cursor,
-        progress,
-        width,
-        height,
-      );
-    }
-
-    // 6. Keystroke HUD
-    if (this.effects.keystroke.enabled && frame.keystrokes) {
-      buffer = await renderKeystrokeHud(
-        buffer,
-        frame.keystrokes,
-        frame.timestamp,
-        this.effects.keystroke,
-        width,
-        height,
-      );
-    }
-
-    // 7. Zoom (adaptive, follows cursor)
-    const scale = ctx.zoomScale;
-    if (this.effects.zoom.enabled && scale > 1) {
-      const rawFocus = frame.clickPosition ??
-        frame.cursorPosition ?? { x: width / 2, y: height / 2 };
-      const offset = getFrameOffset(this.effects.deviceFrame);
-      const focusPoint = {
-        x: rawFocus.x + offset.left,
-        y: rawFocus.y + offset.top,
-      };
-      buffer = await applyZoom(buffer, focusPoint, scale, width, height);
-    }
-
-    // 8. Background
-    buffer = await applyBackground(
-      buffer,
-      this.effects.background,
-      this.output.width,
-      this.output.height,
-    );
-
-    // 9. Watermark overlay
-    if (this.effects.watermark.enabled) {
-      buffer = await renderWatermark(
-        buffer,
-        this.effects.watermark,
-        this.output.width,
-        this.output.height,
-      );
-    }
-
-    // 10. Final resize (ensure exact output dimensions)
-    buffer = await sharp(buffer)
-      .resize(this.output.width, this.output.height, {
-        fit: "fill",
-        kernel: sharp.kernel.lanczos3,
-      })
-      .png()
-      .toBuffer();
-
-    return {
-      index: frame.index,
-      buffer,
-      timestamp: frame.timestamp,
-    };
+    return composeFrame(frame, this.effects, this.output, context);
   }
 
   /**
@@ -224,13 +69,13 @@ export class CanvasRenderer {
    * Multi-pass approach:
    *   Pass 1: Speed ramping (adjust frame set).
    *   Pass 2: Calculate per-frame contexts (zoom, click, trail).
-   *   Pass 3: Render each frame with effects.
+   *   Pass 3: Render frames in parallel using worker threads.
    *   Pass 4: Apply scene transitions at step boundaries.
    */
   async composeAll(frames: CapturedFrame[]): Promise<ComposedFrame[]> {
     if (frames.length === 0) return [];
 
-    // Pass 1: Apply speed ramping (adjust frame set)
+    // Pass 1: Apply speed ramping
     let processFrames = frames;
     if (this.effects.speedRamp.enabled) {
       processFrames = this.applySpeedRamp(frames);
@@ -239,11 +84,23 @@ export class CanvasRenderer {
     // Pass 2: Calculate per-frame contexts
     const contexts = this.calculateFrameContexts(processFrames);
 
-    // Pass 3: Render
-    const composed: ComposedFrame[] = [];
-    for (let i = 0; i < processFrames.length; i++) {
-      const result = await this.composeFrame(processFrames[i], contexts[i]);
-      composed.push(result);
+    // Pass 3: Render — parallel if enough frames and CPUs
+    const cpuCount = os.cpus().length;
+    const workerCount = Math.min(cpuCount, 8);
+    const useWorkers =
+      workerCount >= 2 &&
+      processFrames.length >= workerCount * MIN_FRAMES_PER_WORKER;
+
+    let composed: ComposedFrame[];
+    if (useWorkers) {
+      composed = await this.processWithWorkers(processFrames, contexts, workerCount);
+    } else {
+      composed = [];
+      for (let i = 0; i < processFrames.length; i++) {
+        composed.push(
+          await composeFrame(processFrames[i], this.effects, this.output, contexts[i]),
+        );
+      }
     }
 
     // Pass 4: Apply scene transitions at step boundaries
@@ -255,12 +112,82 @@ export class CanvasRenderer {
   }
 
   /**
-   * Calculate per-frame rendering context (zoom, click progress, cursor trail, tilt).
+   * Distribute frame composition across a pool of worker threads.
+   * Workers process frames concurrently; results are collected in order.
+   */
+  private processWithWorkers(
+    frames: CapturedFrame[],
+    contexts: FrameContext[],
+    workerCount: number,
+  ): Promise<ComposedFrame[]> {
+    return new Promise((resolve, reject) => {
+      const results: ComposedFrame[] = new Array(frames.length);
+      let completed = 0;
+      let nextIndex = 0;
+      let failed = false;
+
+      const workerUrl = getWorkerUrl();
+      const workers: Worker[] = [];
+
+      const dispatch = (worker: Worker): void => {
+        if (nextIndex >= frames.length || failed) return;
+        const i = nextIndex++;
+        worker.postMessage({
+          taskId: i,
+          frame: frames[i],
+          effects: this.effects,
+          output: this.output,
+          context: contexts[i],
+        });
+      };
+
+      for (let w = 0; w < workerCount; w++) {
+        const worker = new Worker(workerUrl);
+        workers.push(worker);
+
+        worker.on("message", (msg: { taskId: number; index: number; timestamp: number; buffer: Buffer; error?: string }) => {
+          if (failed) return;
+
+          if (msg.error) {
+            failed = true;
+            workers.forEach((wk) => wk.terminate());
+            reject(new Error(`Worker failed on frame ${msg.taskId}: ${msg.error}`));
+            return;
+          }
+
+          results[msg.taskId] = {
+            index: frames[msg.taskId].index,
+            buffer: Buffer.from(msg.buffer),
+            timestamp: frames[msg.taskId].timestamp,
+          };
+
+          completed++;
+          if (completed === frames.length) {
+            workers.forEach((wk) => wk.terminate());
+            resolve(results);
+          } else {
+            dispatch(worker);
+          }
+        });
+
+        worker.on("error", (err) => {
+          if (failed) return;
+          failed = true;
+          workers.forEach((wk) => wk.terminate());
+          reject(err);
+        });
+
+        dispatch(worker);
+      }
+    });
+  }
+
+  /**
+   * Calculate per-frame rendering context (zoom scale, click progress, cursor trail).
    */
   private calculateFrameContexts(frames: CapturedFrame[]): FrameContext[] {
     const contexts: FrameContext[] = [];
 
-    // Calculate transition frames from duration and FPS
     const transitionFrames = Math.round(
       this.output.fps * (this.effects.zoom.duration / 1000),
     );
@@ -268,7 +195,6 @@ export class CanvasRenderer {
     for (let i = 0; i < frames.length; i++) {
       const frame = frames[i];
 
-      // Adaptive zoom based on proximity to click events
       let zoomScale = 1;
       if (this.effects.zoom.enabled) {
         zoomScale = calculateAdaptiveZoom(
@@ -279,13 +205,9 @@ export class CanvasRenderer {
         );
       }
 
-      // Click progress from frame metadata (set by recorder)
       const clickProgress =
-        frame.clickPosition != null
-          ? (frame.clickProgress ?? 0.5)
-          : null;
+        frame.clickPosition != null ? (frame.clickProgress ?? 0.5) : null;
 
-      // Cursor trail: last N cursor positions
       const trailLength = this.effects.cursor.trailLength;
       const trail: Array<{ x: number; y: number }> = [];
       for (let j = Math.max(0, i - trailLength); j <= i; j++) {
@@ -302,17 +224,14 @@ export class CanvasRenderer {
 
   /**
    * Apply speed ramping: slow down near actions, speed up during idle.
-   * Returns a new frame array with frames duplicated or skipped.
    */
   private applySpeedRamp(frames: CapturedFrame[]): CapturedFrame[] {
     const config = this.effects.speedRamp;
     if (!config.enabled) return frames;
 
-    // Determine action proximity radius (in frames)
     const proximityRadius = Math.round(this.output.fps * 1);
-
-    // Tag frames near click events as "action" frames
     const actionIndices = new Set<number>();
+
     for (let i = 0; i < frames.length; i++) {
       if (frames[i].clickPosition) {
         for (
@@ -326,18 +245,14 @@ export class CanvasRenderer {
     }
 
     const result: CapturedFrame[] = [];
-
     for (let i = 0; i < frames.length; i++) {
       const isAction = actionIndices.has(i);
-
       if (isAction) {
-        // Slow down: duplicate frame based on actionSpeed
         const copies = Math.max(1, Math.round(1 / config.actionSpeed));
         for (let c = 0; c < copies; c++) {
           result.push({ ...frames[i], index: result.length });
         }
       } else {
-        // Speed up: keep every Nth idle frame
         const skipRate = Math.max(1, Math.round(config.idleSpeed));
         if (i % skipRate === 0) {
           result.push({ ...frames[i], index: result.length });
@@ -350,16 +265,13 @@ export class CanvasRenderer {
 
   /**
    * Apply crossfade transitions at step boundaries where configured.
-   * Modifies the composed array in-place.
    */
   private async applyTransitions(
     composed: ComposedFrame[],
     frames: CapturedFrame[],
   ): Promise<void> {
-    // Number of frames for the transition blend
     const transitionFrames = Math.max(2, Math.round(this.output.fps * 0.3));
 
-    // Find step boundaries: indices where stepIndex changes
     const boundaries: Array<{ index: number; stepIndex: number }> = [];
     for (let i = 1; i < frames.length; i++) {
       if (
@@ -375,7 +287,6 @@ export class CanvasRenderer {
       }
     }
 
-    // Apply crossfade at each boundary
     for (const boundary of boundaries) {
       const startIdx = Math.max(0, boundary.index - Math.floor(transitionFrames / 2));
       const endIdx = Math.min(composed.length - 1, boundary.index + Math.ceil(transitionFrames / 2));
@@ -385,19 +296,19 @@ export class CanvasRenderer {
       const fromBuffer = composed[startIdx].buffer;
       const toBuffer = composed[endIdx].buffer;
 
-      const width = this.output.width;
-      const height = this.output.height;
-
       for (let i = startIdx + 1; i < endIdx; i++) {
         const progress = (i - startIdx) / range;
         composed[i].buffer = await applyCrossfade(
           fromBuffer,
           toBuffer,
           progress,
-          width,
-          height,
+          this.output.width,
+          this.output.height,
         );
       }
     }
   }
 }
+
+// Re-export for backwards compatibility
+export { getFrameOffset };
