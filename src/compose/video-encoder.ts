@@ -26,6 +26,9 @@ type EncodingParams = typeof ENCODING_PRESETS[PresetName];
 function resolveEncodingParams(config: OutputConfig): EncodingParams {
   if (config.preset) return ENCODING_PRESETS[config.preset];
   // Backward compat: map quality number to a preset
+  process.stderr.write(
+    `[clipwise] Deprecation: "quality" is deprecated. Use "preset: social | balanced | archive" instead.\n`,
+  );
   if (config.quality >= 75) return ENCODING_PRESETS.social;
   if (config.quality >= 45) return ENCODING_PRESETS.balanced;
   return ENCODING_PRESETS.archive;
