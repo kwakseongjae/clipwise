@@ -38,7 +38,7 @@ describe("parseScenario", () => {
     expect(scenario.viewport.width).toBe(1280);
     expect(scenario.viewport.height).toBe(800);
     expect(scenario.output.format).toBe("gif");
-    expect(scenario.output.fps).toBe(15);
+    expect(scenario.output.fps).toBe(30);
     expect(scenario.effects.zoom.enabled).toBe(true);
     expect(scenario.effects.cursor.enabled).toBe(true);
     expect(scenario.effects.background.type).toBe("gradient");
