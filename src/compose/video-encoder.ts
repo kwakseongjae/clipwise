@@ -9,10 +9,17 @@ import type { ComposedFrame, OutputConfig } from "../script/types.js";
 
 // ─── Encoding Presets ────────────────────────────────────
 
+// Quality-based encoding (content-adaptive VBR) — much more efficient than
+// constant bitrate for screen recording where large areas are static.
+//   social   → CRF 22 / HEVC q:v 60  (~3-5 MB / 30s)
+//   balanced → CRF 18 / HEVC q:v 70  (~5-8 MB / 30s)
+//   archive  → CRF 13 / HEVC q:v 80  (near-lossless, uncapped)
+// VideoToolbox q:v scale: 0 = best quality (largest), 100 = worst quality (smallest).
+// Higher values = better quality for screen content.
 const ENCODING_PRESETS = {
-  social:   { crf: 25, vtQuality: 40, maxrate: "8M",  bufsize: "16M"  },
-  balanced: { crf: 20, vtQuality: 55, maxrate: "12M", bufsize: "24M"  },
-  archive:  { crf: 15, vtQuality: 70, maxrate: undefined, bufsize: undefined },
+  social:   { crf: 22, vtQuality: 60 },
+  balanced: { crf: 18, vtQuality: 70 },
+  archive:  { crf: 13, vtQuality: 80 },
 } as const;
 
 type PresetName = keyof typeof ENCODING_PRESETS;
@@ -36,7 +43,8 @@ function resolveEncodingParams(config: OutputConfig): EncodingParams {
 
 // ─── Hardware Encoder Detection ──────────────────────────
 
-type VideoEncoder = "h264_videotoolbox" | "libx264";
+// Priority: hevc_videotoolbox (macOS HEVC HW) > h264_videotoolbox (macOS H.264 HW) > libx264 (SW)
+type VideoEncoder = "hevc_videotoolbox" | "h264_videotoolbox" | "libx264";
 
 let encoderDetectionPromise: Promise<VideoEncoder> | null = null;
 
@@ -49,7 +57,9 @@ function detectVideoEncoder(): Promise<VideoEncoder> {
       let out = "";
       proc.stdout.on("data", (d: Buffer) => (out += d.toString()));
       proc.on("close", () => {
-        resolve(out.includes("h264_videotoolbox") ? "h264_videotoolbox" : "libx264");
+        if (out.includes("hevc_videotoolbox")) resolve("hevc_videotoolbox");
+        else if (out.includes("h264_videotoolbox")) resolve("h264_videotoolbox");
+        else resolve("libx264");
       });
       proc.on("error", () => resolve("libx264"));
     });
@@ -100,13 +110,13 @@ export async function encodeGif(
  * Encode a sequence of composed frames into an MP4 buffer.
  *
  * Uses FFmpeg stdin piping (raw video) to eliminate disk I/O overhead.
- * Automatically uses h264_videotoolbox on Apple Silicon/macOS for
- * 5-10x faster encoding; falls back to libx264 on other platforms.
+ * Encoder priority: hevc_videotoolbox (macOS HEVC HW) → h264_videotoolbox
+ * (macOS H.264 HW) → libx264 (software fallback).
  *
  * Encoding quality is controlled by the output.preset field:
- *   social   — CRF 25 / VT q:v 50 (Twitter/YouTube optimized)
- *   balanced — CRF 20 / VT q:v 65 (general purpose)
- *   archive  — CRF 15 / VT q:v 80 (high-fidelity storage)
+ *   social   — screen-recording quality, ~2–4 MB / 30s
+ *   balanced — high fidelity, ~4–8 MB / 30s
+ *   archive  — near-lossless, uncapped bitrate
  *
  * Requires ffmpeg to be installed and available in PATH.
  */
@@ -142,7 +152,14 @@ async function pipeFramesToFfmpeg(
   outputPath: string,
 ): Promise<void> {
   const videoArgs =
-    encoder === "h264_videotoolbox"
+    encoder === "hevc_videotoolbox"
+      ? [
+          "-c:v", "hevc_videotoolbox",
+          "-q:v", String(params.vtQuality),
+          "-pix_fmt", "yuv420p",
+          "-tag:v", "hvc1",   // required for playback in QuickTime / Apple devices
+        ]
+      : encoder === "h264_videotoolbox"
       ? [
           "-c:v", "h264_videotoolbox",
           "-q:v", String(params.vtQuality),
@@ -156,9 +173,6 @@ async function pipeFramesToFfmpeg(
           "-profile:v", "high",
           "-level", "4.1",
           "-pix_fmt", "yuv420p",
-          ...(params.maxrate
-            ? ["-maxrate", params.maxrate, "-bufsize", params.bufsize!]
-            : []),
         ];
 
   return new Promise((resolve, reject) => {
@@ -217,11 +231,11 @@ async function pipeFramesToFfmpeg(
       }
     });
 
-    // Stream raw frames to stdin
+    // Stream raw frames to stdin.
+    // No resize needed here — compose pipeline already outputs at config.width × config.height.
     (async () => {
       for (const frame of frames) {
         const raw = await sharp(frame.buffer)
-          .resize(config.width, config.height, { fit: "fill" })
           .flatten({ background: { r: 0, g: 0, b: 0 } })
           .raw()
           .toBuffer();

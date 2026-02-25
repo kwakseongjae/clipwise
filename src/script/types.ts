@@ -263,6 +263,8 @@ export interface CapturedFrame {
   clickPosition: { x: number; y: number } | null;
   clickProgress?: number;
   viewport: { width: number; height: number };
+  /** Device pixel ratio used during capture (1 = normal, 2 = Retina/HiDPI). */
+  deviceScaleFactor?: number;
   stepName?: string;
   stepIndex?: number;
   actionType?: string;

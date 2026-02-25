@@ -292,28 +292,26 @@ output:
   preset: social      # social | balanced | archive
 ```
 
-| Preset | libx264 CRF | VideoToolbox q:v | Target use case |
-|--------|-------------|------------------|-----------------|
-| `social` | 25 | 40 | Twitter, LinkedIn, Loom-style sharing (~2-3 MB / 30s) |
-| `balanced` | 20 | 55 | General purpose, portfolio sites (~3-5 MB / 30s) |
-| `archive` | 15 | 70 | High-fidelity storage, source masters (uncapped) |
+| Preset | libx264 CRF | HEVC VideoToolbox q:v | Target use case |
+|--------|-------------|----------------------|-----------------|
+| `social` | 22 | 60 | Twitter, LinkedIn, Loom-style sharing (~2-4 MB / 30s) |
+| `balanced` | 18 | 70 | General purpose, portfolio sites (~4-6 MB / 30s) |
+| `archive` | 13 | 80 | High-fidelity storage, source masters (uncapped) |
 
-**Recommended**: `preset: social` for most demos.
+**Recommended**: `preset: balanced` for most demos.
 
 > **Legacy**: `quality: 1-100` still works and maps to the nearest preset (`>= 75` → social, `>= 45` → balanced, `< 45` → archive). Prefer `preset` for clarity.
 
 ### macOS — Hardware Acceleration
 
-On **Apple Silicon and Intel Mac**, Clipwise automatically uses `h264_videotoolbox` for hardware-accelerated encoding. This delivers **~5–10× faster encoding** than software `libx264` with no setup required.
+On **Apple Silicon and Intel Mac**, Clipwise automatically uses `hevc_videotoolbox` (HEVC/H.265) for hardware-accelerated encoding. This delivers **~5–10× faster encoding** than software `libx264` with no setup required.
 
 ```
-macOS (VideoToolbox)  →  ~1:57 wall time for a 35s, 1280×800 demo
-Linux / Windows       →  ~5:30 wall time (libx264, same quality)
+macOS (HEVC VideoToolbox)  →  ~3 min wall time for a 44s, 1280×800 demo
+Linux / Windows            →  ~8–12 min wall time (libx264, same quality)
 ```
 
 VideoToolbox is detected at runtime — no config needed. If VideoToolbox is unavailable, it falls back to `libx264` automatically.
-
-> **Note**: VideoToolbox trades compression efficiency for speed. At the same perceptual quality, VideoToolbox files are ~10–20% larger than libx264. The `social` preset is tuned to balance this.
 
 For further compression after export:
 

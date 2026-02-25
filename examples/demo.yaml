@@ -56,7 +56,7 @@ output:
   width: 1280
   height: 800
   fps: 30
-  preset: social
+  preset: balanced
 
 steps:
   - name: "Load dashboard"

@@ -14,6 +14,7 @@ export async function renderKeystrokeHud(
   config: KeystrokeConfig,
   frameWidth: number,
   frameHeight: number,
+  dpr = 1,
 ): Promise<Buffer> {
   if (!config.enabled || keystrokes.length === 0) return frameBuffer;
 
@@ -26,13 +27,17 @@ export async function renderKeystrokeHud(
   const displayText = recentKeys.map((k) => k.key).join("");
   if (displayText.length === 0) return frameBuffer;
 
+  // Scale all pixel values by dpr for HiDPI rendering
+  const fontSize = config.fontSize * dpr;
+  const padding = config.padding * dpr;
+
   // Calculate text dimensions
-  const charWidth = config.fontSize * 0.62;
+  const charWidth = fontSize * 0.62;
   const textWidth = Math.ceil(displayText.length * charWidth);
-  const hudPadH = config.padding * 2;
-  const hudPadV = config.padding * 1.5;
-  const hudWidth = Math.min(textWidth + hudPadH * 2, frameWidth - 40);
-  const hudHeight = Math.ceil(config.fontSize + hudPadV * 2);
+  const hudPadH = padding * 2;
+  const hudPadV = padding * 1.5;
+  const hudWidth = Math.min(textWidth + hudPadH * 2, frameWidth - 40 * dpr);
+  const hudHeight = Math.ceil(fontSize + hudPadV * 2);
 
   // Calculate overall opacity based on the newest keystroke age
   const newest = recentKeys[recentKeys.length - 1];
@@ -44,15 +49,16 @@ export async function renderKeystrokeHud(
 
   if (opacity <= 0) return frameBuffer;
 
-  // Position
+  // Position (scaled by dpr)
+  const margin = 30 * dpr;
   let hudX: number;
-  const hudY = frameHeight - hudHeight - 30;
+  const hudY = frameHeight - hudHeight - margin;
   switch (config.position) {
     case "bottom-left":
-      hudX = 30;
+      hudX = margin;
       break;
     case "bottom-right":
-      hudX = frameWidth - hudWidth - 30;
+      hudX = frameWidth - hudWidth - margin;
       break;
     case "bottom-center":
     default:
@@ -75,9 +81,9 @@ export async function renderKeystrokeHud(
 
   const hudSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
     <rect x="${hudX}" y="${hudY}" width="${hudWidth}" height="${hudHeight}"
-          rx="8" ry="8" fill="${config.backgroundColor}" opacity="${opacity.toFixed(3)}" />
-    <text x="${hudX + hudPadH}" y="${hudY + hudPadV + config.fontSize * 0.75}"
-          font-family="monospace, Menlo, Consolas" font-size="${config.fontSize}"
+          rx="${8 * dpr}" ry="${8 * dpr}" fill="${config.backgroundColor}" opacity="${opacity.toFixed(3)}" />
+    <text x="${hudX + hudPadH}" y="${hudY + hudPadV + fontSize * 0.75}"
+          font-family="monospace, Menlo, Consolas" font-size="${fontSize}"
           fill="${config.textColor}" opacity="${opacity.toFixed(3)}">${escaped}</text>
   </svg>`;
 

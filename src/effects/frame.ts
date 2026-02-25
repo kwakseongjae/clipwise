@@ -34,38 +34,49 @@ const ANDROID_CAMERA_RADIUS = 6;
 
 /**
  * Build an SVG for the browser chrome title bar.
+ * All pixel constants are multiplied by dpr for HiDPI rendering.
  */
 function buildBrowserChromeSvg(
   width: number,
   darkMode: boolean,
+  dpr = 1,
 ): string {
   const bg = darkMode ? "#2d2d2d" : "#e8e8e8";
   const addressBg = darkMode ? "#1a1a1a" : "#ffffff";
   const addressBorder = darkMode ? "#444444" : "#d0d0d0";
   const textColor = darkMode ? "#999999" : "#666666";
 
+  const tbarH = TITLE_BAR_HEIGHT * dpr;
+  const tlY = TRAFFIC_LIGHT_Y * dpr;
+  const tlR = TRAFFIC_LIGHT_RADIUS * dpr;
+  const tlStartX = TRAFFIC_LIGHTS_START_X * dpr;
+  const tlGap = TRAFFIC_LIGHT_GAP * dpr;
+  const aBarH = ADDRESS_BAR_HEIGHT * dpr;
+  const aBarMargin = ADDRESS_BAR_MARGIN * dpr;
+  const fontSize = 12 * dpr;
+
   const trafficLights = [
-    { cx: TRAFFIC_LIGHTS_START_X, fill: "#ff5f57" },
-    { cx: TRAFFIC_LIGHTS_START_X + TRAFFIC_LIGHT_GAP, fill: "#febc2e" },
-    { cx: TRAFFIC_LIGHTS_START_X + TRAFFIC_LIGHT_GAP * 2, fill: "#28c840" },
+    { cx: tlStartX, fill: "#ff5f57" },
+    { cx: tlStartX + tlGap, fill: "#febc2e" },
+    { cx: tlStartX + tlGap * 2, fill: "#28c840" },
   ]
     .map(
       (light) =>
-        `<circle cx="${light.cx}" cy="${TRAFFIC_LIGHT_Y}" r="${TRAFFIC_LIGHT_RADIUS}" fill="${light.fill}"/>`,
+        `<circle cx="${light.cx}" cy="${tlY}" r="${tlR}" fill="${light.fill}"/>`,
     )
     .join("\n    ");
 
-  const addressBarWidth = width - ADDRESS_BAR_MARGIN * 2;
-  const addressBarX = ADDRESS_BAR_MARGIN;
-  const addressBarY = (TITLE_BAR_HEIGHT - ADDRESS_BAR_HEIGHT) / 2;
+  const addressBarWidth = width - aBarMargin * 2;
+  const addressBarX = aBarMargin;
+  const addressBarY = (tbarH - aBarH) / 2;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${TITLE_BAR_HEIGHT}">
-    <rect width="${width}" height="${TITLE_BAR_HEIGHT}" fill="${bg}"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${tbarH}">
+    <rect width="${width}" height="${tbarH}" fill="${bg}"/>
     ${trafficLights}
-    <rect x="${addressBarX}" y="${addressBarY}" width="${addressBarWidth}" height="${ADDRESS_BAR_HEIGHT}"
-          rx="6" ry="6" fill="${addressBg}" stroke="${addressBorder}" stroke-width="1"/>
-    <text x="${width / 2}" y="${TRAFFIC_LIGHT_Y + 4}" text-anchor="middle"
-          font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="${textColor}">
+    <rect x="${addressBarX}" y="${addressBarY}" width="${addressBarWidth}" height="${aBarH}"
+          rx="${6 * dpr}" ry="${6 * dpr}" fill="${addressBg}" stroke="${addressBorder}" stroke-width="${dpr}"/>
+    <text x="${width / 2}" y="${tlY + 4 * dpr}" text-anchor="middle"
+          font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" fill="${textColor}">
       localhost
     </text>
   </svg>`;
@@ -83,32 +94,43 @@ function buildIPhoneFrameSvg(
   screenWidth: number,
   screenHeight: number,
   darkMode: boolean,
+  dpr = 1,
 ): string {
   const bezelColor = darkMode ? "#1a1a1a" : "#f5f5f7";
   const islandColor = darkMode ? "#000000" : "#1a1a1a";
   const homeBarColor = darkMode ? "#555555" : "#333333";
 
-  const islandX = (totalWidth - IPHONE_ISLAND.width) / 2;
-  const islandY = (IPHONE_BEZEL.top - IPHONE_ISLAND.height) / 2 + 4;
-  const homeBarX = (totalWidth - IPHONE_HOME_BAR.width) / 2;
-  const homeBarY = totalHeight - IPHONE_BEZEL.bottom / 2 - IPHONE_HOME_BAR.height / 2;
+  const bezelTop = IPHONE_BEZEL.top * dpr;
+  const bezelBottom = IPHONE_BEZEL.bottom * dpr;
+  const bezelSides = IPHONE_BEZEL.sides * dpr;
+  const outerRadius = IPHONE_OUTER_RADIUS * dpr;
+  const innerRadius = IPHONE_INNER_RADIUS * dpr;
+  const islandW = IPHONE_ISLAND.width * dpr;
+  const islandH = IPHONE_ISLAND.height * dpr;
+  const homeBarW = IPHONE_HOME_BAR.width * dpr;
+  const homeBarH = IPHONE_HOME_BAR.height * dpr;
 
-  const screenX = IPHONE_BEZEL.sides;
-  const screenY = IPHONE_BEZEL.top;
+  const islandX = (totalWidth - islandW) / 2;
+  const islandY = (bezelTop - islandH) / 2 + 4 * dpr;
+  const homeBarX = (totalWidth - homeBarW) / 2;
+  const homeBarY = totalHeight - bezelBottom / 2 - homeBarH / 2;
+
+  const screenX = bezelSides;
+  const screenY = bezelTop;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}">
     <!-- Device body -->
     <rect width="${totalWidth}" height="${totalHeight}"
-          rx="${IPHONE_OUTER_RADIUS}" ry="${IPHONE_OUTER_RADIUS}" fill="${bezelColor}"/>
+          rx="${outerRadius}" ry="${outerRadius}" fill="${bezelColor}"/>
     <!-- Screen cutout (transparent) -->
     <rect x="${screenX}" y="${screenY}" width="${screenWidth}" height="${screenHeight}"
-          rx="${IPHONE_INNER_RADIUS}" ry="${IPHONE_INNER_RADIUS}" fill="black"/>
+          rx="${innerRadius}" ry="${innerRadius}" fill="black"/>
     <!-- Dynamic Island pill -->
-    <rect x="${islandX}" y="${islandY}" width="${IPHONE_ISLAND.width}" height="${IPHONE_ISLAND.height}"
-          rx="${IPHONE_ISLAND.height / 2}" ry="${IPHONE_ISLAND.height / 2}" fill="${islandColor}"/>
+    <rect x="${islandX}" y="${islandY}" width="${islandW}" height="${islandH}"
+          rx="${islandH / 2}" ry="${islandH / 2}" fill="${islandColor}"/>
     <!-- Home indicator bar -->
-    <rect x="${homeBarX}" y="${homeBarY}" width="${IPHONE_HOME_BAR.width}" height="${IPHONE_HOME_BAR.height}"
-          rx="${IPHONE_HOME_BAR.height / 2}" ry="${IPHONE_HOME_BAR.height / 2}" fill="${homeBarColor}"/>
+    <rect x="${homeBarX}" y="${homeBarY}" width="${homeBarW}" height="${homeBarH}"
+          rx="${homeBarH / 2}" ry="${homeBarH / 2}" fill="${homeBarColor}"/>
   </svg>`;
 }
 
@@ -122,24 +144,27 @@ function buildIPadFrameSvg(
   screenWidth: number,
   screenHeight: number,
   darkMode: boolean,
+  dpr = 1,
 ): string {
   const bezelColor = darkMode ? "#1a1a1a" : "#f5f5f7";
   const cameraColor = darkMode ? "#2a2a2a" : "#3a3a3a";
 
-  const screenX = IPAD_BEZEL.sides;
-  const screenY = IPAD_BEZEL.top;
+  const screenX = IPAD_BEZEL.sides * dpr;
+  const screenY = IPAD_BEZEL.top * dpr;
   const cameraCx = totalWidth / 2;
-  const cameraCy = IPAD_BEZEL.top / 2;
+  const cameraCy = (IPAD_BEZEL.top * dpr) / 2;
+  const outerRadius = IPAD_OUTER_RADIUS * dpr;
+  const innerRadius = IPAD_INNER_RADIUS * dpr;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}">
     <!-- Device body -->
     <rect width="${totalWidth}" height="${totalHeight}"
-          rx="${IPAD_OUTER_RADIUS}" ry="${IPAD_OUTER_RADIUS}" fill="${bezelColor}"/>
+          rx="${outerRadius}" ry="${outerRadius}" fill="${bezelColor}"/>
     <!-- Screen cutout -->
     <rect x="${screenX}" y="${screenY}" width="${screenWidth}" height="${screenHeight}"
-          rx="${IPAD_INNER_RADIUS}" ry="${IPAD_INNER_RADIUS}" fill="black"/>
+          rx="${innerRadius}" ry="${innerRadius}" fill="black"/>
     <!-- Front camera dot -->
-    <circle cx="${cameraCx}" cy="${cameraCy}" r="4" fill="${cameraColor}"/>
+    <circle cx="${cameraCx}" cy="${cameraCy}" r="${4 * dpr}" fill="${cameraColor}"/>
   </svg>`;
 }
 
@@ -153,24 +178,28 @@ function buildAndroidFrameSvg(
   screenWidth: number,
   screenHeight: number,
   darkMode: boolean,
+  dpr = 1,
 ): string {
   const bezelColor = darkMode ? "#1a1a1a" : "#e8e8e8";
   const cameraColor = darkMode ? "#2a2a2a" : "#3a3a3a";
 
-  const screenX = ANDROID_BEZEL.sides;
-  const screenY = ANDROID_BEZEL.top;
+  const screenX = ANDROID_BEZEL.sides * dpr;
+  const screenY = ANDROID_BEZEL.top * dpr;
   const cameraCx = totalWidth / 2;
-  const cameraCy = ANDROID_BEZEL.top / 2;
+  const cameraCy = (ANDROID_BEZEL.top * dpr) / 2;
+  const outerRadius = ANDROID_OUTER_RADIUS * dpr;
+  const innerRadius = ANDROID_INNER_RADIUS * dpr;
+  const cameraR = ANDROID_CAMERA_RADIUS * dpr;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}">
     <!-- Device body -->
     <rect width="${totalWidth}" height="${totalHeight}"
-          rx="${ANDROID_OUTER_RADIUS}" ry="${ANDROID_OUTER_RADIUS}" fill="${bezelColor}"/>
+          rx="${outerRadius}" ry="${outerRadius}" fill="${bezelColor}"/>
     <!-- Screen cutout -->
     <rect x="${screenX}" y="${screenY}" width="${screenWidth}" height="${screenHeight}"
-          rx="${ANDROID_INNER_RADIUS}" ry="${ANDROID_INNER_RADIUS}" fill="black"/>
+          rx="${innerRadius}" ry="${innerRadius}" fill="black"/>
     <!-- Punch-hole camera -->
-    <circle cx="${cameraCx}" cy="${cameraCy}" r="${ANDROID_CAMERA_RADIUS}" fill="${cameraColor}"/>
+    <circle cx="${cameraCx}" cy="${cameraCy}" r="${cameraR}" fill="${cameraColor}"/>
   </svg>`;
 }
 
@@ -211,22 +240,35 @@ async function applyMobileFrame(
   darkMode: boolean,
   frameWidth: number,
   frameHeight: number,
+  dpr = 1,
 ): Promise<Buffer> {
   let bezel: BezelConfig;
   let innerRadius: number;
 
   switch (deviceType) {
     case "iphone":
-      bezel = IPHONE_BEZEL;
-      innerRadius = IPHONE_INNER_RADIUS;
+      bezel = {
+        sides: IPHONE_BEZEL.sides * dpr,
+        top: IPHONE_BEZEL.top * dpr,
+        bottom: IPHONE_BEZEL.bottom * dpr,
+      };
+      innerRadius = IPHONE_INNER_RADIUS * dpr;
       break;
     case "ipad":
-      bezel = IPAD_BEZEL;
-      innerRadius = IPAD_INNER_RADIUS;
+      bezel = {
+        sides: IPAD_BEZEL.sides * dpr,
+        top: IPAD_BEZEL.top * dpr,
+        bottom: IPAD_BEZEL.bottom * dpr,
+      };
+      innerRadius = IPAD_INNER_RADIUS * dpr;
       break;
     case "android":
-      bezel = ANDROID_BEZEL;
-      innerRadius = ANDROID_INNER_RADIUS;
+      bezel = {
+        sides: ANDROID_BEZEL.sides * dpr,
+        top: ANDROID_BEZEL.top * dpr,
+        bottom: ANDROID_BEZEL.bottom * dpr,
+      };
+      innerRadius = ANDROID_INNER_RADIUS * dpr;
       break;
   }
 
@@ -237,13 +279,13 @@ async function applyMobileFrame(
   let frameSvg: string;
   switch (deviceType) {
     case "iphone":
-      frameSvg = buildIPhoneFrameSvg(totalWidth, totalHeight, frameWidth, frameHeight, darkMode);
+      frameSvg = buildIPhoneFrameSvg(totalWidth, totalHeight, frameWidth, frameHeight, darkMode, dpr);
       break;
     case "ipad":
-      frameSvg = buildIPadFrameSvg(totalWidth, totalHeight, frameWidth, frameHeight, darkMode);
+      frameSvg = buildIPadFrameSvg(totalWidth, totalHeight, frameWidth, frameHeight, darkMode, dpr);
       break;
     case "android":
-      frameSvg = buildAndroidFrameSvg(totalWidth, totalHeight, frameWidth, frameHeight, darkMode);
+      frameSvg = buildAndroidFrameSvg(totalWidth, totalHeight, frameWidth, frameHeight, darkMode, dpr);
       break;
   }
 
@@ -295,13 +337,15 @@ export async function applyDeviceFrame(
   config: DeviceFrame,
   frameWidth: number,
   frameHeight: number,
+  dpr = 1,
 ): Promise<Buffer> {
   if (!config.enabled || config.type === "none") return frameBuffer;
 
   switch (config.type) {
     case "browser": {
-      const totalHeight = frameHeight + TITLE_BAR_HEIGHT;
-      const chromeSvg = buildBrowserChromeSvg(frameWidth, config.darkMode);
+      const tbarH = TITLE_BAR_HEIGHT * dpr;
+      const totalHeight = frameHeight + tbarH;
+      const chromeSvg = buildBrowserChromeSvg(frameWidth, config.darkMode, dpr);
       const chromeBuffer = Buffer.from(chromeSvg);
 
       const canvas = await sharp({
@@ -318,7 +362,7 @@ export async function applyDeviceFrame(
       return sharp(canvas)
         .composite([
           { input: chromeBuffer, left: 0, top: 0 },
-          { input: frameBuffer, left: 0, top: TITLE_BAR_HEIGHT },
+          { input: frameBuffer, left: 0, top: tbarH },
         ])
         .png()
         .toBuffer();
@@ -327,7 +371,7 @@ export async function applyDeviceFrame(
     case "iphone":
     case "ipad":
     case "android":
-      return applyMobileFrame(frameBuffer, config.type, config.darkMode, frameWidth, frameHeight);
+      return applyMobileFrame(frameBuffer, config.type, config.darkMode, frameWidth, frameHeight, dpr);
 
     default:
       // macbook or unknown — pass through

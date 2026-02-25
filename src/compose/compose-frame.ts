@@ -27,21 +27,23 @@ export interface FrameContext {
  * Return the pixel offset that a device frame adds to the top-left of the
  * screenshot content. Zoom focus points are in viewport coordinates and need
  * to be shifted by these amounts after the device frame is composited.
+ * Offsets are scaled by dpr for HiDPI captures.
  */
 export function getFrameOffset(
   config: EffectsConfig["deviceFrame"],
+  dpr = 1,
 ): { left: number; top: number } {
   if (!config.enabled) return { left: 0, top: 0 };
 
   switch (config.type) {
     case "browser":
-      return { left: 0, top: 40 };
+      return { left: 0, top: 40 * dpr };
     case "iphone":
-      return { left: 12, top: 50 };
+      return { left: 12 * dpr, top: 50 * dpr };
     case "ipad":
-      return { left: 20, top: 24 };
+      return { left: 20 * dpr, top: 24 * dpr };
     case "android":
-      return { left: 8, top: 32 };
+      return { left: 8 * dpr, top: 32 * dpr };
     default:
       return { left: 0, top: 0 };
   }
@@ -69,9 +71,11 @@ export async function composeFrame(
   output: OutputConfig,
   context?: Partial<FrameContext>,
 ): Promise<ComposedFrame> {
+  const dpr = frame.deviceScaleFactor ?? 1;
   let buffer = frame.screenshot;
-  let width = frame.viewport.width;
-  let height = frame.viewport.height;
+  // Physical pixel dimensions: viewport × dpr (e.g. 2560×1600 for dpr=2)
+  let width = frame.viewport.width * dpr;
+  let height = frame.viewport.height * dpr;
 
   const ctx: FrameContext = {
     zoomScale: context?.zoomScale ?? 1,
@@ -79,59 +83,62 @@ export async function composeFrame(
     cursorTrail: context?.cursorTrail ?? [],
   };
 
-  // 1. Device frame
+  // 1. Device frame (SVG constants are scaled by dpr internally)
   if (effects.deviceFrame.enabled) {
-    buffer = await applyDeviceFrame(buffer, effects.deviceFrame, width, height);
+    buffer = await applyDeviceFrame(buffer, effects.deviceFrame, width, height, dpr);
     const meta = await sharp(buffer).metadata();
     width = meta.width ?? width;
     height = meta.height ?? height;
   }
 
-  // 2. Cursor highlight
+  // 2. Cursor highlight (position scaled to physical pixels by dpr)
   if (effects.cursor.enabled && effects.cursor.highlight && frame.cursorPosition) {
     buffer = await renderCursorHighlight(
-      buffer, frame.cursorPosition, effects.cursor, width, height,
+      buffer, frame.cursorPosition, effects.cursor, width, height, dpr,
     );
   }
 
-  // 3. Cursor trail
+  // 3. Cursor trail (positions scaled to physical pixels by dpr)
   if (effects.cursor.enabled && effects.cursor.trail && ctx.cursorTrail.length >= 2) {
     buffer = await renderCursorTrail(
-      buffer, ctx.cursorTrail, effects.cursor, width, height,
+      buffer, ctx.cursorTrail, effects.cursor, width, height, dpr,
     );
   }
 
-  // 4. Cursor rendering
+  // 4. Cursor rendering (position scaled to physical pixels by dpr)
   if (effects.cursor.enabled && frame.cursorPosition) {
     buffer = await renderCursor(
-      buffer, frame.cursorPosition, effects.cursor, width, height,
+      buffer, frame.cursorPosition, effects.cursor, width, height, dpr,
     );
   }
 
-  // 5. Click ripple effect
+  // 5. Click ripple effect (position scaled to physical pixels by dpr)
   if (effects.cursor.enabled && effects.cursor.clickEffect && frame.clickPosition) {
     const progress = ctx.clickProgress ?? frame.clickProgress ?? 0.5;
     buffer = await renderClickEffect(
-      buffer, frame.clickPosition, effects.cursor, progress, width, height,
+      buffer, frame.clickPosition, effects.cursor, progress, width, height, dpr,
     );
   }
 
-  // 6. Keystroke HUD
+  // 6. Keystroke HUD (font/positions scaled by dpr)
   if (effects.keystroke.enabled && frame.keystrokes) {
     buffer = await renderKeystrokeHud(
-      buffer, frame.keystrokes, frame.timestamp, effects.keystroke, width, height,
+      buffer, frame.keystrokes, frame.timestamp, effects.keystroke, width, height, dpr,
     );
   }
 
   // 7. Zoom (adaptive, follows cursor)
+  // With dpr=2, the source buffer is 2x resolution → zoom crops from 2x more pixels
+  // for dramatically sharper output after downscaling to output dimensions.
   const scale = ctx.zoomScale;
   if (effects.zoom.enabled && scale > 1) {
+    // Focus point: convert CSS pixel coords to physical pixel coords
     const rawFocus = frame.clickPosition ??
-      frame.cursorPosition ?? { x: width / 2, y: height / 2 };
-    const offset = getFrameOffset(effects.deviceFrame);
+      frame.cursorPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 };
+    const offset = getFrameOffset(effects.deviceFrame, dpr);
     const focusPoint = {
-      x: rawFocus.x + offset.left,
-      y: rawFocus.y + offset.top,
+      x: rawFocus.x * dpr + offset.left,
+      y: rawFocus.y * dpr + offset.top,
     };
     buffer = await applyZoom(buffer, focusPoint, scale, width, height);
   }

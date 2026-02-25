@@ -13,10 +13,14 @@ const CLICK_EFFECT_DURATION_MS = 500;
 const REPAINT_INTERVAL_MS = 25;
 const ACTION_GAP_MS = 30;
 
+// Step delay must be >= REPAINT_INTERVAL_MS (25ms) so each intermediate cursor
+// position falls in a distinct CDP screencast frame. At 6-8ms the ACK cycle
+// can't keep up and multiple steps collapse into one captured frame, making
+// the cursor appear to teleport rather than glide smoothly.
 const CURSOR_SPEED_PRESETS = {
-  fast:   { steps: 12, delay: 6 },   // ~72ms total
-  normal: { steps: 18, delay: 8 },   // ~144ms total
-  slow:   { steps: 24, delay: 12 },  // ~288ms total
+  fast:   { steps: 10, delay: 22 },  // ~220ms, ~9 frames captured
+  normal: { steps: 14, delay: 25 },  // ~350ms, ~14 frames captured
+  slow:   { steps: 20, delay: 25 },  // ~500ms, ~20 frames captured
 } as const;
 
 interface RawFrame {
@@ -48,6 +52,7 @@ export class ClipwiseRecorder {
 
   private cursorPosition: { x: number; y: number } = { x: 0, y: 0 };
   private viewport = { width: 1280, height: 800 };
+  private deviceScaleFactor = 2;
   private isCapturing = false;
   private targetFps = 30;
   private cursorSpeed: keyof typeof CURSOR_SPEED_PRESETS = "fast";
@@ -68,6 +73,7 @@ export class ClipwiseRecorder {
     this.browser = await chromium.launch({ headless: true });
     this.context = await this.browser.newContext({
       viewport: this.viewport,
+      deviceScaleFactor: this.deviceScaleFactor,
     });
     this.page = await this.context.newPage();
 
@@ -112,11 +118,15 @@ export class ClipwiseRecorder {
       },
     );
 
+    // PNG format captures lossless frames — eliminates JPEG DCT block artifacts
+    // that accumulate through the multi-layer effects pipeline. Memory usage
+    // increases (~3-4x vs JPEG) but removes the primary source of quality loss.
+    // maxWidth/maxHeight are in physical pixels (viewport × deviceScaleFactor),
+    // giving 2x resolution for sharper zoom crops and better overall detail.
     await this.cdpClient.send("Page.startScreencast", {
-      format: "jpeg",
-      quality: 95,
-      maxWidth: this.viewport.width,
-      maxHeight: this.viewport.height,
+      format: "png",
+      maxWidth: this.viewport.width * this.deviceScaleFactor,
+      maxHeight: this.viewport.height * this.deviceScaleFactor,
       everyNthFrame: 1,
     });
 
@@ -526,6 +536,7 @@ export class ClipwiseRecorder {
         clickPosition: clickEvent?.position ?? null,
         clickProgress,
         viewport: { ...this.viewport },
+        deviceScaleFactor: this.deviceScaleFactor,
         keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
         stepIndex: this.currentStepIndex,
       };
@@ -603,6 +614,7 @@ export class ClipwiseRecorder {
         clickPosition: clickEvent?.position ?? null,
         clickProgress,
         viewport: { ...this.viewport },
+        deviceScaleFactor: this.deviceScaleFactor,
         stepName: frames[nearestIdx].stepName,
         stepIndex: frames[nearestIdx].stepIndex,
         keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
