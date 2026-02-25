@@ -73,7 +73,7 @@ export async function renderKeystrokeHud(
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-  const hudSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}">
+  const hudSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
     <rect x="${hudX}" y="${hudY}" width="${hudWidth}" height="${hudHeight}"
           rx="8" ry="8" fill="${config.backgroundColor}" opacity="${opacity.toFixed(3)}" />
     <text x="${hudX + hudPadH}" y="${hudY + hudPadV + config.fontSize * 0.75}"

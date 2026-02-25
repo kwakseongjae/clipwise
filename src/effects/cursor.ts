@@ -9,7 +9,7 @@ type CursorEffect = EffectsConfig["cursor"];
 function buildCursorSvg(size: number, color: string): string {
   // Classic pointer arrow shape scaled to `size`
   const s = size;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" shape-rendering="geometricPrecision">
     <path d="M4 0 L4 22 L10 16 L16 24 L20 22 L14 14 L22 14 Z"
           fill="${color}" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
   </svg>`;
@@ -27,7 +27,7 @@ function buildClickRippleSvg(
   const opacity = Math.max(0, 1 - progress);
   const size = Math.ceil(radius * 2 + 4);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" shape-rendering="geometricPrecision">
     <circle cx="${size / 2}" cy="${size / 2}" r="${currentRadius}"
             fill="none" stroke="${color}" stroke-width="2"
             opacity="${opacity.toFixed(3)}"/>
@@ -123,7 +123,7 @@ export async function renderCursorHighlight(
   const cx = size / 2;
   const cy = size / 2;
 
-  const highlightSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+  const highlightSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" shape-rendering="geometricPrecision">
     <defs>
       <radialGradient id="glow">
         <stop offset="0%" stop-color="${config.highlightColor}" />
@@ -171,7 +171,7 @@ export async function renderCursorTrail(
     );
   }
 
-  const trailSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}">
+  const trailSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision">
     ${segments.join("\n    ")}
   </svg>`;
 

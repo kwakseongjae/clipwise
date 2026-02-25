@@ -204,7 +204,10 @@ export class CanvasRenderer {
 
     // 10. Final resize (ensure exact output dimensions)
     buffer = await sharp(buffer)
-      .resize(this.output.width, this.output.height, { fit: "fill" })
+      .resize(this.output.width, this.output.height, {
+        fit: "fill",
+        kernel: sharp.kernel.lanczos3,
+      })
       .png()
       .toBuffer();
 

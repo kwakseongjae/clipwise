@@ -47,7 +47,7 @@ export async function renderWatermark(
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-  const watermarkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}">
+  const watermarkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
     <text x="${x}" y="${y}"
           font-family="system-ui, -apple-system, sans-serif" font-size="${config.fontSize}"
           font-weight="600" fill="${config.color}"

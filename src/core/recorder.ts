@@ -10,7 +10,7 @@ import { interpolatePath } from "./cursor-tracker.js";
 import { getElementCenter } from "./screenshot.js";
 
 const CLICK_EFFECT_DURATION_MS = 500;
-const REPAINT_INTERVAL_MS = 50;
+const REPAINT_INTERVAL_MS = 25;
 const ACTION_GAP_MS = 30;
 
 const CURSOR_SPEED_PRESETS = {
@@ -565,16 +565,14 @@ export class ClipwiseRecorder {
       const t = targetFrameCount > 1 ? i / (targetFrameCount - 1) : 0;
       const targetTimestamp = startTime + t * duration;
 
-      // Find the nearest raw frame by timestamp
-      let nearestIdx = 0;
-      let minDist = Infinity;
-      for (let j = 0; j < frames.length; j++) {
-        const dist = Math.abs(frames[j].timestamp - targetTimestamp);
-        if (dist < minDist) {
-          minDist = dist;
-          nearestIdx = j;
-        }
-      }
+      // Find the nearest raw frame by timestamp using binary search (O(log N))
+      const lo = this.binarySearchTimeline(frames, targetTimestamp);
+      const hi = Math.min(lo + 1, frames.length - 1);
+      const nearestIdx =
+        Math.abs(frames[hi].timestamp - targetTimestamp) <
+        Math.abs(frames[lo].timestamp - targetTimestamp)
+          ? hi
+          : lo;
 
       // Re-interpolate cursor position at this exact timestamp
       const cursorPos = this.interpolateCursorAt(targetTimestamp);
@@ -625,20 +623,10 @@ export class ClipwiseRecorder {
       return { ...this.cursorTimeline[0].position };
     }
 
-    // Find the two keyframes surrounding this timestamp
-    let before = this.cursorTimeline[0];
-    let after = this.cursorTimeline[this.cursorTimeline.length - 1];
-
-    for (let i = 0; i < this.cursorTimeline.length - 1; i++) {
-      if (
-        this.cursorTimeline[i].timestamp <= timestamp &&
-        this.cursorTimeline[i + 1].timestamp >= timestamp
-      ) {
-        before = this.cursorTimeline[i];
-        after = this.cursorTimeline[i + 1];
-        break;
-      }
-    }
+    // Find the two keyframes surrounding this timestamp using binary search (O(log N))
+    const idx = this.binarySearchTimeline(this.cursorTimeline, timestamp);
+    const before = this.cursorTimeline[idx];
+    const after = this.cursorTimeline[Math.min(idx + 1, this.cursorTimeline.length - 1)];
 
     // Clamp if timestamp is outside keyframe range
     if (timestamp <= before.timestamp) return { ...before.position };
@@ -656,6 +644,27 @@ export class ClipwiseRecorder {
         before.position.y + (after.position.y - before.position.y) * t,
       ),
     };
+  }
+
+  /**
+   * Binary search: returns the index of the last entry whose timestamp <= target.
+   * Assumes the array is sorted by timestamp in ascending order.
+   */
+  private binarySearchTimeline(
+    timeline: { timestamp: number }[],
+    target: number,
+  ): number {
+    let lo = 0;
+    let hi = timeline.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (timeline[mid].timestamp <= target) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return lo;
   }
 
   /**
