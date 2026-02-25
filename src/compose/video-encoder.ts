@@ -82,8 +82,9 @@ export async function encodeMp4(
 
     const outputPath = join(tmpDir, "output.mp4");
 
-    // CRF mapping: quality 100 → CRF 0 (lossless), quality 0 → CRF 51 (worst)
-    const crf = Math.round(51 - (config.quality / 100) * 51);
+    // CRF mapping: quality 100 → CRF 18 (high quality), quality 0 → CRF 51 (worst)
+    // Social media sweet spot is CRF 22–24 (quality ~80 → CRF ~25)
+    const crf = Math.round(51 - (config.quality / 100) * 33);
 
     // Encode with ffmpeg
     await runFfmpeg([
@@ -92,6 +93,11 @@ export async function encodeMp4(
       String(config.fps),
       "-i",
       join(tmpDir, `frame-%0${padLength}d.png`),
+      // Silent audio track for Twitter/X compatibility
+      "-f",
+      "lavfi",
+      "-i",
+      "anullsrc=r=48000:cl=stereo",
       "-c:v",
       "libx264",
       "-pix_fmt",
@@ -100,10 +106,27 @@ export async function encodeMp4(
       String(crf),
       "-preset",
       "slow",
+      // stillimage tuning: better for screencasts with large static regions
       "-tune",
-      "animation",
+      "stillimage",
+      // Platform compatibility
+      "-profile:v",
+      "high",
+      "-level",
+      "4.1",
+      // Capped CRF: prevents bitrate spikes while keeping quality consistent
+      "-maxrate",
+      "8M",
+      "-bufsize",
+      "16M",
       "-movflags",
       "+faststart",
+      // Audio: AAC for maximum platform compatibility
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-shortest",
       outputPath,
     ]);
 

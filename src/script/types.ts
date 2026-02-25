@@ -207,7 +207,7 @@ export const OutputConfigSchema = z.object({
   format: z.enum(["gif", "mp4", "webm", "png-sequence"]).default("gif"),
   width: z.number().default(1280),
   height: z.number().default(800),
-  fps: z.number().min(1).max(60).default(15),
+  fps: z.number().min(1).max(60).default(30),
   quality: z.number().min(1).max(100).default(80),
   outputDir: z.string().default("./output"),
   filename: z.string().default("clipwise-recording"),
