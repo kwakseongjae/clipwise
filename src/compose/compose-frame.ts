@@ -71,11 +71,18 @@ export async function composeFrame(
   output: OutputConfig,
   context?: Partial<FrameContext>,
 ): Promise<ComposedFrame> {
-  const dpr = frame.deviceScaleFactor ?? 1;
   let buffer = frame.screenshot;
-  // Physical pixel dimensions: viewport × dpr (e.g. 2560×1600 for dpr=2)
-  let width = frame.viewport.width * dpr;
-  let height = frame.viewport.height * dpr;
+  // Read actual buffer dimensions — headless Chrome CDP screencasts ignore
+  // deviceScaleFactor and always capture at viewport (CSS pixel) resolution.
+  // Computing from metadata is the only reliable source of truth.
+  const meta = await sharp(buffer).metadata();
+  let width = meta.width ?? frame.viewport.width;
+  let height = meta.height ?? frame.viewport.height;
+  // Compute actual dpr from the real buffer vs CSS viewport dimensions.
+  // If headless captures at 1× (always the case today), actualDpr=1 and
+  // all position/size scaling is a no-op. If a future Playwright/Chrome
+  // version captures at 2×, this will automatically use dpr=2.
+  const dpr = Math.round(width / frame.viewport.width);
 
   const ctx: FrameContext = {
     zoomScale: context?.zoomScale ?? 1,

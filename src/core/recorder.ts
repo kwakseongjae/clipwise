@@ -52,7 +52,7 @@ export class ClipwiseRecorder {
 
   private cursorPosition: { x: number; y: number } = { x: 0, y: 0 };
   private viewport = { width: 1280, height: 800 };
-  private deviceScaleFactor = 2;
+  private deviceScaleFactor = 1;
   private isCapturing = false;
   private targetFps = 30;
   private cursorSpeed: keyof typeof CURSOR_SPEED_PRESETS = "fast";
@@ -73,7 +73,6 @@ export class ClipwiseRecorder {
     this.browser = await chromium.launch({ headless: true });
     this.context = await this.browser.newContext({
       viewport: this.viewport,
-      deviceScaleFactor: this.deviceScaleFactor,
     });
     this.page = await this.context.newPage();
 
