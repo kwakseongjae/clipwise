@@ -11,15 +11,15 @@ import type { ComposedFrame, OutputConfig } from "../script/types.js";
 
 // Quality-based encoding (content-adaptive VBR) — much more efficient than
 // constant bitrate for screen recording where large areas are static.
-//   social   → CRF 22 / HEVC q:v 60  (~3-5 MB / 30s)
-//   balanced → CRF 18 / HEVC q:v 70  (~5-8 MB / 30s)
-//   archive  → CRF 13 / HEVC q:v 80  (near-lossless, uncapped)
-// VideoToolbox q:v scale: 0 = best quality (largest), 100 = worst quality (smallest).
-// Higher values = better quality for screen content.
+//   social   → CRF 22 / HEVC q:v 75  (~5-8 MB / 30s)
+//   balanced → CRF 18 / HEVC q:v 85  (~10-15 MB / 30s, near macOS quality)
+//   archive  → CRF 13 / HEVC q:v 92  (near-lossless, macOS screen recording parity)
+// VideoToolbox q:v: higher = better quality / larger file.
+// macOS native screen recording ≈ 4-6 Mbps H.264 ≈ 2-3 Mbps HEVC ≈ q:v 85+
 const ENCODING_PRESETS = {
-  social:   { crf: 22, vtQuality: 60 },
-  balanced: { crf: 18, vtQuality: 70 },
-  archive:  { crf: 13, vtQuality: 80 },
+  social:   { crf: 22, vtQuality: 75 },
+  balanced: { crf: 18, vtQuality: 85 },
+  archive:  { crf: 13, vtQuality: 92 },
 } as const;
 
 type PresetName = keyof typeof ENCODING_PRESETS;
