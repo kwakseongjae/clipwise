@@ -7,7 +7,14 @@ export type { FrameContext } from "./compose/canvas-renderer.js";
 export { encodeGif, encodeMp4, encodeMp4Stream, savePngSequence } from "./compose/video-encoder.js";
 
 // Effects
-export { calculateAdaptiveZoom, calculatePanOffset, lerpZoom } from "./effects/zoom.js";
+export {
+  calculateAdaptiveZoom,
+  buildZoomClickLookup,
+  calculateAdaptiveZoomFromLookup,
+  calculateAdaptiveZoomInWindow,
+  calculatePanOffset,
+  lerpZoom,
+} from "./effects/zoom.js";
 export { renderCursorTrail, renderCursorHighlight } from "./effects/cursor.js";
 export { renderKeystrokeHud } from "./effects/keystroke.js";
 export { applyCrossfade } from "./effects/transition.js";

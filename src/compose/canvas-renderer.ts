@@ -11,7 +11,7 @@ import type {
 } from "../script/types.js";
 import { composeFrame, getFrameOffset } from "./compose-frame.js";
 import type { FrameContext } from "./compose-frame.js";
-import { calculateAdaptiveZoom } from "../effects/zoom.js";
+import { buildZoomClickLookup, calculateAdaptiveZoomFromLookup } from "../effects/zoom.js";
 import { applyCrossfade } from "../effects/transition.js";
 
 export type { FrameContext };
@@ -192,13 +192,19 @@ export class CanvasRenderer {
       this.output.fps * (this.effects.zoom.duration / 1000),
     );
 
+    // Pre-build click lookup once — O(n) — so each frame uses O(log k) binary search
+    // instead of O(transitionFrames) linear scan.  Total: O(n + n·log k) vs O(n·transitionFrames).
+    const clickLookup = this.effects.zoom.enabled
+      ? buildZoomClickLookup(frames)
+      : [];
+
     for (let i = 0; i < frames.length; i++) {
       const frame = frames[i];
 
       let zoomScale = 1;
       if (this.effects.zoom.enabled) {
-        zoomScale = calculateAdaptiveZoom(
-          frames,
+        zoomScale = calculateAdaptiveZoomFromLookup(
+          clickLookup,
           i,
           this.effects.zoom.scale,
           transitionFrames,

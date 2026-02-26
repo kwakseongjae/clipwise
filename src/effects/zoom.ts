@@ -87,10 +87,18 @@ export function calculateZoomSequence(
  * Calculate adaptive zoom scale based on proximity to click/action frames.
  * Zooms in smoothly near important actions, stays at 1.0 during idle.
  *
+ * Scans only the ±transitionFrames influence window — frames outside that
+ * range always produce 1.0 anyway, so scanning the full array is wasted work.
+ * This reduces per-call cost from O(n) to O(transitionFrames).
+ *
+ * For bulk context calculation over many frames, prefer the lookup-based API:
+ *   buildZoomClickLookup() once → calculateAdaptiveZoomFromLookup() per frame
+ * which achieves O(n + n·log k) instead of O(n·transitionFrames).
+ *
  * @param frames - Array of frames with optional clickPosition
  * @param currentIndex - Index of the current frame
  * @param maxScale - Peak zoom scale
- * @param transitionFrames - Number of frames for zoom-in/zoom-out transition
+ * @param transitionFrames - Half-width of the zoom influence window (frames)
  * @returns Scale value for the current frame (1.0 = no zoom)
  */
 export function calculateAdaptiveZoom(
@@ -101,26 +109,115 @@ export function calculateAdaptiveZoom(
 ): number {
   if (maxScale <= 1) return 1;
 
-  // Find the nearest click frame
-  let minDistance = Infinity;
+  // Only scan within the influence window — identical results, far fewer iterations
+  const lo = Math.max(0, currentIndex - transitionFrames);
+  const hi = Math.min(frames.length - 1, currentIndex + transitionFrames);
 
-  for (let i = 0; i < frames.length; i++) {
+  let minDistance = Infinity;
+  for (let i = lo; i <= hi; i++) {
     if (frames[i].clickPosition) {
       const distance = Math.abs(i - currentIndex);
-      minDistance = Math.min(minDistance, distance);
+      if (distance < minDistance) minDistance = distance;
     }
   }
 
-  if (minDistance === Infinity) return 1;
+  if (minDistance > transitionFrames) return 1;
+  const t = 1 - minDistance / transitionFrames;
+  return 1 + (maxScale - 1) * easeInOutCubic(t);
+}
 
-  // Zoom envelope: ramp up to maxScale near click, fade out over transitionFrames
-  if (minDistance <= transitionFrames) {
-    const t = 1 - minDistance / transitionFrames;
-    const eased = easeInOutCubic(t);
-    return 1 + (maxScale - 1) * eased;
+// ─── Lookup-based API (O(n log k) batch) ─────────────────────────────────────
+
+/**
+ * Pre-extract the indices of all click frames in a single O(n) pass.
+ * Pass the result to calculateAdaptiveZoomFromLookup() for O(log k) per-frame
+ * zoom computation, instead of O(transitionFrames) per frame.
+ *
+ * @returns Sorted array of frame indices that carry a clickPosition.
+ */
+export function buildZoomClickLookup(
+  frames: ReadonlyArray<{ clickPosition: unknown }>,
+): number[] {
+  const indices: number[] = [];
+  for (let i = 0; i < frames.length; i++) {
+    if (frames[i].clickPosition !== null && frames[i].clickPosition !== undefined) {
+      indices.push(i);
+    }
+  }
+  return indices; // already ascending
+}
+
+/**
+ * Calculate adaptive zoom scale using a pre-built click index lookup.
+ * Binary-searches the lookup for the nearest click — O(log k) per call.
+ *
+ * Use buildZoomClickLookup() once before iterating, then call this per frame.
+ *
+ * @param clickLookup - Sorted array of click frame indices from buildZoomClickLookup()
+ * @param currentIndex - Index of the frame being evaluated
+ */
+export function calculateAdaptiveZoomFromLookup(
+  clickLookup: readonly number[],
+  currentIndex: number,
+  maxScale: number,
+  transitionFrames: number,
+): number {
+  if (maxScale <= 1 || clickLookup.length === 0) return 1;
+
+  // Binary search: find insertion point for currentIndex
+  let lo = 0;
+  let hi = clickLookup.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (clickLookup[mid] < currentIndex) lo = mid + 1;
+    else hi = mid;
   }
 
-  return 1;
+  // Nearest click is lo-1 (left neighbour) or lo (right neighbour)
+  const distBefore = lo > 0 ? currentIndex - clickLookup[lo - 1] : Infinity;
+  const distAfter = lo < clickLookup.length ? clickLookup[lo] - currentIndex : Infinity;
+  const minDistance = Math.min(distBefore, distAfter);
+
+  if (minDistance > transitionFrames) return 1;
+  const t = 1 - minDistance / transitionFrames;
+  return 1 + (maxScale - 1) * easeInOutCubic(t);
+}
+
+// ─── Window-based API (Phase 3-A streaming) ──────────────────────────────────
+
+/**
+ * Calculate adaptive zoom scale using only a local window of frames.
+ * Does NOT need the full frame array — only frames within
+ * [currentIndex - transitionFrames, currentIndex + transitionFrames].
+ *
+ * This is the Phase 3-A compatible API: when composition runs concurrently
+ * with recording, only the ±transitionFrames lookahead buffer needs to be
+ * available before frame i can be composed.
+ *
+ * @param windowFrames - Slice of frames around currentIndex
+ * @param windowStart  - Absolute timeline index of windowFrames[0]
+ * @param currentIndex - Absolute timeline index of the frame being composed
+ */
+export function calculateAdaptiveZoomInWindow(
+  windowFrames: ReadonlyArray<{ clickPosition: unknown }>,
+  windowStart: number,
+  currentIndex: number,
+  maxScale: number,
+  transitionFrames: number,
+): number {
+  if (maxScale <= 1) return 1;
+
+  let minDistance = Infinity;
+  for (let j = 0; j < windowFrames.length; j++) {
+    if (windowFrames[j].clickPosition !== null && windowFrames[j].clickPosition !== undefined) {
+      const dist = Math.abs(windowStart + j - currentIndex);
+      if (dist < minDistance) minDistance = dist;
+    }
+  }
+
+  if (minDistance > transitionFrames) return 1;
+  const t = 1 - minDistance / transitionFrames;
+  return 1 + (maxScale - 1) * easeInOutCubic(t);
 }
 
 /**
