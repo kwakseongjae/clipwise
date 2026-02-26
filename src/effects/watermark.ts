@@ -4,15 +4,16 @@ import type { EffectsConfig } from "../script/types.js";
 type WatermarkConfig = EffectsConfig["watermark"];
 
 /**
- * Render a text watermark overlay at the specified corner.
+ * Build the watermark SVG string without rendering it.
+ * Used to bake the watermark into the static backdrop buffer.
+ * Returns an empty string when watermark is disabled.
  */
-export async function renderWatermark(
-  frameBuffer: Buffer,
+export function buildWatermarkSvg(
   config: WatermarkConfig,
   frameWidth: number,
   frameHeight: number,
-): Promise<Buffer> {
-  if (!config.enabled || !config.text) return frameBuffer;
+): string {
+  if (!config.enabled || !config.text) return "";
 
   const charWidth = config.fontSize * 0.62;
   const textWidth = Math.ceil(config.text.length * charWidth);
@@ -47,15 +48,27 @@ export async function renderWatermark(
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-  const watermarkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
     <text x="${x}" y="${y}"
           font-family="system-ui, -apple-system, sans-serif" font-size="${config.fontSize}"
           font-weight="600" fill="${config.color}"
           opacity="${config.opacity.toFixed(3)}">${escaped}</text>
   </svg>`;
+}
 
+/**
+ * Render a text watermark overlay at the specified corner.
+ */
+export async function renderWatermark(
+  frameBuffer: Buffer,
+  config: WatermarkConfig,
+  frameWidth: number,
+  frameHeight: number,
+): Promise<Buffer> {
+  if (!config.enabled || !config.text) return frameBuffer;
+  const svg = buildWatermarkSvg(config, frameWidth, frameHeight);
   return sharp(frameBuffer)
-    .composite([{ input: Buffer.from(watermarkSvg), left: 0, top: 0 }])
+    .composite([{ input: Buffer.from(svg), left: 0, top: 0 }])
     .png()
     .toBuffer();
 }

@@ -87,7 +87,10 @@ export async function encodeGif(
   const delay = Math.round(1000 / config.fps);
 
   for (const frame of frames) {
-    const { data, info } = await sharp(frame.buffer)
+    const src = frame.rawInfo
+      ? sharp(frame.buffer, { raw: { width: frame.rawInfo.width, height: frame.rawInfo.height, channels: frame.rawInfo.channels } })
+      : sharp(frame.buffer);
+    const { data, info } = await src
       .resize(width, height, { fit: "fill" })
       .ensureAlpha()
       .raw()
@@ -231,16 +234,19 @@ async function pipeFramesToFfmpeg(
       }
     });
 
-    // Stream raw frames to stdin.
-    // No resize needed here — compose pipeline already outputs at config.width × config.height.
+    // Stream raw RGB24 frames to FFmpeg stdin.
+    // When rawInfo is set the buffer already contains raw RGBA pixels — skip the
+    // PNG decode step and go straight to alpha-flatten + raw extraction.
     (async () => {
       for (const frame of frames) {
-        const raw = await sharp(frame.buffer)
+        const src = frame.rawInfo
+          ? sharp(frame.buffer, { raw: { width: frame.rawInfo.width, height: frame.rawInfo.height, channels: frame.rawInfo.channels } })
+          : sharp(frame.buffer);
+        const raw = await src
           .flatten({ background: { r: 0, g: 0, b: 0 } })
           .raw()
           .toBuffer();
 
-        // Handle backpressure
         if (!ffmpeg.stdin.write(raw)) {
           await new Promise<void>((r) => ffmpeg.stdin.once("drain", r));
         }
@@ -365,9 +371,13 @@ async function pipeStreamToFfmpeg(
 
     // `for await` naturally pauses while waiting for the next composed frame,
     // giving FFmpeg time to encode previously received frames in parallel.
+    // When rawInfo is set the buffer already contains raw RGBA — skip PNG decode.
     (async () => {
       for await (const frame of frames) {
-        const raw = await sharp(frame.buffer)
+        const src = frame.rawInfo
+          ? sharp(frame.buffer, { raw: { width: frame.rawInfo.width, height: frame.rawInfo.height, channels: frame.rawInfo.channels } })
+          : sharp(frame.buffer);
+        const raw = await src
           .flatten({ background: { r: 0, g: 0, b: 0 } })
           .raw()
           .toBuffer();

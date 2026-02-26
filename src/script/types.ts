@@ -275,6 +275,11 @@ export interface ComposedFrame {
   index: number;
   buffer: Buffer;
   timestamp: number;
+  /**
+   * Present when buffer contains raw RGBA pixels (not PNG).
+   * Allows the encoder to skip the PNG-decode step and consume pixels directly.
+   */
+  rawInfo?: { width: number; height: number; channels: 4 };
 }
 
 export interface DedupStats {

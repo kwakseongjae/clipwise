@@ -149,7 +149,7 @@ export class CanvasRenderer {
         const worker = new Worker(workerUrl);
         workers.push(worker);
 
-        worker.on("message", (msg: { taskId: number; index: number; timestamp: number; buffer: Buffer; error?: string }) => {
+        worker.on("message", (msg: { taskId: number; index: number; timestamp: number; buffer: Buffer; rawInfo?: { width: number; height: number; channels: 4 }; error?: string }) => {
           if (failed) return;
 
           if (msg.error) {
@@ -163,6 +163,7 @@ export class CanvasRenderer {
             index: frames[msg.taskId].index,
             buffer: Buffer.from(msg.buffer),
             timestamp: frames[msg.taskId].timestamp,
+            rawInfo: msg.rawInfo,
           };
 
           completed++;
@@ -416,7 +417,7 @@ export class CanvasRenderer {
       const worker = new Worker(workerUrl);
       workers.push(worker);
 
-      worker.on("message", (msg: { taskId: number; buffer: Buffer; error?: string }) => {
+      worker.on("message", (msg: { taskId: number; buffer: Buffer; rawInfo?: { width: number; height: number; channels: 4 }; error?: string }) => {
         if (workerError) return;
         if (msg.error) {
           workerError = new Error(`Worker failed on frame ${msg.taskId}: ${msg.error}`);
@@ -425,6 +426,7 @@ export class CanvasRenderer {
             index: frames[msg.taskId].index,
             buffer: Buffer.from(msg.buffer),
             timestamp: frames[msg.taskId].timestamp,
+            rawInfo: msg.rawInfo,
           });
           dispatch(worker); // give worker next available task
         }
@@ -552,7 +554,7 @@ export class CanvasRenderer {
       const worker = new Worker(workerUrl);
       workers.push(worker);
 
-      worker.on("message", (msg: { taskId: number; buffer: Buffer; error?: string }) => {
+      worker.on("message", (msg: { taskId: number; buffer: Buffer; rawInfo?: { width: number; height: number; channels: 4 }; error?: string }) => {
         if (workerError) return;
         if (msg.error) {
           workerError = new Error(`Worker failed on frame ${msg.taskId}: ${msg.error}`);
@@ -561,6 +563,7 @@ export class CanvasRenderer {
             index: frames[msg.taskId].index,
             buffer: Buffer.from(msg.buffer),
             timestamp: frames[msg.taskId].timestamp,
+            rawInfo: msg.rawInfo,
           };
           dispatch(worker);
         }
@@ -694,13 +697,18 @@ export class CanvasRenderer {
           const toBuf = state.frames[state.frames.length - 1].buffer;
           const range = state.frames.length - 1;
 
+          const fromRawInfo = state.frames[0].rawInfo;
+          const toRawInfo = state.frames[state.frames.length - 1].rawInfo;
           for (let j = 1; j < state.frames.length - 1; j++) {
+            const blended = await applyCrossfade(
+              fromBuf, toBuf, j / range,
+              this.output.width, this.output.height,
+              fromRawInfo, toRawInfo,
+            );
             state.frames[j] = {
               ...state.frames[j],
-              buffer: await applyCrossfade(
-                fromBuf, toBuf, j / range,
-                this.output.width, this.output.height,
-              ),
+              buffer: blended.buffer,
+              rawInfo: blended.rawInfo,
             };
           }
 
@@ -759,16 +767,22 @@ export class CanvasRenderer {
 
       const fromBuffer = composed[startIdx].buffer;
       const toBuffer = composed[endIdx].buffer;
+      const fromRawInfo = composed[startIdx].rawInfo;
+      const toRawInfo = composed[endIdx].rawInfo;
 
       for (let i = startIdx + 1; i < endIdx; i++) {
         const progress = (i - startIdx) / range;
-        composed[i].buffer = await applyCrossfade(
+        const blended = await applyCrossfade(
           fromBuffer,
           toBuffer,
           progress,
           this.output.width,
           this.output.height,
+          fromRawInfo,
+          toRawInfo,
         );
+        composed[i].buffer = blended.buffer;
+        composed[i].rawInfo = blended.rawInfo;
       }
     }
   }
