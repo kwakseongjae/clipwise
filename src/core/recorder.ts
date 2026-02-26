@@ -2,6 +2,7 @@ import { chromium, Browser, BrowserContext, Page, CDPSession } from "playwright"
 import type {
   Scenario,
   CapturedFrame,
+  DedupStats,
   StepAction,
   RecordingSession,
   KeystrokeEvent,
@@ -27,6 +28,12 @@ interface RawFrame {
   buffer: Buffer;
   timestamp: number;
 }
+
+// Byte length of the prefix slice used for deduplication comparison.
+// PNG 파일의 IHDR(~33 bytes) + IDAT 시작 부분을 커버하는 충분한 크기.
+// 화면 내용이 다르면 이 범위에서 반드시 차이가 생기며,
+// 동일 내용이면 CDP PNG 인코더가 결정론적으로 동일 bytes를 생성한다.
+const DEDUP_SIGNATURE_BYTES = 2048;
 
 interface CursorKeyframe {
   position: { x: number; y: number };
@@ -59,6 +66,11 @@ export class ClipwiseRecorder {
   private firstContentTimestamp = 0;
   private pendingResponsePromises: Map<number, Promise<unknown>> = new Map();
 
+  // ── 중복 프레임 제거 (Phase 1-A) ──────────────────────────────────────────
+  // 직전 저장된 프레임의 앞부분 시그니처. 동일하면 화면 내용이 바뀌지 않은 것.
+  private lastFrameSignature: Buffer | null = null;
+  private dedupStats: DedupStats = { received: 0, stored: 0, skipped: 0 };
+
   /**
    * Launch the browser and create a page with the scenario viewport.
    */
@@ -85,6 +97,8 @@ export class ClipwiseRecorder {
     this.cursorPosition = { x: 0, y: 0 };
     this.isCapturing = false;
     this.firstContentTimestamp = 0;
+    this.lastFrameSignature = null;
+    this.dedupStats = { received: 0, stored: 0, skipped: 0 };
   }
 
   /**
@@ -103,10 +117,24 @@ export class ClipwiseRecorder {
         if (!this.isCapturing || !this.cdpClient) return;
 
         const buffer = Buffer.from(event.data, "base64");
-        this.rawFrames.push({
-          buffer,
-          timestamp: Date.now(),
-        });
+        this.dedupStats.received++;
+
+        // 직전 프레임과 앞부분 시그니처 비교.
+        // CDP PNG 인코더는 동일 화면 내용에 대해 결정론적으로 동일 bytes를 생성하므로
+        // prefix 비교만으로 중복 여부를 신뢰성 있게 판단할 수 있다.
+        const signature = buffer.subarray(0, DEDUP_SIGNATURE_BYTES);
+        const isDuplicate =
+          this.lastFrameSignature !== null &&
+          this.lastFrameSignature.length === signature.length &&
+          this.lastFrameSignature.equals(signature);
+
+        if (isDuplicate) {
+          this.dedupStats.skipped++;
+        } else {
+          this.lastFrameSignature = Buffer.from(signature); // 복사 후 저장
+          this.rawFrames.push({ buffer, timestamp: Date.now() });
+          this.dedupStats.stored++;
+        }
 
         // ACK so CDP sends the next frame
         await this.cdpClient
@@ -199,6 +227,7 @@ export class ClipwiseRecorder {
         frames,
         startTime,
         endTime: Date.now(),
+        dedupStats: { ...this.dedupStats },
       };
     } catch (error) {
       await this.stopCapture().catch(() => {});
@@ -217,6 +246,7 @@ export class ClipwiseRecorder {
           frames,
           startTime,
           endTime: Date.now(),
+          dedupStats: { ...this.dedupStats },
         };
       throw err;
     } finally {

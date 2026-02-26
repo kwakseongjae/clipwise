@@ -277,9 +277,20 @@ export interface ComposedFrame {
   timestamp: number;
 }
 
+export interface DedupStats {
+  /** CDP로부터 수신한 원본 프레임 수 */
+  received: number;
+  /** 중복 제거 후 실제 저장된 고유 프레임 수 */
+  stored: number;
+  /** 중복으로 판단해 건너뛴 프레임 수 */
+  skipped: number;
+}
+
 export interface RecordingSession {
   scenario: Scenario;
   frames: CapturedFrame[];
   startTime: number;
   endTime?: number;
+  /** 정적 프레임 중복 제거 통계 */
+  dedupStats?: DedupStats;
 }
