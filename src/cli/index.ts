@@ -7,7 +7,7 @@ import { validateScenario } from "../script/validator.js";
 import { ClipwiseRecorder } from "../core/recorder.js";
 import { CanvasRenderer } from "../compose/canvas-renderer.js";
 import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-encoder.js";
-import { StreamingSession } from "../compose/streaming-session.js";
+import { StreamingSession, ConcurrentSession } from "../compose/streaming-session.js";
 import type { PipelineProgress } from "../compose/streaming-session.js";
 import { writeFile, mkdir, access } from "fs/promises";
 import { join, resolve, dirname } from "path";
@@ -99,96 +99,104 @@ program
         }
       }
 
-      // 4. Record (continuous CDP screencast capture)
-      spinner.start(
-        `Recording ${scenario.steps.length} steps...`,
-      );
-      const recorder = new ClipwiseRecorder();
-      const session = await recorder.record(scenario);
-      spinner.succeed(
-        `Recorded ${session.frames.length} frames`,
-      );
-
-      // 5+6. Compose & encode (MP4: streaming pipeline — composition and encoding overlap)
+      // 4+5+6. Record & encode
+      // Phase 3-B adaptive strategy: when effects don't need the full frame array
+      // (canStreamOnline) and format is MP4, use ConcurrentSession to overlap
+      // recording with composition — total time ≈ max(recording, compose) not sum.
       await mkdir(options.output, { recursive: true });
+      const recorder = new ClipwiseRecorder();
       const renderer = new CanvasRenderer(
         scenario.effects,
         scenario.output,
         scenario.steps,
       );
 
-      if (scenario.output.format === "png-sequence") {
-        // PNG sequence: compose all first, then save (no streaming benefit)
-        let composedFrames;
-        if (options.effects !== false) {
-          spinner.start(`Applying effects to ${session.frames.length} frames...`);
-          composedFrames = await renderer.composeAll(session.frames);
-          spinner.succeed("Effects applied");
-        } else {
-          composedFrames = session.frames.map((f) => ({
-            index: f.index,
-            buffer: f.screenshot,
-            timestamp: f.timestamp,
-          }));
-          spinner.info("Effects disabled, using raw frames");
-        }
-        spinner.start("Saving PNG sequence...");
-        const paths = await savePngSequence(composedFrames, scenario.output);
-        spinner.succeed(
-          `Saved ${paths.length} frames to ${chalk.bold(options.output)}`,
-        );
-      } else if (scenario.output.format === "mp4") {
-        // MP4: streaming pipeline — FFmpeg starts encoding as frames are composed.
-        // StreamingSession emits per-frame progress so the spinner shows live %.
+      const isConcurrentEligible =
+        scenario.output.format === "mp4" &&
+        options.effects !== false &&
+        renderer.canStreamOnline();
+
+      if (isConcurrentEligible) {
+        // ── Concurrent path (Phase 3-B) ───────────────────────────────────
+        // Recording and composition run in parallel.
+        const pipeline = new ConcurrentSession(recorder, scenario, renderer);
+        pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
+          spinner.text = total > 0
+            ? `Recording & composing... ${composed}/${total} (${pct}%)`
+            : `Recording & composing... ${composed} frames`;
+        });
+        spinner.start(`Recording & composing ${scenario.steps.length} steps concurrently...`);
+        const { buffer: mp4Buffer, session } = await pipeline.run();
         const outputPath = join(options.output, `${scenario.output.filename}.mp4`);
-        let mp4Buffer: Buffer;
-
-        if (options.effects !== false) {
-          const pipeline = new StreamingSession(session, renderer);
-          pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
-            spinner.text = `Composing & encoding... ${composed}/${total} (${pct}%)`;
-          });
-          spinner.start(`Composing & encoding ${session.frames.length} frames...`);
-          mp4Buffer = await pipeline.run();
-        } else {
-          spinner.start(`Encoding ${session.frames.length} raw frames...`);
-          const rawStream = (async function* () {
-            for (const f of session.frames) {
-              yield { index: f.index, buffer: f.screenshot, timestamp: f.timestamp };
-            }
-          })();
-          mp4Buffer = await encodeMp4Stream(rawStream, scenario.output);
-        }
-
         await writeFile(outputPath, mp4Buffer);
         const sizeMB = (mp4Buffer.length / (1024 * 1024)).toFixed(2);
         spinner.succeed(
-          `MP4 saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`,
+          `MP4 saved to ${chalk.bold(outputPath)} (${sizeMB} MB, ${session.frames.length} frames)`,
         );
       } else {
-        // GIF: compose all first (palette quantization needs all frames)
-        let composedFrames;
-        if (options.effects !== false) {
-          spinner.start(`Applying effects to ${session.frames.length} frames...`);
-          composedFrames = await renderer.composeAll(session.frames);
-          spinner.succeed("Effects applied");
+        // ── Sequential path (Phase 3-A / batch) ───────────────────────────
+        spinner.start(`Recording ${scenario.steps.length} steps...`);
+        const session = await recorder.record(scenario);
+        spinner.succeed(`Recorded ${session.frames.length} frames`);
+
+        if (scenario.output.format === "png-sequence") {
+          let composedFrames;
+          if (options.effects !== false) {
+            spinner.start(`Applying effects to ${session.frames.length} frames...`);
+            composedFrames = await renderer.composeAll(session.frames);
+            spinner.succeed("Effects applied");
+          } else {
+            composedFrames = session.frames.map((f) => ({
+              index: f.index, buffer: f.screenshot, timestamp: f.timestamp,
+            }));
+            spinner.info("Effects disabled, using raw frames");
+          }
+          spinner.start("Saving PNG sequence...");
+          const paths = await savePngSequence(composedFrames, scenario.output);
+          spinner.succeed(`Saved ${paths.length} frames to ${chalk.bold(options.output)}`);
+        } else if (scenario.output.format === "mp4") {
+          const outputPath = join(options.output, `${scenario.output.filename}.mp4`);
+          let mp4Buffer: Buffer;
+          if (options.effects === false) {
+            spinner.start(`Encoding ${session.frames.length} raw frames...`);
+            const rawStream = (async function* () {
+              for (const f of session.frames) {
+                yield { index: f.index, buffer: f.screenshot, timestamp: f.timestamp };
+              }
+            })();
+            mp4Buffer = await encodeMp4Stream(rawStream, scenario.output);
+          } else {
+            const pipeline = new StreamingSession(session, renderer);
+            pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
+              spinner.text = `Composing & encoding... ${composed}/${total} (${pct}%)`;
+            });
+            spinner.start(`Composing & encoding ${session.frames.length} frames...`);
+            mp4Buffer = await pipeline.run();
+          }
+          await writeFile(outputPath, mp4Buffer);
+          const sizeMB = (mp4Buffer.length / (1024 * 1024)).toFixed(2);
+          spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`);
         } else {
-          composedFrames = session.frames.map((f) => ({
-            index: f.index,
-            buffer: f.screenshot,
-            timestamp: f.timestamp,
-          }));
-          spinner.info("Effects disabled, using raw frames");
+          // GIF: compose all first (palette quantization needs all frames)
+          let composedFrames;
+          if (options.effects !== false) {
+            spinner.start(`Applying effects to ${session.frames.length} frames...`);
+            composedFrames = await renderer.composeAll(session.frames);
+            spinner.succeed("Effects applied");
+          } else {
+            composedFrames = session.frames.map((f) => ({
+              index: f.index, buffer: f.screenshot, timestamp: f.timestamp,
+            }));
+            spinner.info("Effects disabled, using raw frames");
+          }
+          spinner.start("Encoding GIF...");
+          const gifBuffer = await encodeGif(composedFrames, scenario.output);
+          const outputPath = join(options.output, `${scenario.output.filename}.gif`);
+          await writeFile(outputPath, gifBuffer);
+          const sizeMB = (gifBuffer.length / (1024 * 1024)).toFixed(2);
+          spinner.succeed(`GIF saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`);
         }
-        spinner.start("Encoding GIF...");
-        const gifBuffer = await encodeGif(composedFrames, scenario.output);
-        const outputPath = join(options.output, `${scenario.output.filename}.gif`);
-        await writeFile(outputPath, gifBuffer);
-        const sizeMB = (gifBuffer.length / (1024 * 1024)).toFixed(2);
-        spinner.succeed(
-          `GIF saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`,
-        );
-      }
+      } // end sequential path
 
       console.log(chalk.green("\nDone! 🎬"));
     } catch (error) {
@@ -433,37 +441,54 @@ program
         }
       }
 
-      // Record
-      spinner.start(`Recording ${scenario.steps.length} steps...`);
-      const recorder = new ClipwiseRecorder();
-      const session = await recorder.record(scenario);
-      spinner.succeed(`Recorded ${session.frames.length} frames`);
-
       // Compose & encode
       await mkdir(options.output, { recursive: true });
-      const renderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
+      const demoRenderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
       const ext = scenario.output.format === "gif" ? "gif" : "mp4";
       const outputPath = join(options.output, `clipwise-demo-${device}.${ext}`);
 
-      if (ext === "gif") {
-        // GIF needs all frames upfront for palette quantization — batch compose
-        spinner.start(`Applying effects to ${session.frames.length} frames...`);
-        const composedFrames = await renderer.composeAll(session.frames);
-        spinner.succeed("Effects applied");
-        spinner.start("Encoding GIF...");
-        const buf = await encodeGif(composedFrames, scenario.output);
-        await writeFile(outputPath, buf);
-        spinner.succeed(`GIF saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
-      } else {
-        // MP4: StreamingSession streams compose → FFmpeg in parallel, with progress
-        const pipeline = new StreamingSession(session, renderer);
-        pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
-          spinner.text = `Composing & encoding... ${composed}/${total} (${pct}%)`;
+      const isConcurrentEligible = ext === "mp4" && demoRenderer.canStreamOnline();
+
+      if (isConcurrentEligible) {
+        // Phase 3-B: record + compose run concurrently — single pass, no pre-recording.
+        const recorder = new ClipwiseRecorder();
+        const concPipeline = new ConcurrentSession(recorder, scenario, demoRenderer);
+        concPipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
+          spinner.text = total > 0
+            ? `Recording & composing... ${composed}/${total} (${pct}%)`
+            : `Recording & composing... ${composed} frames`;
         });
-        spinner.start(`Composing & encoding ${session.frames.length} frames...`);
-        const buf = await pipeline.run();
+        spinner.start(`Recording & composing ${scenario.steps.length} steps concurrently...`);
+        const { buffer: buf, session } = await concPipeline.run();
         await writeFile(outputPath, buf);
-        spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
+        spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB, ${session.frames.length} frames)`);
+      } else {
+        // Sequential: record first, then compose + encode
+        spinner.start(`Recording ${scenario.steps.length} steps...`);
+        const recorder = new ClipwiseRecorder();
+        const session = await recorder.record(scenario);
+        spinner.succeed(`Recorded ${session.frames.length} frames`);
+
+        if (ext === "gif") {
+          // GIF needs all frames upfront for palette quantization — batch compose
+          spinner.start(`Applying effects to ${session.frames.length} frames...`);
+          const composedFrames = await demoRenderer.composeAll(session.frames);
+          spinner.succeed("Effects applied");
+          spinner.start("Encoding GIF...");
+          const buf = await encodeGif(composedFrames, scenario.output);
+          await writeFile(outputPath, buf);
+          spinner.succeed(`GIF saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
+        } else {
+          // Speed-ramp or other blocking effects: StreamingSession (sequential)
+          const pipeline = new StreamingSession(session, demoRenderer);
+          pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
+            spinner.text = `Composing & encoding... ${composed}/${total} (${pct}%)`;
+          });
+          spinner.start(`Composing & encoding ${session.frames.length} frames...`);
+          const buf = await pipeline.run();
+          await writeFile(outputPath, buf);
+          spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
+        }
       }
 
       console.log(chalk.green("\nDemo complete! 🎬"));

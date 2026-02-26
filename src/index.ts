@@ -5,8 +5,8 @@ export { ClipwiseRecorder } from "./core/recorder.js";
 export { CanvasRenderer } from "./compose/canvas-renderer.js";
 export type { FrameContext } from "./compose/canvas-renderer.js";
 export { encodeGif, encodeMp4, encodeMp4Stream, savePngSequence } from "./compose/video-encoder.js";
-export { StreamingSession } from "./compose/streaming-session.js";
-export type { PipelineProgress } from "./compose/streaming-session.js";
+export { StreamingSession, ConcurrentSession } from "./compose/streaming-session.js";
+export type { PipelineProgress, ConcurrentResult } from "./compose/streaming-session.js";
 
 // Effects
 export {
@@ -36,5 +36,6 @@ export type {
   CapturedFrame,
   ComposedFrame,
   RecordingSession,
+  RecordingHandle,
   KeystrokeEvent,
 } from "./script/types.js";

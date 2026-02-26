@@ -22,7 +22,11 @@ import {
   ClipwiseRecorder,
   CanvasRenderer,
   encodeMp4Stream,
+  ConcurrentSession,
 } from "../dist/index.js";
+
+// BENCH_MODE=concurrent uses ConcurrentSession (overlaps recording + compose)
+const CONCURRENT_MODE = process.env.BENCH_MODE === "concurrent";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -102,21 +106,104 @@ async function runBenchmark() {
   console.log(`  RAM      : ${systemInfo.memTotalMB} MB total`);
   console.log();
 
+  await mkdir(resolve(ROOT, "output"), { recursive: true });
+
+  let recordingMs = 0;
+  let streamMs = 0;
+  let totalMs = 0;
+  let frameCount = 0;
+  let composedCount = 0;
+  let dedup: { received: number; stored: number; skipped: number } | undefined;
+  let memAfterRecord = 0;
+  let memBeforeRecord = 0;
+  let memBeforeStream = 0;
+  let memAfterStream = 0;
+  let msPerFrame = 0;
+
+  if (CONCURRENT_MODE) {
+    // ── Phase 3-B: ConcurrentSession (recording + compose overlap) ─────────
+    // wall-clock total ≈ max(recordingMs, composeMs) instead of sum
+    const renderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
+
+    if (!renderer.canStreamOnline()) {
+      console.error("  ERROR: scenario has speedRamp enabled — cannot use concurrent mode.");
+      process.exit(1);
+    }
+
+    const recorder = new ClipwiseRecorder();
+    const pipeline = new ConcurrentSession(recorder, scenario, renderer);
+
+    console.log("  [1/1] Recording & composing concurrently (Phase 3-B)...");
+    memBeforeRecord = memMB();
+    const t0 = now();
+
+    let lastComposed = 0;
+    pipeline.on("progress", ({ composed }: { composed: number }) => { lastComposed = composed; });
+
+    const { buffer: mp4Buffer, session } = await pipeline.run();
+
+    const t1 = now();
+    totalMs = ms(t0, t1);
+    memAfterRecord = memMB();
+    composedCount = lastComposed;
+    frameCount = session.frames.length;
+    dedup = session.dedupStats;
+    const durationSec2 = frameCount / scenario.output.fps;
+    msPerFrame = composedCount > 0 ? Math.round(totalMs / composedCount) : 0;
+    memAfterStream = memAfterRecord;
+    memBeforeStream = memBeforeRecord;
+
+    if (dedup) {
+      const skipPct = dedup.received > 0 ? Math.round((dedup.skipped / dedup.received) * 100) : 0;
+      console.log(`    Dedup: ${dedup.received} received → ${dedup.stored} stored  (${dedup.skipped} skipped, ${skipPct}%)`);
+    }
+    console.log(`    ✓ ${formatMs(totalMs)}  →  ${composedCount} frames composed  (${msPerFrame}ms/frame concurrent)`);
+    console.log(`    Memory: ${memBeforeRecord} MB → ${memAfterRecord} MB`);
+    console.log();
+
+    const outputPath = resolve(ROOT, "output/benchmark-output.mp4");
+    await writeFile(outputPath, mp4Buffer);
+
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("  RESULTS  (BENCH_MODE=concurrent)");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log(`  Record+Compose+Encode : ${formatMs(totalMs)} (wall-clock, overlapped)`);
+    console.log(`  Frames (composed)     : ${composedCount}`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+    const result: BenchmarkResult = {
+      timestamp: new Date().toISOString(),
+      label: process.env.BENCH_LABEL ?? "baseline",
+      scenario: scenario.name,
+      systemInfo,
+      pipeline: { recordingMs: totalMs, streamMs: 0, totalMs },
+      frames: { resampled: frameCount, composed: composedCount, fps: scenario.output.fps, durationSec: durationSec2 },
+      perFrameMs: msPerFrame,
+      memoryDeltaMB: { recording: memAfterRecord - memBeforeRecord, stream: 0 },
+      dedup: dedup ?? null,
+      concurrentMode: true,
+    };
+
+    await appendResultToMarkdown(result);
+    console.log(`  Results saved → ${RESULTS_FILE}\n`);
+    return result;
+  }
+
   // ── 3. 녹화 단계 ────────────────────────────────────────────────────────────
   console.log("  [1/3] Recording...");
   const recorder = new ClipwiseRecorder();
-  const memBeforeRecord = memMB();
+  memBeforeRecord = memMB();
   const t0 = now();
 
   const session = await recorder.record(scenario);
 
   const t1 = now();
-  const recordingMs = ms(t0, t1);
-  const memAfterRecord = memMB();
+  recordingMs = ms(t0, t1);
+  memAfterRecord = memMB();
 
-  const frameCount = session.frames.length;
+  frameCount = session.frames.length;
   const durationSec = session.frames.length / scenario.output.fps;
-  const dedup = session.dedupStats;
+  dedup = session.dedupStats;
 
   console.log(`    ✓ ${formatMs(recordingMs)}  →  ${frameCount} frames  (${durationSec.toFixed(1)}s @ ${scenario.output.fps}fps)`);
   if (dedup) {
@@ -135,11 +222,9 @@ async function runBenchmark() {
     scenario.output,
     scenario.steps,
   );
-  await mkdir(resolve(ROOT, "output"), { recursive: true });
-  const memBeforeStream = memMB();
+  memBeforeStream = memMB();
   const t2 = now();
 
-  let composedCount = 0;
   const countingStream = (async function* () {
     for await (const frame of renderer.composeStream(session.frames)) {
       composedCount++;
@@ -149,20 +234,19 @@ async function runBenchmark() {
   const mp4Buffer = await encodeMp4Stream(countingStream, scenario.output);
 
   const t3 = now();
-  const streamMs = ms(t2, t3);
-  const memAfterStream = memMB();
-  const msPerFrame = composedCount > 0 ? Math.round(streamMs / composedCount) : 0;
+  streamMs = ms(t2, t3);
+  memAfterStream = memMB();
+  msPerFrame = composedCount > 0 ? Math.round(streamMs / composedCount) : 0;
 
   const outputPath = resolve(ROOT, "output/benchmark-output.mp4");
-  const { writeFile: wf } = await import("fs/promises");
-  await wf(outputPath, mp4Buffer);
+  await writeFile(outputPath, mp4Buffer);
 
   console.log(`    ✓ ${formatMs(streamMs)}  →  ${composedCount} frames  (${msPerFrame}ms/frame, streaming)`);
   console.log(`    Memory: ${memBeforeStream} MB → ${memAfterStream} MB  (+${memAfterStream - memBeforeStream} MB)`);
   console.log();
 
   // ── 6. 결과 요약 ────────────────────────────────────────────────────────────
-  const totalMs = recordingMs + streamMs;
+  totalMs = recordingMs + streamMs;
 
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("  RESULTS");
@@ -237,6 +321,7 @@ interface BenchmarkResult {
     stream: number;
   };
   dedup: { received: number; stored: number; skipped: number } | null;
+  concurrentMode?: boolean;
 }
 
 // ─── Markdown 누적 기록 ───────────────────────────────────────────────────────

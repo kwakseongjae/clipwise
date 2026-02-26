@@ -294,3 +294,18 @@ export interface RecordingSession {
   /** 정적 프레임 중복 제거 통계 */
   dedupStats?: DedupStats;
 }
+
+/**
+ * Handle returned by ClipwiseRecorder.recordToChannel().
+ *
+ * frameStream: async iterable of CapturedFrames as they are captured
+ *   (post-dedup, no FPS resampling — frames arrive at CDP capture rate).
+ *   Closes automatically when recording ends.
+ *
+ * done: resolves with the full RecordingSession (including FPS-resampled
+ *   frames) when recording has completely finished.
+ */
+export interface RecordingHandle {
+  frameStream: AsyncIterable<CapturedFrame>;
+  done: Promise<RecordingSession>;
+}

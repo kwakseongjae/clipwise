@@ -5,6 +5,7 @@ import type {
   DedupStats,
   StepAction,
   RecordingSession,
+  RecordingHandle,
   KeystrokeEvent,
 } from "../script/types.js";
 import { interpolatePath } from "./cursor-tracker.js";
@@ -27,6 +28,42 @@ const CURSOR_SPEED_PRESETS = {
 interface RawFrame {
   buffer: Buffer;
   timestamp: number;
+  /** Step index at capture time — set to this.currentStepIndex when the CDP frame arrives. */
+  stepIndex: number;
+}
+
+// ─── Async frame channel (Phase 3-B) ────────────────────────────────────────
+// Single-producer / single-consumer async queue.
+// push() buffers an item and wakes any awaiting consumer.
+// close() signals end-of-stream; subsequent push() calls are no-ops.
+class FrameChannel {
+  private buffer: CapturedFrame[] = [];
+  private resolve: ((v: void) => void) | null = null;
+  private closed = false;
+
+  push(frame: CapturedFrame): void {
+    if (this.closed) return;
+    this.buffer.push(frame);
+    this.resolve?.();
+    this.resolve = null;
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.resolve?.();
+    this.resolve = null;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<CapturedFrame> {
+    while (true) {
+      while (this.buffer.length > 0) {
+        yield this.buffer.shift()!;
+      }
+      if (this.closed) return;
+      await new Promise<void>((r) => { this.resolve = r; });
+    }
+  }
 }
 
 // Byte length of the prefix slice used for deduplication comparison.
@@ -71,6 +108,11 @@ export class ClipwiseRecorder {
   private lastFrameSignature: Buffer | null = null;
   private dedupStats: DedupStats = { received: 0, stored: 0, skipped: 0 };
 
+  // ── 스트리밍 채널 (Phase 3-B) ───────────────────────────────────────────
+  // Set during recordToChannel(); null in normal record() mode.
+  private frameChannel: FrameChannel | null = null;
+  private channelIndex = 0; // sequential index for channel-pushed frames
+
   /**
    * Launch the browser and create a page with the scenario viewport.
    */
@@ -99,6 +141,8 @@ export class ClipwiseRecorder {
     this.firstContentTimestamp = 0;
     this.lastFrameSignature = null;
     this.dedupStats = { received: 0, stored: 0, skipped: 0 };
+    this.frameChannel = null;
+    this.channelIndex = 0;
   }
 
   /**
@@ -132,8 +176,19 @@ export class ClipwiseRecorder {
           this.dedupStats.skipped++;
         } else {
           this.lastFrameSignature = Buffer.from(signature); // 복사 후 저장
-          this.rawFrames.push({ buffer, timestamp: Date.now() });
+          const captureTime = Date.now();
+          this.rawFrames.push({ buffer, timestamp: captureTime, stepIndex: this.currentStepIndex });
           this.dedupStats.stored++;
+
+          // Phase 3-B: push to channel for concurrent composition.
+          // Only emit after first content is available (same trim as buildCapturedFrames).
+          if (this.frameChannel && this.firstContentTimestamp > 0) {
+            const frame = this.buildFrameOnline(
+              { buffer, timestamp: captureTime, stepIndex: this.currentStepIndex },
+              this.channelIndex++,
+            );
+            this.frameChannel.push(frame);
+          }
         }
 
         // ACK so CDP sends the next frame
@@ -252,6 +307,114 @@ export class ClipwiseRecorder {
     } finally {
       await this.cleanup();
     }
+  }
+
+  // ─── Streaming recording API (Phase 3-B) ──────────────────────────────────
+
+  /**
+   * Start recording concurrently and return a RecordingHandle immediately.
+   *
+   * frameStream: yields CapturedFrames as each unique frame arrives from CDP
+   *   (post-dedup, sequential indices starting at 0, NO FPS resampling).
+   *   Closes when recording ends.
+   *
+   * done: resolves with the full RecordingSession (FPS-resampled) once
+   *   all steps have completed and the browser has been cleaned up.
+   *
+   * Use this with CanvasRenderer.composeStreamOnline() to overlap recording
+   * time with composition time — total wall-clock ≈ max(recordingMs, composeMs).
+   */
+  recordToChannel(scenario: Scenario): RecordingHandle {
+    const channel = new FrameChannel();
+
+    const done = (async (): Promise<RecordingSession> => {
+      try {
+        await this.init(scenario);
+        this.frameChannel = channel;
+
+        const startTime = Date.now();
+        await this.startCapture();
+
+        for (let si = 0; si < scenario.steps.length; si++) {
+          const step = scenario.steps[si];
+          this.currentStepIndex = si;
+          this.preRegisterResponseListeners(step.actions);
+          for (let ai = 0; ai < step.actions.length; ai++) {
+            await this.executeAction(step.actions[ai], ai);
+          }
+          if (step.captureDelay > 0) await this.waitWithRepaints(step.captureDelay);
+          if (step.holdDuration > 0) await this.waitWithRepaints(step.holdDuration);
+        }
+
+        await this.stopCapture();
+        channel.close();
+
+        const rawFrames = this.buildCapturedFrames();
+        const recordingDurationMs = Date.now() - startTime;
+        const frames = this.resampleToTargetFps(rawFrames, recordingDurationMs);
+
+        return {
+          scenario,
+          frames,
+          startTime,
+          endTime: Date.now(),
+          dedupStats: { ...this.dedupStats },
+        };
+      } catch (error) {
+        channel.close();
+        await this.stopCapture().catch(() => {});
+
+        const rawFrames = this.buildCapturedFrames();
+        const session: RecordingSession = {
+          scenario,
+          frames: rawFrames,
+          startTime: Date.now(),
+          dedupStats: { ...this.dedupStats },
+        };
+        const err = error instanceof Error ? error : new Error(String(error));
+        (err as Error & { partialSession?: RecordingSession }).partialSession = session;
+        throw err;
+      } finally {
+        await this.cleanup();
+      }
+    })();
+
+    return { frameStream: channel, done };
+  }
+
+  /**
+   * Build a single CapturedFrame from a RawFrame in real-time.
+   * Used by recordToChannel() to emit frames as they arrive.
+   * Cursor/click data reflects the timeline up to this moment.
+   */
+  private buildFrameOnline(raw: RawFrame, sequentialIndex: number): CapturedFrame {
+    const cursorPos = this.interpolateCursorAt(raw.timestamp);
+
+    const clickEvent = this.clickTimeline.find(
+      (click) =>
+        raw.timestamp >= click.timestamp &&
+        raw.timestamp <= click.timestamp + CLICK_EFFECT_DURATION_MS,
+    );
+
+    let clickProgress: number | undefined;
+    if (clickEvent) {
+      clickProgress = Math.min(1, (raw.timestamp - clickEvent.timestamp) / CLICK_EFFECT_DURATION_MS);
+    }
+
+    const frameKeystrokes = this.keystrokeTimeline.filter((k) => k.timestamp <= raw.timestamp);
+
+    return {
+      index: sequentialIndex,
+      screenshot: raw.buffer,
+      timestamp: raw.timestamp,
+      cursorPosition: cursorPos,
+      clickPosition: clickEvent?.position ?? null,
+      clickProgress,
+      viewport: { ...this.viewport },
+      deviceScaleFactor: this.deviceScaleFactor,
+      stepIndex: raw.stepIndex,
+      keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
+    };
   }
 
   /**
@@ -567,7 +730,7 @@ export class ClipwiseRecorder {
         viewport: { ...this.viewport },
         deviceScaleFactor: this.deviceScaleFactor,
         keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
-        stepIndex: this.currentStepIndex,
+        stepIndex: raw.stepIndex, // use per-frame step index captured at event time
       };
     });
   }

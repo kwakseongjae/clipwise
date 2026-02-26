@@ -11,7 +11,11 @@ import type {
 } from "../script/types.js";
 import { composeFrame, getFrameOffset } from "./compose-frame.js";
 import type { FrameContext } from "./compose-frame.js";
-import { buildZoomClickLookup, calculateAdaptiveZoomFromLookup } from "../effects/zoom.js";
+import {
+  buildZoomClickLookup,
+  calculateAdaptiveZoomFromLookup,
+  calculateAdaptiveZoomInWindow,
+} from "../effects/zoom.js";
 import { applyCrossfade } from "../effects/transition.js";
 
 export type { FrameContext };
@@ -267,6 +271,205 @@ export class CanvasRenderer {
     }
 
     return result;
+  }
+
+  // ─── Online streaming pipeline (Phase 3-B) ─────────────────────────────────
+
+  /**
+   * Returns true when no effect requires the full frame array upfront.
+   *
+   * When true, composeStreamOnline() can be used: frames are composited as they
+   * arrive (no need to wait for all frames to be collected first).
+   *
+   * Currently the only blocking effect is speed ramp, which needs to scan all
+   * frames to compute action-proximity indices.  Zoom uses the window-based
+   * calculateAdaptiveZoomInWindow() so it works with a rolling lookahead buffer.
+   */
+  canStreamOnline(): boolean {
+    return !this.effects.speedRamp.enabled;
+  }
+
+  /**
+   * Online streaming compose — accepts an AsyncIterable of frames (e.g. from
+   * ClipwiseRecorder.recordToChannel()) and begins compositing immediately,
+   * without waiting for all frames to be collected.
+   *
+   * Each frame is dispatched to the worker pool as soon as its zoom lookahead
+   * window is satisfied (i.e. when frame i + transitionFrames has arrived).
+   * This creates a natural pipeline: recording produces frames while workers
+   * consume them in parallel.
+   *
+   * Requires canStreamOnline() === true (speedRamp must be disabled).
+   * Transitions (step boundaries with transition: fade) are applied inline
+   * using the same applyTransitionsToStream() logic as composeStream().
+   */
+  async *composeStreamOnline(
+    source: AsyncIterable<CapturedFrame>,
+  ): AsyncGenerator<ComposedFrame> {
+    const hasFadeTransitions = this.steps.some((s) => s.transition === "fade");
+
+    if (!hasFadeTransitions) {
+      // Fast path (common case): no crossfades needed.
+      // Frames are composited online — no full-array pass required.
+      const cpuCount = os.cpus().length;
+      const workerCount = Math.min(cpuCount, 8);
+      yield* this.streamOnlineWithWorkers(source, workerCount);
+      return;
+    }
+
+    // Fallback: fade transitions need the full frame array for window detection.
+    // Collect all frames from source first (this still overlaps with recording —
+    // the compositor starts as soon as recording ends), then use standard
+    // composeStream() which handles transitions correctly.
+    const collected: CapturedFrame[] = [];
+    for await (const frame of source) {
+      collected.push(frame);
+    }
+    yield* this.composeStream(collected);
+  }
+
+  /**
+   * Worker-pool online streaming: dispatches frame i to a worker as soon as
+   * frame i + transitionFrames has arrived from the source.
+   *
+   * Uses a notify-on-progress pattern (same as streamWithWorkers) extended
+   * with an intake coroutine that feeds the growing frames[] buffer.
+   */
+  private async *streamOnlineWithWorkers(
+    source: AsyncIterable<CapturedFrame>,
+    workerCount: number,
+  ): AsyncGenerator<ComposedFrame> {
+    const transitionFrames = this.effects.zoom.enabled
+      ? Math.round(this.output.fps * (this.effects.zoom.duration / 1000))
+      : 0;
+    const trailLength = this.effects.cursor.trailLength;
+
+    // Growing buffer — frames accumulate as intake runs
+    const frames: CapturedFrame[] = [];
+    let sourceComplete = false;
+    let workerError: Error | null = null;
+
+    // Single notify slot — both intake and worker callbacks call trigger()
+    let notify: (() => void) | null = null;
+    const trigger = (): void => { notify?.(); notify = null; };
+    const waitForProgress = (): Promise<void> =>
+      new Promise<void>((r) => { notify = r; });
+
+    const completed = new Map<number, ComposedFrame>();
+    const idleWorkers: Worker[] = [];
+    let nextToDispatch = 0;
+    let nextToYield = 0;
+
+    // Frame i is ready to dispatch when its lookahead window is satisfied
+    const canDispatch = (i: number): boolean =>
+      i < frames.length && (sourceComplete || frames.length > i + transitionFrames);
+
+    const computeContext = (i: number): FrameContext => {
+      const frame = frames[i];
+      let zoomScale = 1;
+      if (this.effects.zoom.enabled) {
+        const lo = Math.max(0, i - transitionFrames);
+        const hi = Math.min(frames.length - 1, i + transitionFrames);
+        zoomScale = calculateAdaptiveZoomInWindow(
+          frames.slice(lo, hi + 1) as ReadonlyArray<{ clickPosition: unknown }>,
+          lo,
+          i,
+          this.effects.zoom.scale,
+          transitionFrames,
+        );
+      }
+      const clickProgress = frame.clickPosition != null ? (frame.clickProgress ?? 0.5) : null;
+      const trail: Array<{ x: number; y: number }> = [];
+      for (let j = Math.max(0, i - trailLength); j <= i; j++) {
+        if (frames[j].cursorPosition) trail.push(frames[j].cursorPosition!);
+      }
+      return { zoomScale, clickProgress, cursorTrail: trail };
+    };
+
+    // Dispatch one task to worker; if no work ready, park worker as idle
+    const dispatch = (worker: Worker): void => {
+      if (canDispatch(nextToDispatch)) {
+        const i = nextToDispatch++;
+        worker.postMessage({
+          taskId: i,
+          frame: frames[i],
+          effects: this.effects,
+          output: this.output,
+          context: computeContext(i),
+        });
+      } else {
+        idleWorkers.push(worker);
+      }
+    };
+
+    // Wake idle workers when new frames unlock pending dispatches
+    const dispatchToIdle = (): void => {
+      while (idleWorkers.length > 0 && canDispatch(nextToDispatch)) {
+        dispatch(idleWorkers.shift()!);
+      }
+    };
+
+    const workerUrl = getWorkerUrl();
+    const workers: Worker[] = [];
+
+    for (let w = 0; w < workerCount; w++) {
+      const worker = new Worker(workerUrl);
+      workers.push(worker);
+
+      worker.on("message", (msg: { taskId: number; buffer: Buffer; error?: string }) => {
+        if (workerError) return;
+        if (msg.error) {
+          workerError = new Error(`Worker failed on frame ${msg.taskId}: ${msg.error}`);
+        } else {
+          completed.set(msg.taskId, {
+            index: frames[msg.taskId].index,
+            buffer: Buffer.from(msg.buffer),
+            timestamp: frames[msg.taskId].timestamp,
+          });
+          dispatch(worker); // give worker next available task
+        }
+        trigger();
+      });
+
+      worker.on("error", (err) => { workerError = err; trigger(); });
+      idleWorkers.push(worker); // start idle, will be dispatched once frames arrive
+    }
+
+    // Intake: consume source concurrently with worker dispatch
+    const intakeTask = (async (): Promise<void> => {
+      for await (const frame of source) {
+        frames.push(frame);
+        dispatchToIdle(); // new frame may satisfy lookahead for pending tasks
+        trigger();
+      }
+      sourceComplete = true;
+      dispatchToIdle(); // flush: remaining frames no longer need lookahead
+      trigger();
+    })();
+
+    try {
+      while (true) {
+        if (workerError) throw workerError;
+
+        // Done: source ended, all frames dispatched, all frames yielded
+        if (sourceComplete && nextToDispatch >= frames.length && nextToYield >= frames.length) {
+          break;
+        }
+
+        if (completed.has(nextToYield)) {
+          const frame = completed.get(nextToYield)!;
+          completed.delete(nextToYield); // free memory
+          nextToYield++;
+          yield frame;
+          continue;
+        }
+
+        await waitForProgress();
+      }
+    } finally {
+      await intakeTask;
+      workers.forEach((w) => w.terminate());
+    }
   }
 
   // ─── Streaming pipeline (Phase 1-B) ────────────────────────────────────────
