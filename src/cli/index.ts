@@ -6,7 +6,7 @@ import { loadScenario } from "../script/parser.js";
 import { validateScenario } from "../script/validator.js";
 import { ClipwiseRecorder } from "../core/recorder.js";
 import { CanvasRenderer } from "../compose/canvas-renderer.js";
-import { encodeGif, encodeMp4, savePngSequence } from "../compose/video-encoder.js";
+import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-encoder.js";
 import { writeFile, mkdir, access } from "fs/promises";
 import { join, resolve, dirname } from "path";
 import { pathToFileURL } from "url";
@@ -107,64 +107,69 @@ program
         `Recorded ${session.frames.length} frames`,
       );
 
-      // 5. Compose effects
-      let composedFrames;
-      if (options.effects !== false) {
-        spinner.start(`Applying effects to ${session.frames.length} frames...`);
-        const renderer = new CanvasRenderer(
-          scenario.effects,
-          scenario.output,
-          scenario.steps,
-        );
-        composedFrames = await renderer.composeAll(session.frames);
-        spinner.succeed("Effects applied");
-      } else {
-        // Convert captured frames to composed frames without effects
-        composedFrames = session.frames.map((f) => ({
-          index: f.index,
-          buffer: f.screenshot,
-          timestamp: f.timestamp,
-        }));
-        spinner.info("Effects disabled, using raw frames");
-      }
-
-      // 6. Encode & save
+      // 5+6. Compose & encode (MP4: streaming pipeline — composition and encoding overlap)
       await mkdir(options.output, { recursive: true });
+      const renderer = new CanvasRenderer(
+        scenario.effects,
+        scenario.output,
+        scenario.steps,
+      );
 
       if (scenario.output.format === "png-sequence") {
+        // PNG sequence: compose all first, then save (no streaming benefit)
+        let composedFrames;
+        if (options.effects !== false) {
+          spinner.start(`Applying effects to ${session.frames.length} frames...`);
+          composedFrames = await renderer.composeAll(session.frames);
+          spinner.succeed("Effects applied");
+        } else {
+          composedFrames = session.frames.map((f) => ({
+            index: f.index,
+            buffer: f.screenshot,
+            timestamp: f.timestamp,
+          }));
+          spinner.info("Effects disabled, using raw frames");
+        }
         spinner.start("Saving PNG sequence...");
-        const paths = await savePngSequence(
-          composedFrames,
-          scenario.output,
-        );
+        const paths = await savePngSequence(composedFrames, scenario.output);
         spinner.succeed(
           `Saved ${paths.length} frames to ${chalk.bold(options.output)}`,
         );
       } else if (scenario.output.format === "mp4") {
-        spinner.start("Encoding MP4...");
-        const mp4Buffer = await encodeMp4(
-          composedFrames,
-          scenario.output,
-        );
-        const outputPath = join(
-          options.output,
-          `${scenario.output.filename}.mp4`,
-        );
+        // MP4: streaming pipeline — FFmpeg starts encoding as frames are composed
+        spinner.start(`Composing & encoding ${session.frames.length} frames...`);
+        const frameStream = options.effects !== false
+          ? renderer.composeStream(session.frames)
+          : (async function* () {
+              for (const f of session.frames) {
+                yield { index: f.index, buffer: f.screenshot, timestamp: f.timestamp };
+              }
+            })();
+        const mp4Buffer = await encodeMp4Stream(frameStream, scenario.output);
+        const outputPath = join(options.output, `${scenario.output.filename}.mp4`);
         await writeFile(outputPath, mp4Buffer);
         const sizeMB = (mp4Buffer.length / (1024 * 1024)).toFixed(2);
         spinner.succeed(
           `MP4 saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`,
         );
       } else {
+        // GIF: compose all first (palette quantization needs all frames)
+        let composedFrames;
+        if (options.effects !== false) {
+          spinner.start(`Applying effects to ${session.frames.length} frames...`);
+          composedFrames = await renderer.composeAll(session.frames);
+          spinner.succeed("Effects applied");
+        } else {
+          composedFrames = session.frames.map((f) => ({
+            index: f.index,
+            buffer: f.screenshot,
+            timestamp: f.timestamp,
+          }));
+          spinner.info("Effects disabled, using raw frames");
+        }
         spinner.start("Encoding GIF...");
-        const gifBuffer = await encodeGif(
-          composedFrames,
-          scenario.output,
-        );
-        const outputPath = join(
-          options.output,
-          `${scenario.output.filename}.gif`,
-        );
+        const gifBuffer = await encodeGif(composedFrames, scenario.output);
+        const outputPath = join(options.output, `${scenario.output.filename}.gif`);
         await writeFile(outputPath, gifBuffer);
         const sizeMB = (gifBuffer.length / (1024 * 1024)).toFixed(2);
         spinner.succeed(

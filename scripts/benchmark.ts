@@ -21,7 +21,7 @@ import {
   validateScenario,
   ClipwiseRecorder,
   CanvasRenderer,
-  encodeMp4,
+  encodeMp4Stream,
 } from "../dist/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -126,55 +126,51 @@ async function runBenchmark() {
   console.log(`    Memory: ${memBeforeRecord} MB → ${memAfterRecord} MB  (+${memAfterRecord - memBeforeRecord} MB)`);
   console.log();
 
-  // ── 4. 합성 단계 ────────────────────────────────────────────────────────────
-  console.log("  [2/3] Composing effects...");
+  // ── 4+5. 합성+인코딩 (스트리밍 파이프라인) ──────────────────────────────────
+  // 합성 worker가 프레임을 만드는 즉시 FFmpeg stdin으로 공급.
+  // 두 단계가 겹치므로 wall-clock 시간은 max(compose, encode) ≈ compose 시간.
+  console.log("  [2/3] Composing & encoding (streaming pipeline)...");
   const renderer = new CanvasRenderer(
     scenario.effects,
     scenario.output,
     scenario.steps,
   );
-  const memBeforeCompose = memMB();
+  await mkdir(resolve(ROOT, "output"), { recursive: true });
+  const memBeforeStream = memMB();
   const t2 = now();
 
-  const composed = await renderer.composeAll(session.frames);
+  let composedCount = 0;
+  const countingStream = (async function* () {
+    for await (const frame of renderer.composeStream(session.frames)) {
+      composedCount++;
+      yield frame;
+    }
+  })();
+  const mp4Buffer = await encodeMp4Stream(countingStream, scenario.output);
 
   const t3 = now();
-  const compositionMs = ms(t2, t3);
-  const memAfterCompose = memMB();
-  const msPerFrame = Math.round(compositionMs / composed.length);
+  const streamMs = ms(t2, t3);
+  const memAfterStream = memMB();
+  const msPerFrame = composedCount > 0 ? Math.round(streamMs / composedCount) : 0;
 
-  console.log(`    ✓ ${formatMs(compositionMs)}  →  ${composed.length} frames  (${msPerFrame}ms/frame)`);
-  console.log(`    Memory: ${memBeforeCompose} MB → ${memAfterCompose} MB  (+${memAfterCompose - memBeforeCompose} MB)`);
-  console.log();
-
-  // ── 5. 인코딩 단계 ──────────────────────────────────────────────────────────
-  console.log("  [3/3] Encoding...");
-  await mkdir(resolve(ROOT, "output"), { recursive: true });
   const outputPath = resolve(ROOT, "output/benchmark-output.mp4");
-  const memBeforeEncode = memMB();
-  const t4 = now();
+  const { writeFile: wf } = await import("fs/promises");
+  await wf(outputPath, mp4Buffer);
 
-  await encodeMp4(composed, scenario.output, outputPath);
-
-  const t5 = now();
-  const encodingMs = ms(t4, t5);
-  const memAfterEncode = memMB();
-
-  console.log(`    ✓ ${formatMs(encodingMs)}  →  ${outputPath.split("/").pop()}`);
-  console.log(`    Memory: ${memBeforeEncode} MB → ${memAfterEncode} MB`);
+  console.log(`    ✓ ${formatMs(streamMs)}  →  ${composedCount} frames  (${msPerFrame}ms/frame, streaming)`);
+  console.log(`    Memory: ${memBeforeStream} MB → ${memAfterStream} MB  (+${memAfterStream - memBeforeStream} MB)`);
   console.log();
 
   // ── 6. 결과 요약 ────────────────────────────────────────────────────────────
-  const totalMs = recordingMs + compositionMs + encodingMs;
+  const totalMs = recordingMs + streamMs;
 
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("  RESULTS");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`  Recording   : ${formatMs(recordingMs).padEnd(10)} (${pct(recordingMs, totalMs)}%)`);
-  console.log(`  Composition : ${formatMs(compositionMs).padEnd(10)} (${pct(compositionMs, totalMs)}%)`);
-  console.log(`  Encoding    : ${formatMs(encodingMs).padEnd(10)} (${pct(encodingMs, totalMs)}%)`);
+  console.log(`  Recording          : ${formatMs(recordingMs).padEnd(10)} (${pct(recordingMs, totalMs)}%)`);
+  console.log(`  Compose+Encode     : ${formatMs(streamMs).padEnd(10)} (${pct(streamMs, totalMs)}%)`);
   console.log(`  ─────────────────────────`);
-  console.log(`  Total       : ${formatMs(totalMs)}`);
+  console.log(`  Total              : ${formatMs(totalMs)}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
   // ── 7. 결과 파일 기록 ───────────────────────────────────────────────────────
@@ -185,21 +181,19 @@ async function runBenchmark() {
     systemInfo,
     pipeline: {
       recordingMs,
-      compositionMs,
-      encodingMs,
+      streamMs,
       totalMs,
     },
     frames: {
       resampled: frameCount,
-      composed: composed.length,
+      composed: composedCount,
       fps: scenario.output.fps,
       durationSec,
     },
     perFrameMs: msPerFrame,
     memoryDeltaMB: {
       recording: memAfterRecord - memBeforeRecord,
-      composition: memAfterCompose - memBeforeCompose,
-      encoding: memAfterEncode - memBeforeEncode,
+      stream: memAfterStream - memBeforeStream,
     },
     dedup: session.dedupStats ?? null,
   };
@@ -228,8 +222,7 @@ interface BenchmarkResult {
   };
   pipeline: {
     recordingMs: number;
-    compositionMs: number;
-    encodingMs: number;
+    streamMs: number;
     totalMs: number;
   };
   frames: {
@@ -241,8 +234,7 @@ interface BenchmarkResult {
   perFrameMs: number;
   memoryDeltaMB: {
     recording: number;
-    composition: number;
-    encoding: number;
+    stream: number;
   };
   dedup: { received: number; stored: number; skipped: number } | null;
 }
@@ -279,8 +271,7 @@ async function appendResultToMarkdown(result: BenchmarkResult): Promise<void> {
     `| 단계 | 시간 | 비중 |`,
     `|------|------|------|`,
     `| Recording | ${formatMsTable(pipeline.recordingMs)} | ${pct(pipeline.recordingMs, pipeline.totalMs)}% |`,
-    `| Composition | ${formatMsTable(pipeline.compositionMs)} | ${pct(pipeline.compositionMs, pipeline.totalMs)}% |`,
-    `| Encoding | ${formatMsTable(pipeline.encodingMs)} | ${pct(pipeline.encodingMs, pipeline.totalMs)}% |`,
+    `| Compose+Encode (streaming) | ${formatMsTable(pipeline.streamMs)} | ${pct(pipeline.streamMs, pipeline.totalMs)}% |`,
     `| **Total** | **${formatMsTable(pipeline.totalMs)}** | 100% |`,
     ``,
     `### 프레임 통계`,
@@ -290,7 +281,7 @@ async function appendResultToMarkdown(result: BenchmarkResult): Promise<void> {
     `| 리샘플링 후 프레임 수 | ${frames.resampled} |`,
     `| 합성 완료 프레임 수 | ${frames.composed} |`,
     `| 영상 길이 | ${frames.durationSec.toFixed(1)}s @ ${frames.fps}fps |`,
-    `| 프레임당 합성 시간 | ${result.perFrameMs}ms/frame |`,
+    `| 프레임당 합성+인코딩 시간 | ${result.perFrameMs}ms/frame |`,
     ...(result.dedup
       ? [
           ``,
@@ -309,8 +300,7 @@ async function appendResultToMarkdown(result: BenchmarkResult): Promise<void> {
     `| 단계 | 증가량 |`,
     `|------|--------|`,
     `| Recording | +${memoryDeltaMB.recording} MB |`,
-    `| Composition | +${memoryDeltaMB.composition} MB |`,
-    `| Encoding | +${memoryDeltaMB.encoding} MB |`,
+    `| Compose+Encode | +${memoryDeltaMB.stream} MB |`,
     ``,
     `---`,
     ``,

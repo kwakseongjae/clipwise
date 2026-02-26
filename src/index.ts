@@ -4,7 +4,7 @@ export { ClipwiseRecorder } from "./core/recorder.js";
 // Composition & encoding
 export { CanvasRenderer } from "./compose/canvas-renderer.js";
 export type { FrameContext } from "./compose/canvas-renderer.js";
-export { encodeGif, encodeMp4, savePngSequence } from "./compose/video-encoder.js";
+export { encodeGif, encodeMp4, encodeMp4Stream, savePngSequence } from "./compose/video-encoder.js";
 
 // Effects
 export { calculateAdaptiveZoom, calculatePanOffset, lerpZoom } from "./effects/zoom.js";

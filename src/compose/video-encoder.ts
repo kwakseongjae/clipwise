@@ -250,6 +250,137 @@ async function pipeFramesToFfmpeg(
   });
 }
 
+// ─── MP4 Streaming Encoder ───────────────────────────────
+
+/**
+ * Streaming variant of encodeMp4 — accepts an AsyncIterable so frames can
+ * be piped to FFmpeg as they arrive from the composition pipeline,
+ * overlapping composition and encoding rather than waiting for all frames.
+ */
+export async function encodeMp4Stream(
+  frames: AsyncIterable<ComposedFrame>,
+  config: OutputConfig,
+): Promise<Buffer> {
+  const outputPath = join(tmpdir(), `clipwise-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
+
+  try {
+    const encoder = await detectVideoEncoder();
+    const params = resolveEncodingParams(config);
+    await pipeStreamToFfmpeg(frames, config, params, encoder, outputPath);
+    return await readFile(outputPath);
+  } finally {
+    await rm(outputPath, { force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Like pipeFramesToFfmpeg but reads from an AsyncIterable —
+ * FFmpeg starts encoding immediately as the first frames arrive,
+ * without waiting for the full composed array.
+ */
+async function pipeStreamToFfmpeg(
+  frames: AsyncIterable<ComposedFrame>,
+  config: OutputConfig,
+  params: EncodingParams,
+  encoder: VideoEncoder,
+  outputPath: string,
+): Promise<void> {
+  const videoArgs =
+    encoder === "hevc_videotoolbox"
+      ? [
+          "-c:v", "hevc_videotoolbox",
+          "-q:v", String(params.vtQuality),
+          "-pix_fmt", "yuv420p",
+          "-tag:v", "hvc1",
+        ]
+      : encoder === "h264_videotoolbox"
+      ? [
+          "-c:v", "h264_videotoolbox",
+          "-q:v", String(params.vtQuality),
+          "-pix_fmt", "yuv420p",
+        ]
+      : [
+          "-c:v", "libx264",
+          "-crf", String(params.crf),
+          "-preset", "medium",
+          "-tune", "stillimage",
+          "-profile:v", "high",
+          "-level", "4.1",
+          "-pix_fmt", "yuv420p",
+        ];
+
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn(
+      "ffmpeg",
+      [
+        "-y",
+        "-f", "rawvideo",
+        "-pixel_format", "rgb24",
+        "-video_size", `${config.width}x${config.height}`,
+        "-framerate", String(config.fps),
+        "-i", "pipe:0",
+        "-f", "lavfi",
+        "-i", "anullsrc=r=48000:cl=stereo",
+        ...videoArgs,
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-shortest",
+        "-movflags", "+faststart",
+        outputPath,
+      ],
+      { stdio: ["pipe", "ignore", "pipe"] },
+    );
+
+    let stderr = "";
+    ffmpeg.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `FFmpeg encoding failed (exit code ${code}). ` +
+              `Make sure ffmpeg is installed: brew install ffmpeg\n` +
+              stderr.slice(-500),
+          ),
+        );
+      }
+    });
+
+    ffmpeg.on("error", (err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        reject(
+          new Error(
+            "ffmpeg not found. Install it to encode MP4:\n" +
+              "  macOS: brew install ffmpeg\n" +
+              "  Ubuntu: sudo apt install ffmpeg\n" +
+              "  Windows: choco install ffmpeg",
+          ),
+        );
+      } else {
+        reject(err);
+      }
+    });
+
+    // `for await` naturally pauses while waiting for the next composed frame,
+    // giving FFmpeg time to encode previously received frames in parallel.
+    (async () => {
+      for await (const frame of frames) {
+        const raw = await sharp(frame.buffer)
+          .flatten({ background: { r: 0, g: 0, b: 0 } })
+          .raw()
+          .toBuffer();
+
+        if (!ffmpeg.stdin.write(raw)) {
+          await new Promise<void>((r) => ffmpeg.stdin.once("drain", r));
+        }
+      }
+      ffmpeg.stdin.end();
+    })().catch(reject);
+  });
+}
+
 // ─── PNG Sequence ─────────────────────────────────────────
 
 /**
