@@ -1,0 +1,163 @@
+name: "Beam Analytics Showcase"
+description: "Product analytics dashboard — 1440×900 → 1920×1200 (~25s)"
+
+viewport:
+  width: 1440
+  height: 900
+
+effects:
+  zoom:
+    enabled: true
+    scale: 2.0
+    duration: 400
+    autoZoom:
+      followCursor: true
+      maxScale: 2.2
+      transitionDuration: 200
+
+  cursor:
+    enabled: true
+    size: 24
+    smoothing: true
+    clickEffect: true
+    clickColor: "rgba(99, 102, 241, 0.45)"
+    trail: true
+    trailLength: 7
+    trailColor: "rgba(129, 140, 248, 0.28)"
+    highlight: true
+    highlightRadius: 42
+    highlightColor: "rgba(99, 102, 241, 0.1)"
+
+  background:
+    type: gradient
+    value: "linear-gradient(145deg, #05081a 0%, #040710 50%, #05081a 100%)"
+    padding: 80
+    borderRadius: 16
+    shadow: true
+
+  deviceFrame:
+    enabled: true
+    type: browser
+    darkMode: true
+
+  keystroke:
+    enabled: true
+    position: bottom-center
+    fontSize: 18
+    backgroundColor: "rgba(3, 4, 12, 0.90)"
+    textColor: "#e2e8f0"
+    fadeAfter: 1000
+
+  watermark:
+    enabled: true
+    text: "made with Clipwise"
+    position: bottom-right
+    opacity: 0.35
+    fontSize: 13
+    color: "#94a3b8"
+
+output:
+  format: mp4
+  width: 1920
+  height: 1200
+  fps: 30
+  preset: archive
+
+steps:
+  - name: "Load"
+    captureDelay: 100
+    holdDuration: 120
+    actions:
+      - action: navigate
+        url: "demo-site/beam.html"
+        waitUntil: load
+
+  - name: "Hover Visitors"
+    captureDelay: 30
+    holdDuration: 250
+    actions:
+      - action: hover
+        selector: "#kpi-visitors"
+
+  - name: "Hover Bounce Rate"
+    captureDelay: 30
+    holdDuration: 250
+    actions:
+      - action: hover
+        selector: "#kpi-bounce"
+
+  - name: "Chart 30D"
+    captureDelay: 30
+    holdDuration: 250
+    actions:
+      - action: click
+        selector: "#tab-30d"
+
+  - name: "Chart All"
+    captureDelay: 30
+    holdDuration: 270
+    actions:
+      - action: click
+        selector: "#tab-all"
+
+  - name: "Expand page_view"
+    captureDelay: 30
+    holdDuration: 290
+    actions:
+      - action: click
+        selector: "#ev-row-1"
+
+  - name: "Expand button_click"
+    captureDelay: 30
+    holdDuration: 290
+    actions:
+      - action: click
+        selector: "#ev-row-2"
+
+  - name: "Reports"
+    captureDelay: 40
+    holdDuration: 300
+    transition: fade
+    actions:
+      - action: click
+        selector: "#nav-reports"
+
+  - name: "Funnels"
+    captureDelay: 40
+    holdDuration: 300
+    transition: fade
+    actions:
+      - action: click
+        selector: "#nav-funnels"
+
+  - name: "Overview"
+    captureDelay: 40
+    holdDuration: 250
+    transition: fade
+    actions:
+      - action: click
+        selector: "#nav-overview"
+
+  - name: "New Goal"
+    captureDelay: 40
+    holdDuration: 270
+    actions:
+      - action: click
+        selector: "#new-goal-btn"
+
+  - name: "Type"
+    captureDelay: 30
+    holdDuration: 250
+    actions:
+      - action: type
+        selector: "#goal-input"
+        text: "checkout_done"
+        delay: 38
+
+  - name: "Confirm"
+    captureDelay: 50
+    holdDuration: 1200   # 줌 애니메이션(400ms) + 여유 800ms
+    transition: fade
+    actions:
+      - action: click
+        selector: "#goal-confirm"

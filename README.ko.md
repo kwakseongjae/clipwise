@@ -5,7 +5,7 @@
 YAML 시나리오를 작성하면 시네마틱 데모 영상(MP4/GIF)을 자동으로 만들어주는 스크린 레코더. Playwright CDP 기반.
 
 <p align="center">
-  <img src="https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif" width="100%" alt="Clipwise Demo" />
+  <video src="https://kwakseongjae.github.io/clipwise/demo.mp4" autoplay loop muted playsinline width="100%"></video>
 </p>
 
 > *`npx clipwise demo` 한 줄로 생성된 영상입니다.*
@@ -271,6 +271,20 @@ speedRamp:
   idleSpeed: 3.0
   actionSpeed: 0.8
 ```
+
+## 성능
+
+**Apple M1 Max (10코어)** 기준 — Pulse Dashboard 데모, 44초 @ 30fps, 1280×800:
+
+| 단계 | v0.3.0 | v0.4.0 | 변화 |
+|------|--------|--------|------|
+| 녹화 | 30.8 s | 31.1 s | — |
+| 합성 + 인코딩 | 97.2 s | 60.6 s | **−38%** |
+| **전체** | **127.9 s** | **91.7 s** | **−28%** |
+| ms / 프레임 | 69 ms | 67 ms | −3% |
+| 캡처 프레임 수 | 1,303 | 902 | −31% (중복 제거) |
+
+v0.4.0 주요 최적화: 동시 스트리밍 파이프라인, 정적 프레임 중복 제거(~33% 건너뜀), 워커별 StaticLayers 캐시, raw RGBA 버퍼 파이프라인.
 
 ## 출력 압축
 

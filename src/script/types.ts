@@ -275,6 +275,20 @@ export interface ComposedFrame {
   index: number;
   buffer: Buffer;
   timestamp: number;
+  /**
+   * Present when buffer contains raw RGBA pixels (not PNG).
+   * Allows the encoder to skip the PNG-decode step and consume pixels directly.
+   */
+  rawInfo?: { width: number; height: number; channels: 4 };
+}
+
+export interface DedupStats {
+  /** CDP로부터 수신한 원본 프레임 수 */
+  received: number;
+  /** 중복 제거 후 실제 저장된 고유 프레임 수 */
+  stored: number;
+  /** 중복으로 판단해 건너뛴 프레임 수 */
+  skipped: number;
 }
 
 export interface RecordingSession {
@@ -282,4 +296,21 @@ export interface RecordingSession {
   frames: CapturedFrame[];
   startTime: number;
   endTime?: number;
+  /** 정적 프레임 중복 제거 통계 */
+  dedupStats?: DedupStats;
+}
+
+/**
+ * Handle returned by ClipwiseRecorder.recordToChannel().
+ *
+ * frameStream: async iterable of CapturedFrames as they are captured
+ *   (post-dedup, no FPS resampling — frames arrive at CDP capture rate).
+ *   Closes automatically when recording ends.
+ *
+ * done: resolves with the full RecordingSession (including FPS-resampled
+ *   frames) when recording has completely finished.
+ */
+export interface RecordingHandle {
+  frameStream: AsyncIterable<CapturedFrame>;
+  done: Promise<RecordingSession>;
 }

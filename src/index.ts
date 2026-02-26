@@ -4,10 +4,19 @@ export { ClipwiseRecorder } from "./core/recorder.js";
 // Composition & encoding
 export { CanvasRenderer } from "./compose/canvas-renderer.js";
 export type { FrameContext } from "./compose/canvas-renderer.js";
-export { encodeGif, encodeMp4, savePngSequence } from "./compose/video-encoder.js";
+export { encodeGif, encodeMp4, encodeMp4Stream, savePngSequence } from "./compose/video-encoder.js";
+export { StreamingSession, ConcurrentSession } from "./compose/streaming-session.js";
+export type { PipelineProgress, ConcurrentResult } from "./compose/streaming-session.js";
 
 // Effects
-export { calculateAdaptiveZoom, calculatePanOffset, lerpZoom } from "./effects/zoom.js";
+export {
+  calculateAdaptiveZoom,
+  buildZoomClickLookup,
+  calculateAdaptiveZoomFromLookup,
+  calculateAdaptiveZoomInWindow,
+  calculatePanOffset,
+  lerpZoom,
+} from "./effects/zoom.js";
 export { renderCursorTrail, renderCursorHighlight } from "./effects/cursor.js";
 export { renderKeystrokeHud } from "./effects/keystroke.js";
 export { applyCrossfade } from "./effects/transition.js";
@@ -27,5 +36,6 @@ export type {
   CapturedFrame,
   ComposedFrame,
   RecordingSession,
+  RecordingHandle,
   KeystrokeEvent,
 } from "./script/types.js";

@@ -82,6 +82,56 @@ function buildBackgroundSvg(
 }
 
 /**
+ * Pre-compute the static backdrop: background gradient + optional shadow.
+ * Does NOT include screenshot content — it is output-sized and purely decorative.
+ * Optionally composites extra RGBA/SVG overlays (e.g. watermark) on top.
+ *
+ * Returns raw RGBA buffer at (outputWidth × outputHeight) — no PNG overhead.
+ * Compute once per render session and reuse across all workers.
+ */
+export async function buildBackdropBuffer(
+  config: Background,
+  outputWidth: number,
+  outputHeight: number,
+  extraOverlays: Buffer[] = [],
+): Promise<{ data: Buffer; width: number; height: number }> {
+  const padding = config.padding;
+  const contentWidth = outputWidth - padding * 2;
+  const contentHeight = outputHeight - padding * 2;
+
+  const bgSvg = buildBackgroundSvg(config, outputWidth, outputHeight);
+  const composites: sharp.OverlayOptions[] = [];
+
+  if (config.shadow && contentWidth > 0 && contentHeight > 0) {
+    const shadowSvg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}">
+        <defs>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="4" stdDeviation="16" flood-color="rgba(0,0,0,0.3)"/>
+          </filter>
+        </defs>
+        <rect x="${padding}" y="${padding}" width="${contentWidth}" height="${contentHeight}"
+              rx="${config.borderRadius}" ry="${config.borderRadius}" fill="rgba(0,0,0,0.15)" filter="url(#shadow)"/>
+      </svg>`,
+    );
+    composites.push({ input: shadowSvg, left: 0, top: 0 });
+  }
+
+  for (const overlay of extraOverlays) {
+    composites.push({ input: overlay, left: 0, top: 0 });
+  }
+
+  const { data, info } = await sharp(Buffer.from(bgSvg))
+    .resize(outputWidth, outputHeight)
+    .composite(composites)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  return { data: Buffer.from(data), width: info.width, height: info.height };
+}
+
+/**
  * Apply a decorative background behind the screenshot frame.
  *
  * - Adds padding around the screenshot

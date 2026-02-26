@@ -5,7 +5,7 @@
 Scriptable cinematic screen recorder for product demos — YAML in, polished MP4 out. Powered by Playwright CDP.
 
 <p align="center">
-  <img src="https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif" width="100%" alt="Clipwise Demo" />
+  <video src="https://kwakseongjae.github.io/clipwise/demo.mp4" autoplay loop muted playsinline width="100%"></video>
 </p>
 
 > *Generated with `npx clipwise demo` — zero config, one command.*
@@ -280,6 +280,20 @@ speedRamp:
   idleSpeed: 3.0        # Skip factor for idle frames
   actionSpeed: 0.8      # Slow factor near clicks
 ```
+
+## Performance
+
+Measured on **Apple M1 Max (10 cores)** — Pulse Dashboard demo, 44s @ 30fps, 1280×800:
+
+| Stage | v0.3.0 | v0.4.0 | Change |
+|-------|--------|--------|--------|
+| Recording | 30.8 s | 31.1 s | — |
+| Compose + Encode | 97.2 s | 60.6 s | **−38%** |
+| **Total** | **127.9 s** | **91.7 s** | **−28%** |
+| ms / frame | 69 ms | 67 ms | −3% |
+| Frames captured | 1,303 | 902 | −31% (dedup) |
+
+Key optimisations in v0.4.0: concurrent streaming pipeline, static frame deduplication (~33% skipped), per-worker StaticLayers cache, and raw RGBA buffer pipeline.
 
 ## Output Compression
 

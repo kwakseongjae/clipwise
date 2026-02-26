@@ -5,7 +5,7 @@ type DeviceFrame = EffectsConfig["deviceFrame"];
 
 // ─── Browser Chrome Constants ────────────────────────────
 
-const TITLE_BAR_HEIGHT = 40;
+export const TITLE_BAR_HEIGHT = 40;
 const TRAFFIC_LIGHT_Y = 14;
 const TRAFFIC_LIGHT_RADIUS = 6;
 const TRAFFIC_LIGHTS_START_X = 16;
@@ -320,6 +320,26 @@ async function applyMobileFrame(
       { input: Buffer.from(frameSvg), left: 0, top: 0 },
       { input: maskedScreen, left: bezel.sides, top: bezel.top },
     ])
+    .png()
+    .toBuffer();
+}
+
+// ─── Static pre-render helpers ───────────────────────────
+
+/**
+ * Pre-rasterize the browser chrome bar SVG to a PNG buffer once per session.
+ * Workers reuse this buffer instead of re-generating and rasterizing the SVG
+ * for every frame, eliminating one Sharp pipeline invocation per frame.
+ */
+export async function buildBrowserChromeBuffer(
+  viewportWidth: number,
+  darkMode: boolean,
+  dpr = 1,
+): Promise<Buffer> {
+  const tbarH = TITLE_BAR_HEIGHT * dpr;
+  const chromeSvg = buildBrowserChromeSvg(viewportWidth, darkMode, dpr);
+  return sharp(Buffer.from(chromeSvg))
+    .resize(viewportWidth, tbarH)
     .png()
     .toBuffer();
 }

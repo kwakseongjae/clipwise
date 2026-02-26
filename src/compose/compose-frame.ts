@@ -5,7 +5,7 @@ import type {
   EffectsConfig,
   OutputConfig,
 } from "../script/types.js";
-import { applyDeviceFrame } from "../effects/frame.js";
+import { applyDeviceFrame, buildBrowserChromeBuffer, TITLE_BAR_HEIGHT } from "../effects/frame.js";
 import {
   renderCursor,
   renderClickEffect,
@@ -13,14 +13,84 @@ import {
   renderCursorHighlight,
 } from "../effects/cursor.js";
 import { applyZoom } from "../effects/zoom.js";
-import { applyBackground } from "../effects/background.js";
+import { applyBackground, buildBackdropBuffer } from "../effects/background.js";
 import { renderKeystrokeHud } from "../effects/keystroke.js";
-import { renderWatermark } from "../effects/watermark.js";
+import { renderWatermark, buildWatermarkSvg } from "../effects/watermark.js";
+
+// ─── Static Layer Cache ──────────────────────────────────────────────────────
+
+/**
+ * Pre-computed static layers that are identical for every frame in a session.
+ *
+ * backdropRaw: background gradient + shadow + watermark composited together at
+ *   output dimensions, stored as raw RGBA.  Workers composite the per-frame
+ *   screenshot onto this buffer instead of re-generating the background SVG
+ *   and shadow SVG on every frame — eliminating ~3 PNG encode/decode cycles.
+ *
+ * browserChromePng: pre-rasterized browser chrome bar PNG.  Applied via
+ *   Sharp's .extend() + .composite() in a single pipeline pass instead of the
+ *   current two-pass create-blank-canvas + composite pattern.
+ *
+ * Both are computed once per worker (first frame), then cached in memory for
+ * all subsequent frames handled by that worker.
+ */
+export interface StaticLayers {
+  backdropRaw: Buffer;
+  backdropWidth: number;
+  backdropHeight: number;
+  /** Pre-rasterized browser chrome bar PNG.  Null when device frame is disabled or not "browser". */
+  browserChromePng: Buffer | null;
+  /** Pixel height of the chrome bar (0 when browserChromePng is null). */
+  browserChromeHeight: number;
+}
+
+/**
+ * Build static layers once per render session (called from each worker on its
+ * first task).  Accepts the viewport dimensions from the first captured frame.
+ */
+export async function buildStaticLayers(
+  effects: EffectsConfig,
+  output: OutputConfig,
+  viewportWidth: number,
+  dpr: number,
+): Promise<StaticLayers> {
+  // Bake watermark SVG into the backdrop so renderWatermark() can be skipped per-frame.
+  const wmSvg = buildWatermarkSvg(effects.watermark, output.width, output.height);
+  const extraOverlays = wmSvg ? [Buffer.from(wmSvg)] : [];
+
+  const { data, width, height } = await buildBackdropBuffer(
+    effects.background,
+    output.width,
+    output.height,
+    extraOverlays,
+  );
+
+  let browserChromePng: Buffer | null = null;
+  let browserChromeHeight = 0;
+  if (effects.deviceFrame.enabled && effects.deviceFrame.type === "browser") {
+    browserChromeHeight = TITLE_BAR_HEIGHT * dpr;
+    browserChromePng = await buildBrowserChromeBuffer(
+      viewportWidth,
+      effects.deviceFrame.darkMode,
+      dpr,
+    );
+  }
+
+  return {
+    backdropRaw: data,
+    backdropWidth: width,
+    backdropHeight: height,
+    browserChromePng,
+    browserChromeHeight,
+  };
+}
 
 export interface FrameContext {
   zoomScale: number;
   clickProgress: number | null;
   cursorTrail: Array<{ x: number; y: number }>;
+  /** When present, skip redundant per-frame SVG generation for background/watermark/device-frame. */
+  staticLayers?: StaticLayers;
 }
 
 /**
@@ -92,7 +162,24 @@ export async function composeFrame(
 
   // 1. Device frame (SVG constants are scaled by dpr internally)
   if (effects.deviceFrame.enabled) {
-    buffer = await applyDeviceFrame(buffer, effects.deviceFrame, width, height, dpr);
+    const sl = ctx.staticLayers;
+    if (sl?.browserChromePng && effects.deviceFrame.type === "browser") {
+      // Fast path: pre-rasterized chrome bar — one Sharp call (extend + composite)
+      // instead of two (create blank canvas + composite).
+      buffer = await sharp(buffer)
+        .extend({
+          top: sl.browserChromeHeight,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .composite([{ input: sl.browserChromePng, left: 0, top: 0 }])
+        .png()
+        .toBuffer();
+    } else {
+      buffer = await applyDeviceFrame(buffer, effects.deviceFrame, width, height, dpr);
+    }
     const meta = await sharp(buffer).metadata();
     width = meta.width ?? width;
     height = meta.height ?? height;
@@ -151,21 +238,77 @@ export async function composeFrame(
   }
 
   // 8. Background
-  buffer = await applyBackground(buffer, effects.background, output.width, output.height);
+  const sl = ctx.staticLayers;
+  if (sl) {
+    // Fast path: composite the zoomed frame onto the pre-built backdrop (raw RGBA).
+    // Eliminates per-frame background SVG + shadow SVG generation and 1 PNG encode.
+    const padding = effects.background.padding;
+    const contentWidth = output.width - padding * 2;
+    const contentHeight = output.height - padding * 2;
 
-  // 9. Watermark overlay
-  if (effects.watermark.enabled) {
-    buffer = await renderWatermark(buffer, effects.watermark, output.width, output.height);
+    if (contentWidth > 0 && contentHeight > 0) {
+      const radius = effects.background.borderRadius;
+      const roundedMask = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${contentWidth}" height="${contentHeight}">
+          <rect width="${contentWidth}" height="${contentHeight}" rx="${radius}" ry="${radius}" fill="#ffffff"/>
+        </svg>`,
+      );
+
+      // Resize + round corners in one raw-RGBA pass (no PNG encode)
+      const { data: maskedData, info: maskedInfo } = await sharp(buffer)
+        .resize(contentWidth, contentHeight, { fit: "fill" })
+        .composite([{ input: roundedMask, blend: "dest-in" }])
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      // Composite masked screenshot onto pre-built backdrop (raw RGBA → raw RGBA)
+      const { data: composited, info: compInfo } = await sharp(sl.backdropRaw, {
+        raw: { width: sl.backdropWidth, height: sl.backdropHeight, channels: 4 },
+      })
+        .composite([{
+          input: Buffer.from(maskedData),
+          raw: { width: maskedInfo.width, height: maskedInfo.height, channels: 4 },
+          left: padding,
+          top: padding,
+        }])
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      // 9. Watermark already baked into backdrop — skip renderWatermark.
+      // 10. Return raw RGBA (no final PNG encode; encoder handles raw→rgb24 directly).
+      return {
+        index: frame.index,
+        buffer: Buffer.from(composited),
+        timestamp: frame.timestamp,
+        rawInfo: { width: compInfo.width, height: compInfo.height, channels: 4 },
+      };
+    }
+    // Fallback for degenerate padding (contentWidth/Height <= 0)
+    buffer = sl.backdropRaw;
+  } else {
+    buffer = await applyBackground(buffer, effects.background, output.width, output.height);
+
+    // 9. Watermark overlay
+    if (effects.watermark.enabled) {
+      buffer = await renderWatermark(buffer, effects.watermark, output.width, output.height);
+    }
   }
 
-  // 10. Final resize (ensure exact output dimensions)
-  buffer = await sharp(buffer)
+  // 10. Final resize + raw RGBA output (no PNG encode — encoder reads raw directly)
+  const { data: finalData, info: finalInfo } = await sharp(buffer)
     .resize(output.width, output.height, {
       fit: "fill",
       kernel: sharp.kernel.lanczos3,
     })
-    .png()
-    .toBuffer();
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
 
-  return { index: frame.index, buffer, timestamp: frame.timestamp };
+  return {
+    index: frame.index,
+    buffer: Buffer.from(finalData),
+    timestamp: frame.timestamp,
+    rawInfo: { width: finalInfo.width, height: finalInfo.height, channels: 4 },
+  };
 }

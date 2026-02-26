@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-26
+
+### Added
+- **Concurrent streaming pipeline** — recording and composition now run in parallel via `recordToChannel()`. On Apple M1 Max (10 cores), total wall time drops from ~128s to ~92s (−28%) for a 44s demo at 1280×800
+- **Static frame deduplication** — identical consecutive CDP frames are dropped before composition (signature: first 2 KB). Reduces frame count by ~33% on typical demos (902 vs 1,303 frames), directly cutting composition time
+- **StaticLayers cache per worker** — background, shadow, watermark SVGs and browser chrome PNG are pre-rasterised once per worker thread and reused across all frames, eliminating ~3 redundant Sharp calls per frame
+- **Raw RGBA pipeline** — compose workers return raw RGBA buffers instead of re-encoding to PNG; FFmpeg and GIF encoder consume them directly, removing a full PNG encode/decode round-trip per frame
+- **`sharp.concurrency(1)`** — prevents libvips from spawning additional threads inside each worker, avoiding CPU oversubscription with an 8-worker pool
+- **New Beam Analytics demo** — redesigned built-in showcase (`beam.html`) with a clean product analytics dashboard, replacing the legacy Pulse Dashboard
+
+### Fixed
+- **Blank opening frames** — `startCapture()` was called before the first `navigate` action, recording browser startup and page-load frames into the video. Fixed: step 0's actions run first, then capture begins. Eliminates the ~5s static opener present in prior versions
+
+### Performance (Apple M1 Max · 10 cores)
+
+| Stage | v0.3.0 | v0.4.0 | Change |
+|-------|--------|--------|--------|
+| Recording | 30.8 s | 31.1 s | — |
+| Compose + Encode | 97.2 s | 60.6 s | **−38%** |
+| **Total** | **127.9 s** | **91.7 s** | **−28%** |
+| ms / frame | 69 ms | 67 ms | −3% |
+| Frames captured | 1,303 | 902 | −31% (dedup) |
+
+---
+
 ## [0.3.0] - 2026-02-26
 
 ### Added
@@ -87,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI: `record`, `demo`, `init`, `validate`
 - Programmatic API: `ClipwiseRecorder`, `CanvasRenderer`, `encodeMp4`
 
+[0.4.0]: https://github.com/kwakseongjae/clipwise/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kwakseongjae/clipwise/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/kwakseongjae/clipwise/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kwakseongjae/clipwise/compare/v0.1.2...v0.2.0
