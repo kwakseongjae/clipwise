@@ -244,15 +244,29 @@ export class ClipwiseRecorder {
     const startTime = Date.now();
 
     try {
+      // Run step 0's actions before starting capture so that browser
+      // startup + page-load blank frames are not recorded into the video.
+      if (scenario.steps.length > 0) {
+        const s0 = scenario.steps[0];
+        this.currentStepIndex = 0;
+        this.preRegisterResponseListeners(s0.actions);
+        for (let ai = 0; ai < s0.actions.length; ai++) {
+          await this.executeAction(s0.actions[ai], ai);
+        }
+      }
+
       await this.startCapture();
 
-      // Execute all steps
+      // Execute all steps (step 0's actions already ran above)
       for (let si = 0; si < scenario.steps.length; si++) {
         const step = scenario.steps[si];
         this.currentStepIndex = si;
-        this.preRegisterResponseListeners(step.actions);
-        for (let ai = 0; ai < step.actions.length; ai++) {
-          await this.executeAction(step.actions[ai], ai);
+
+        if (si > 0) {
+          this.preRegisterResponseListeners(step.actions);
+          for (let ai = 0; ai < step.actions.length; ai++) {
+            await this.executeAction(step.actions[ai], ai);
+          }
         }
 
         // captureDelay: wait with forced repaints for page to settle
@@ -333,14 +347,28 @@ export class ClipwiseRecorder {
         this.frameChannel = channel;
 
         const startTime = Date.now();
+
+        // Run step 0's actions before starting capture so that browser
+        // startup + page-load blank frames are not recorded into the video.
+        if (scenario.steps.length > 0) {
+          const s0 = scenario.steps[0];
+          this.currentStepIndex = 0;
+          this.preRegisterResponseListeners(s0.actions);
+          for (let ai = 0; ai < s0.actions.length; ai++) {
+            await this.executeAction(s0.actions[ai], ai);
+          }
+        }
+
         await this.startCapture();
 
         for (let si = 0; si < scenario.steps.length; si++) {
           const step = scenario.steps[si];
           this.currentStepIndex = si;
-          this.preRegisterResponseListeners(step.actions);
-          for (let ai = 0; ai < step.actions.length; ai++) {
-            await this.executeAction(step.actions[ai], ai);
+          if (si > 0) {
+            this.preRegisterResponseListeners(step.actions);
+            for (let ai = 0; ai < step.actions.length; ai++) {
+              await this.executeAction(step.actions[ai], ai);
+            }
           }
           if (step.captureDelay > 0) await this.waitWithRepaints(step.captureDelay);
           if (step.holdDuration > 0) await this.waitWithRepaints(step.holdDuration);

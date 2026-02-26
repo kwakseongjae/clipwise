@@ -60,12 +60,11 @@
 <!-- Demo -->
 <div class="demo-showcase">
   <div class="demo-showcase-inner">
-    <img
-      src="https://github.com/kwakseongjae/clipwise/releases/download/v0.1.0/demo.gif"
-      alt="Clipwise demo — YAML scenario recording a dashboard with cinematic effects"
+    <video
+      src="./demo.mp4"
+      autoplay loop muted playsinline
       class="demo-gif"
-      loading="lazy"
-    />
+    ></video>
   </div>
 </div>
 
@@ -104,6 +103,11 @@
       <div class="feature-icon">🎯</div>
       <div class="feature-title">Playwright-Powered</div>
       <div class="feature-desc">Pixel-perfect frame capture via Playwright CDP. Consistent results across every run.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Fast Pipeline</div>
+      <div class="feature-desc">Concurrent streaming pipeline + frame deduplication. <strong>−28% total time</strong> vs v0.3 on Apple M1 Max — 92s for a 44s demo at 1280×800.</div>
     </div>
   </div>
 </section>

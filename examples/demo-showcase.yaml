@@ -1,5 +1,5 @@
-name: "Aether Platform Showcase"
-description: "Developer Observability Platform — 고해상도 데모 (1440×900 → 1920×1200)"
+name: "Beam Analytics Showcase"
+description: "Product analytics dashboard — 1440×900 → 1920×1200 (~25s)"
 
 viewport:
   width: 1440
@@ -9,30 +9,30 @@ effects:
   zoom:
     enabled: true
     scale: 2.0
-    duration: 600
+    duration: 400
     autoZoom:
       followCursor: true
-      maxScale: 2.4
-      transitionDuration: 400
+      maxScale: 2.2
+      transitionDuration: 200
 
   cursor:
     enabled: true
-    size: 26
+    size: 24
     smoothing: true
     clickEffect: true
-    clickColor: "rgba(124, 58, 237, 0.45)"
+    clickColor: "rgba(99, 102, 241, 0.45)"
     trail: true
-    trailLength: 8
-    trailColor: "rgba(168, 85, 247, 0.3)"
+    trailLength: 7
+    trailColor: "rgba(129, 140, 248, 0.28)"
     highlight: true
-    highlightRadius: 46
-    highlightColor: "rgba(124, 58, 237, 0.1)"
+    highlightRadius: 42
+    highlightColor: "rgba(99, 102, 241, 0.1)"
 
   background:
     type: gradient
-    value: "linear-gradient(140deg, #06091a 0%, #050810 45%, #06091a 100%)"
-    padding: 88
-    borderRadius: 18
+    value: "linear-gradient(145deg, #05081a 0%, #040710 50%, #05081a 100%)"
+    padding: 80
+    borderRadius: 16
     shadow: true
 
   deviceFrame:
@@ -43,16 +43,16 @@ effects:
   keystroke:
     enabled: true
     position: bottom-center
-    fontSize: 19
-    backgroundColor: "rgba(3, 4, 12, 0.92)"
+    fontSize: 18
+    backgroundColor: "rgba(3, 4, 12, 0.90)"
     textColor: "#e2e8f0"
-    fadeAfter: 1800
+    fadeAfter: 1000
 
   watermark:
     enabled: true
     text: "made with Clipwise"
     position: bottom-right
-    opacity: 0.38
+    opacity: 0.35
     fontSize: 13
     color: "#94a3b8"
 
@@ -64,152 +64,100 @@ output:
   preset: archive
 
 steps:
-  - name: "Load Aether Dashboard"
-    captureDelay: 300
-    holdDuration: 2200
+  - name: "Load"
+    captureDelay: 100
+    holdDuration: 120
     actions:
       - action: navigate
-        url: "demo-site/aether.html"
+        url: "demo-site/beam.html"
         waitUntil: load
 
-  - name: "Hover Requests metric"
-    captureDelay: 150
-    holdDuration: 1400
+  - name: "Hover Visitors"
+    captureDelay: 30
+    holdDuration: 250
     actions:
       - action: hover
-        selector: "#metric-requests"
-      - action: wait
-        duration: 1000
+        selector: "#kpi-visitors"
 
-  - name: "Hover Error Rate (warning state)"
-    captureDelay: 150
-    holdDuration: 1600
+  - name: "Hover Bounce Rate"
+    captureDelay: 30
+    holdDuration: 250
     actions:
       - action: hover
-        selector: "#metric-errors"
-      - action: wait
-        duration: 1200
+        selector: "#kpi-bounce"
 
-  - name: "Hover Latency metric"
-    captureDelay: 150
-    holdDuration: 1200
-    actions:
-      - action: hover
-        selector: "#metric-latency"
-      - action: wait
-        duration: 800
-
-  - name: "Switch chart to 1H"
-    captureDelay: 150
-    holdDuration: 1400
-    actions:
-      - action: click
-        selector: "#tab-1h"
-      - action: wait
-        duration: 1000
-
-  - name: "Switch chart to 30D"
-    captureDelay: 150
-    holdDuration: 1600
+  - name: "Chart 30D"
+    captureDelay: 30
+    holdDuration: 250
     actions:
       - action: click
         selector: "#tab-30d"
-      - action: wait
-        duration: 1200
 
-  - name: "Switch chart to 7D"
-    captureDelay: 150
-    holdDuration: 1200
+  - name: "Chart All"
+    captureDelay: 30
+    holdDuration: 270
     actions:
       - action: click
-        selector: "#tab-7d"
-      - action: wait
-        duration: 800
+        selector: "#tab-all"
 
-  - name: "Expand TypeError error row"
-    captureDelay: 150
-    holdDuration: 2000
+  - name: "Expand page_view"
+    captureDelay: 30
+    holdDuration: 290
     actions:
       - action: click
-        selector: "#error-row-1"
-      - action: wait
-        duration: 1500
+        selector: "#ev-row-1"
 
-  - name: "Expand Redis warning row"
-    captureDelay: 150
-    holdDuration: 1800
+  - name: "Expand button_click"
+    captureDelay: 30
+    holdDuration: 290
     actions:
       - action: click
-        selector: "#error-row-2"
-      - action: wait
-        duration: 1200
+        selector: "#ev-row-2"
 
-  - name: "Navigate to Deployments"
-    captureDelay: 150
-    holdDuration: 1800
+  - name: "Reports"
+    captureDelay: 40
+    holdDuration: 300
     transition: fade
     actions:
       - action: click
-        selector: "#nav-deployments"
-      - action: wait
-        duration: 1200
+        selector: "#nav-reports"
 
-  - name: "Navigate to Error Tracking"
-    captureDelay: 150
-    holdDuration: 1600
+  - name: "Funnels"
+    captureDelay: 40
+    holdDuration: 300
     transition: fade
     actions:
       - action: click
-        selector: "#nav-errors"
-      - action: wait
-        duration: 1000
+        selector: "#nav-funnels"
 
-  - name: "Open notifications panel"
-    captureDelay: 150
-    holdDuration: 1800
+  - name: "Overview"
+    captureDelay: 40
+    holdDuration: 250
+    transition: fade
     actions:
       - action: click
         selector: "#nav-overview"
-      - action: wait
-        duration: 400
-      - action: click
-        selector: "#notification-bell"
-      - action: wait
-        duration: 1200
 
-  - name: "Close notifications"
-    captureDelay: 150
-    holdDuration: 800
+  - name: "New Goal"
+    captureDelay: 40
+    holdDuration: 270
     actions:
       - action: click
-        selector: "#notif-close"
-      - action: wait
-        duration: 500
+        selector: "#new-goal-btn"
 
-  - name: "Open New Deployment modal"
-    captureDelay: 200
-    holdDuration: 1400
-    actions:
-      - action: click
-        selector: "#new-deploy-btn"
-      - action: wait
-        duration: 900
-
-  - name: "Type version tag"
-    captureDelay: 100
-    holdDuration: 1600
+  - name: "Type"
+    captureDelay: 30
+    holdDuration: 250
     actions:
       - action: type
-        selector: "#deploy-tag-input"
-        text: "v2.4.0-rc.1"
-        delay: 90
+        selector: "#goal-input"
+        text: "checkout_done"
+        delay: 38
 
-  - name: "Deploy and celebrate"
-    captureDelay: 200
-    holdDuration: 2800
+  - name: "Confirm"
+    captureDelay: 50
+    holdDuration: 1200   # 줌 애니메이션(400ms) + 여유 800ms
     transition: fade
     actions:
       - action: click
-        selector: "#deploy-confirm-btn"
-      - action: wait
-        duration: 2200
+        selector: "#goal-confirm"
