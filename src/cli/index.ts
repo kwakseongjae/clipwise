@@ -7,6 +7,8 @@ import { validateScenario } from "../script/validator.js";
 import { ClipwiseRecorder } from "../core/recorder.js";
 import { CanvasRenderer } from "../compose/canvas-renderer.js";
 import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-encoder.js";
+import { StreamingSession } from "../compose/streaming-session.js";
+import type { PipelineProgress } from "../compose/streaming-session.js";
 import { writeFile, mkdir, access } from "fs/promises";
 import { join, resolve, dirname } from "path";
 import { pathToFileURL } from "url";
@@ -136,17 +138,28 @@ program
           `Saved ${paths.length} frames to ${chalk.bold(options.output)}`,
         );
       } else if (scenario.output.format === "mp4") {
-        // MP4: streaming pipeline — FFmpeg starts encoding as frames are composed
-        spinner.start(`Composing & encoding ${session.frames.length} frames...`);
-        const frameStream = options.effects !== false
-          ? renderer.composeStream(session.frames)
-          : (async function* () {
-              for (const f of session.frames) {
-                yield { index: f.index, buffer: f.screenshot, timestamp: f.timestamp };
-              }
-            })();
-        const mp4Buffer = await encodeMp4Stream(frameStream, scenario.output);
+        // MP4: streaming pipeline — FFmpeg starts encoding as frames are composed.
+        // StreamingSession emits per-frame progress so the spinner shows live %.
         const outputPath = join(options.output, `${scenario.output.filename}.mp4`);
+        let mp4Buffer: Buffer;
+
+        if (options.effects !== false) {
+          const pipeline = new StreamingSession(session, renderer);
+          pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
+            spinner.text = `Composing & encoding... ${composed}/${total} (${pct}%)`;
+          });
+          spinner.start(`Composing & encoding ${session.frames.length} frames...`);
+          mp4Buffer = await pipeline.run();
+        } else {
+          spinner.start(`Encoding ${session.frames.length} raw frames...`);
+          const rawStream = (async function* () {
+            for (const f of session.frames) {
+              yield { index: f.index, buffer: f.screenshot, timestamp: f.timestamp };
+            }
+          })();
+          mp4Buffer = await encodeMp4Stream(rawStream, scenario.output);
+        }
+
         await writeFile(outputPath, mp4Buffer);
         const sizeMB = (mp4Buffer.length / (1024 * 1024)).toFixed(2);
         spinner.succeed(
@@ -426,25 +439,29 @@ program
       const session = await recorder.record(scenario);
       spinner.succeed(`Recorded ${session.frames.length} frames`);
 
-      // Compose
-      spinner.start(`Applying effects to ${session.frames.length} frames...`);
-      const renderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
-      const composedFrames = await renderer.composeAll(session.frames);
-      spinner.succeed("Effects applied");
-
-      // Encode
+      // Compose & encode
       await mkdir(options.output, { recursive: true });
+      const renderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
       const ext = scenario.output.format === "gif" ? "gif" : "mp4";
       const outputPath = join(options.output, `clipwise-demo-${device}.${ext}`);
 
       if (ext === "gif") {
+        // GIF needs all frames upfront for palette quantization — batch compose
+        spinner.start(`Applying effects to ${session.frames.length} frames...`);
+        const composedFrames = await renderer.composeAll(session.frames);
+        spinner.succeed("Effects applied");
         spinner.start("Encoding GIF...");
         const buf = await encodeGif(composedFrames, scenario.output);
         await writeFile(outputPath, buf);
         spinner.succeed(`GIF saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
       } else {
-        spinner.start("Encoding MP4...");
-        const buf = await encodeMp4(composedFrames, scenario.output);
+        // MP4: StreamingSession streams compose → FFmpeg in parallel, with progress
+        const pipeline = new StreamingSession(session, renderer);
+        pipeline.on("progress", ({ composed, total, pct }: PipelineProgress) => {
+          spinner.text = `Composing & encoding... ${composed}/${total} (${pct}%)`;
+        });
+        spinner.start(`Composing & encoding ${session.frames.length} frames...`);
+        const buf = await pipeline.run();
         await writeFile(outputPath, buf);
         spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
       }
