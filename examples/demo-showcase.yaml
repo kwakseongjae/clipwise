@@ -1,0 +1,215 @@
+name: "Aether Platform Showcase"
+description: "Developer Observability Platform — 고해상도 데모 (1440×900 → 1920×1200)"
+
+viewport:
+  width: 1440
+  height: 900
+
+effects:
+  zoom:
+    enabled: true
+    scale: 2.0
+    duration: 600
+    autoZoom:
+      followCursor: true
+      maxScale: 2.4
+      transitionDuration: 400
+
+  cursor:
+    enabled: true
+    size: 26
+    smoothing: true
+    clickEffect: true
+    clickColor: "rgba(124, 58, 237, 0.45)"
+    trail: true
+    trailLength: 8
+    trailColor: "rgba(168, 85, 247, 0.3)"
+    highlight: true
+    highlightRadius: 46
+    highlightColor: "rgba(124, 58, 237, 0.1)"
+
+  background:
+    type: gradient
+    value: "linear-gradient(140deg, #06091a 0%, #050810 45%, #06091a 100%)"
+    padding: 88
+    borderRadius: 18
+    shadow: true
+
+  deviceFrame:
+    enabled: true
+    type: browser
+    darkMode: true
+
+  keystroke:
+    enabled: true
+    position: bottom-center
+    fontSize: 19
+    backgroundColor: "rgba(3, 4, 12, 0.92)"
+    textColor: "#e2e8f0"
+    fadeAfter: 1800
+
+  watermark:
+    enabled: true
+    text: "made with Clipwise"
+    position: bottom-right
+    opacity: 0.38
+    fontSize: 13
+    color: "#94a3b8"
+
+output:
+  format: mp4
+  width: 1920
+  height: 1200
+  fps: 30
+  preset: archive
+
+steps:
+  - name: "Load Aether Dashboard"
+    captureDelay: 300
+    holdDuration: 2200
+    actions:
+      - action: navigate
+        url: "demo-site/aether.html"
+        waitUntil: load
+
+  - name: "Hover Requests metric"
+    captureDelay: 150
+    holdDuration: 1400
+    actions:
+      - action: hover
+        selector: "#metric-requests"
+      - action: wait
+        duration: 1000
+
+  - name: "Hover Error Rate (warning state)"
+    captureDelay: 150
+    holdDuration: 1600
+    actions:
+      - action: hover
+        selector: "#metric-errors"
+      - action: wait
+        duration: 1200
+
+  - name: "Hover Latency metric"
+    captureDelay: 150
+    holdDuration: 1200
+    actions:
+      - action: hover
+        selector: "#metric-latency"
+      - action: wait
+        duration: 800
+
+  - name: "Switch chart to 1H"
+    captureDelay: 150
+    holdDuration: 1400
+    actions:
+      - action: click
+        selector: "#tab-1h"
+      - action: wait
+        duration: 1000
+
+  - name: "Switch chart to 30D"
+    captureDelay: 150
+    holdDuration: 1600
+    actions:
+      - action: click
+        selector: "#tab-30d"
+      - action: wait
+        duration: 1200
+
+  - name: "Switch chart to 7D"
+    captureDelay: 150
+    holdDuration: 1200
+    actions:
+      - action: click
+        selector: "#tab-7d"
+      - action: wait
+        duration: 800
+
+  - name: "Expand TypeError error row"
+    captureDelay: 150
+    holdDuration: 2000
+    actions:
+      - action: click
+        selector: "#error-row-1"
+      - action: wait
+        duration: 1500
+
+  - name: "Expand Redis warning row"
+    captureDelay: 150
+    holdDuration: 1800
+    actions:
+      - action: click
+        selector: "#error-row-2"
+      - action: wait
+        duration: 1200
+
+  - name: "Navigate to Deployments"
+    captureDelay: 150
+    holdDuration: 1800
+    transition: fade
+    actions:
+      - action: click
+        selector: "#nav-deployments"
+      - action: wait
+        duration: 1200
+
+  - name: "Navigate to Error Tracking"
+    captureDelay: 150
+    holdDuration: 1600
+    transition: fade
+    actions:
+      - action: click
+        selector: "#nav-errors"
+      - action: wait
+        duration: 1000
+
+  - name: "Open notifications panel"
+    captureDelay: 150
+    holdDuration: 1800
+    actions:
+      - action: click
+        selector: "#nav-overview"
+      - action: wait
+        duration: 400
+      - action: click
+        selector: "#notification-bell"
+      - action: wait
+        duration: 1200
+
+  - name: "Close notifications"
+    captureDelay: 150
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#notif-close"
+      - action: wait
+        duration: 500
+
+  - name: "Open New Deployment modal"
+    captureDelay: 200
+    holdDuration: 1400
+    actions:
+      - action: click
+        selector: "#new-deploy-btn"
+      - action: wait
+        duration: 900
+
+  - name: "Type version tag"
+    captureDelay: 100
+    holdDuration: 1600
+    actions:
+      - action: type
+        selector: "#deploy-tag-input"
+        text: "v2.4.0-rc.1"
+        delay: 90
+
+  - name: "Deploy and celebrate"
+    captureDelay: 200
+    holdDuration: 2800
+    transition: fade
+    actions:
+      - action: click
+        selector: "#deploy-confirm-btn"
+      - action: wait
+        duration: 2200

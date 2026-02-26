@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Aether — Observability Platform</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050810;--bg1:#080d1a;--bg2:#0d1525;
+  --card:rgba(10,15,28,0.88);
+  --border:rgba(255,255,255,0.065);
+  --border2:rgba(124,58,237,0.2);
+  --purple:#7c3aed;--purple2:#a855f7;
+  --cyan:#06b6d4;--green:#10b981;--red:#ef4444;--amber:#f59e0b;
+  --text:#e2e8f0;--text2:#8b9db8;--text3:#3a4d66;
+  --r:12px;--rs:8px;
+}
+html,body{
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;
+  background:var(--bg);color:var(--text);height:100%;overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 8% 80%,rgba(124,58,237,0.08) 0%,transparent 70%),
+    radial-gradient(ellipse 60% 50% at 92% 10%,rgba(6,182,212,0.06) 0%,transparent 65%),
+    radial-gradient(ellipse 45% 35% at 50% 105%,rgba(16,185,129,0.04) 0%,transparent 55%);
+  animation:bgPulse 18s ease-in-out infinite alternate;
+}
+@keyframes bgPulse{from{opacity:.8}to{opacity:1}}
+
+.app{display:flex;flex-direction:column;height:100vh;position:relative;z-index:1}
+
+/* ── NAV ── */
+nav{
+  height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  padding:0 16px 0 20px;background:rgba(5,8,16,0.92);backdrop-filter:blur(24px);
+  flex-shrink:0;z-index:100;gap:0;
+}
+.nav-logo{
+  font-size:14px;font-weight:800;letter-spacing:3.5px;text-transform:uppercase;
+  background:linear-gradient(90deg,#a855f7 0%,#06b6d4 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-right:28px;cursor:pointer;
+}
+.nav-bc{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)}
+.nav-bc-sep{color:var(--text3)}
+.nav-bc-current{color:var(--text);font-weight:500}
+.nav-spacer{flex:1}
+.nav-live{
+  display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+  color:var(--green);background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);
+  border-radius:20px;padding:4px 10px 4px 8px;margin-right:14px;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:livePulse 2s infinite}
+@keyframes livePulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0.6)}
+  50%{box-shadow:0 0 0 5px rgba(16,185,129,0)}
+}
+.nav-icon-btn{
+  width:34px;height:34px;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--text2);cursor:pointer;display:flex;
+  align-items:center;justify-content:center;transition:all .15s;
+  margin-left:6px;position:relative;
+}
+.nav-icon-btn:hover{background:rgba(255,255,255,0.06);color:var(--text);border-color:rgba(255,255,255,0.12)}
+.notif-badge{
+  position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;
+  background:var(--purple);font-size:9px;font-weight:700;color:#fff;
+  display:flex;align-items:center;justify-content:center;border:1.5px solid var(--bg);
+}
+.nav-avatar{
+  width:32px;height:32px;border-radius:8px;cursor:pointer;margin-left:8px;flex-shrink:0;
+  background:linear-gradient(135deg,#7c3aed,#06b6d4);display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:700;color:#fff;
+}
+
+/* ── BODY ── */
+.body{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:220px;border-right:1px solid var(--border);background:rgba(5,8,16,0.65);
+  display:flex;flex-direction:column;flex-shrink:0;padding:14px 0;
+}
+.sb-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px;padding:10px 16px 6px}
+.sb-item{
+  display:flex;align-items:center;gap:10px;padding:8px 14px;
+  border-radius:8px;color:var(--text2);font-size:13px;font-weight:500;
+  cursor:pointer;transition:all .15s;margin:1px 8px;
+}
+.sb-item:hover{color:var(--text);background:rgba(255,255,255,0.04)}
+.sb-item.active{color:var(--text);background:rgba(124,58,237,0.12);box-shadow:inset 2px 0 0 var(--purple)}
+.sb-item svg{opacity:.65;flex-shrink:0}
+.sb-item.active svg{opacity:1}
+.sb-spacer{flex:1}
+.sb-footer{padding:10px 8px;border-top:1px solid var(--border)}
+
+/* ── MAIN ── */
+.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px;display:flex;flex-direction:column;gap:20px}
+.main::-webkit-scrollbar{width:5px}
+.main::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:3px}
+
+/* ── PAGE HEADER ── */
+.page-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.page-title{font-size:19px;font-weight:700}
+.page-sub{font-size:12.5px;color:var(--text2);margin-top:3px}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;padding:8px 15px;
+  border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;
+  border:none;transition:all .15s;
+}
+.btn-primary{
+  background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;
+  box-shadow:0 4px 16px rgba(124,58,237,0.32);
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(124,58,237,0.45)}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-ghost:hover{border-color:rgba(255,255,255,0.15);color:var(--text);background:rgba(255,255,255,0.04)}
+
+/* ── METRIC CARDS ── */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.metric-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:20px 22px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+}
+.metric-card::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 100% 80% at 50% -30%,rgba(255,255,255,0.025) 0%,transparent 70%);
+}
+.metric-card:hover{
+  border-color:rgba(255,255,255,0.13);background:rgba(12,18,36,0.96);
+  transform:translateY(-2px);box-shadow:0 10px 36px rgba(0,0,0,0.35);
+}
+.metric-card.warn{border-color:rgba(245,158,11,0.18)}
+.metric-card.warn:hover{border-color:rgba(245,158,11,0.32);box-shadow:0 10px 36px rgba(245,158,11,0.08)}
+.metric-label{font-size:11.5px;font-weight:500;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.metric-value{font-size:30px;font-weight:700;letter-spacing:-.5px;line-height:1;font-variant-numeric:tabular-nums}
+.metric-change{
+  display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;
+  margin-top:10px;padding:3px 9px;border-radius:20px;
+}
+.up-good{color:var(--green);background:rgba(16,185,129,0.1)}
+.up-bad{color:var(--amber);background:rgba(245,158,11,0.1)}
+.down-good{color:var(--green);background:rgba(16,185,129,0.1)}
+
+/* ── CHART ── */
+.chart-section{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.chart-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 0}
+.chart-title{font-size:13.5px;font-weight:600}
+.chart-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.chart-tabs{display:flex;gap:3px}
+.chart-tab{
+  padding:5px 12px;font-size:12px;font-weight:600;border-radius:6px;
+  cursor:pointer;color:var(--text2);border:none;background:transparent;transition:all .15s;
+}
+.chart-tab:hover{color:var(--text);background:rgba(255,255,255,0.06)}
+.chart-tab.active{color:var(--purple2);background:rgba(124,58,237,0.13)}
+.chart-area{padding:12px 22px 18px}
+.chart-svg{width:100%;height:190px;overflow:visible}
+
+/* ── BOTTOM GRID ── */
+.bottom-grid{display:grid;grid-template-columns:1fr 368px;gap:16px}
+
+/* ── SECTION ── */
+.section-box{background:var(--card);border:1px solid var(--border);border-radius:var(--r)}
+.section-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:15px 20px;border-bottom:1px solid var(--border);
+}
+.section-title{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700}
+.bd-red{background:rgba(239,68,68,0.12);color:var(--red);border:1px solid rgba(239,68,68,0.2)}
+.bd-green{background:rgba(16,185,129,0.1);color:var(--green);border:1px solid rgba(16,185,129,0.2)}
+.bd-amber{background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.2)}
+.bd-purple{background:rgba(124,58,237,0.12);color:var(--purple2);border:1px solid rgba(124,58,237,0.22)}
+.bd-gray{background:rgba(255,255,255,0.05);color:var(--text2);border:1px solid var(--border)}
+
+/* Error rows */
+.err-row{border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.err-row:hover{background:rgba(255,255,255,0.025)}
+.err-row-main{display:flex;align-items:center;gap:11px;padding:12px 20px}
+.expand-ico{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0}
+.err-row.open .expand-ico{transform:rotate(90deg)}
+.err-type{font-size:12px;font-weight:600;font-family:'SF Mono','Fira Code',monospace;flex-shrink:0}
+.err-msg{font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.err-count{font-size:11px;font-weight:600;color:var(--text2);flex-shrink:0}
+.err-time{font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0}
+.err-detail{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.err-row.open .err-detail{max-height:160px}
+.err-trace{
+  background:rgba(0,0,0,0.32);border-top:1px solid var(--border);
+  padding:12px 20px;font-size:11.5px;font-family:'SF Mono','Fira Code',monospace;
+  color:var(--text2);line-height:1.75;
+}
+.trace-hi{color:var(--red)}
+.trace-dim{color:var(--text3)}
+
+/* Deploy items */
+.dep-item{display:flex;align-items:flex-start;gap:12px;padding:13px 20px;border-bottom:1px solid var(--border);transition:background .12s}
+.dep-item:hover{background:rgba(255,255,255,0.025)}
+.dep-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.dot-g{background:var(--green);box-shadow:0 0 6px rgba(16,185,129,0.5)}
+.dot-r{background:var(--red);box-shadow:0 0 6px rgba(239,68,68,0.4)}
+.dot-a{background:var(--amber);box-shadow:0 0 6px rgba(245,158,11,0.4)}
+.dep-info{flex:1;min-width:0}
+.dep-tag{font-size:13px;font-weight:600;font-family:'SF Mono','Fira Code',monospace}
+.dep-meta{font-size:11px;color:var(--text2);margin-top:2px}
+.dep-sha{color:var(--cyan);font-family:'SF Mono','Fira Code',monospace}
+.dep-time{font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0}
+
+/* ── NOTIFICATION OVERLAY ── */
+.notif-overlay{position:fixed;inset:0;z-index:200;display:none}
+.notif-overlay.open{display:block}
+.notif-panel{
+  position:absolute;top:52px;right:14px;width:348px;
+  background:var(--bg1);border:1px solid rgba(255,255,255,0.09);border-radius:var(--r);
+  box-shadow:0 20px 60px rgba(0,0,0,0.55);overflow:hidden;
+  animation:slideDown .18s ease;
+}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notif-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.notif-hdr-title{font-size:14px;font-weight:600}
+.notif-close-btn{
+  background:transparent;border:none;color:var(--text2);cursor:pointer;
+  font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;
+}
+.notif-close-btn:hover{color:var(--text);background:rgba(255,255,255,0.06)}
+.notif-item{display:flex;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.notif-item:last-child{border:none}
+.n-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.n-body{font-size:12.5px;line-height:1.5;flex:1}
+.n-body strong{color:var(--text)}
+.n-body span{color:var(--text2)}
+.n-ts{font-size:11px;color:var(--text3);margin-top:3px}
+
+/* ── MODAL ── */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.62);backdrop-filter:blur(10px);
+  z-index:300;display:none;align-items:center;justify-content:center;
+}
+.modal-backdrop.open{display:flex}
+.modal{
+  width:480px;background:var(--bg1);border:1px solid var(--border2);border-radius:16px;
+  box-shadow:0 24px 80px rgba(124,58,237,0.18),0 8px 32px rgba(0,0,0,0.4);
+  overflow:hidden;animation:modalIn .2s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-hdr{padding:22px 24px 0;display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:17px;font-weight:700}
+.modal-x{
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text2);
+  cursor:pointer;font-size:16px;width:28px;height:28px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+}
+.modal-body{padding:18px 24px 22px}
+.form-grp{margin-bottom:15px}
+.form-lbl{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;display:block;text-transform:uppercase;letter-spacing:.6px}
+.form-input{
+  width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;
+  padding:9px 12px;font-size:14px;color:var(--text);
+  font-family:'SF Mono','Fira Code',monospace;transition:border-color .15s;outline:none;
+}
+.form-input:focus{border-color:rgba(124,58,237,0.5);box-shadow:0 0 0 3px rgba(124,58,237,0.1)}
+.form-input::placeholder{color:var(--text3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-select{
+  width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;
+  padding:9px 12px;font-size:13px;color:var(--text);outline:none;cursor:pointer;
+  -webkit-appearance:none;
+}
+.form-hint{font-size:11px;color:var(--text3);margin-top:4px}
+.modal-actions{
+  display:flex;gap:10px;justify-content:flex-end;
+  padding:0 24px 22px;border-top:1px solid var(--border);padding-top:16px;
+}
+.success-view{display:none;flex-direction:column;align-items:center;padding:36px 24px;text-align:center}
+.success-view.show{display:flex}
+.success-ico{font-size:52px;margin-bottom:16px}
+.success-title{font-size:18px;font-weight:700;color:var(--green);margin-bottom:8px}
+.success-sub{font-size:13px;color:var(--text2)}
+
+/* Deployments full view */
+.dep-full{background:var(--card);border:1px solid var(--border);border-radius:var(--r)}
+.dep-row-full{
+  display:grid;grid-template-columns:1fr 110px 90px 100px 80px;
+  align-items:center;padding:13px 20px;border-bottom:1px solid var(--border);
+  font-size:13px;transition:background .12s;
+}
+.dep-row-full:hover{background:rgba(255,255,255,0.025)}
+.dep-row-full.hdr{font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px}
+
+/* Errors full view */
+.errs-full{background:var(--card);border:1px solid var(--border);border-radius:var(--r)}
+
+/* Perf view */
+.perf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.perf-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:22px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- NAV -->
+<nav>
+  <span class="nav-logo">AETHER</span>
+  <div class="nav-bc">
+    <span>API Services</span>
+    <span class="nav-bc-sep">›</span>
+    <span class="nav-bc-current" id="bc-label">Overview</span>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-live"><div class="live-dot"></div>All systems operational</div>
+  <button class="nav-icon-btn" title="Search">
+    <svg width="14" height="14" viewBox="0 0 15 15" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <button class="nav-icon-btn" id="notification-bell">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span class="notif-badge">2</span>
+  </button>
+  <div class="nav-avatar">JS</div>
+</nav>
+
+<div class="body">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div style="padding:0 8px">
+    <div class="sb-label">Main</div>
+    <div class="sb-item active" id="nav-overview" onclick="switchView('overview')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Overview
+    </div>
+    <div class="sb-item" id="nav-deployments" onclick="switchView('deployments')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Deployments
+    </div>
+    <div class="sb-item" id="nav-errors" onclick="switchView('errors')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Errors
+    </div>
+    <div class="sb-item" id="nav-performance" onclick="switchView('performance')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Performance
+    </div>
+    <div class="sb-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Logs
+    </div>
+    <div class="sb-spacer"></div>
+    <div class="sb-label" style="margin-top:16px">Settings</div>
+    <div class="sb-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </div>
+  </div>
+  <div class="sb-spacer"></div>
+  <div class="sb-footer">
+    <div class="sb-item" style="margin:0">
+      <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">JS</div>
+      <div style="min-width:0"><div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">jseo</div><div style="font-size:11px;color:var(--text2)">Admin</div></div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main" id="main-content">
+
+  <!-- ── OVERVIEW ── -->
+  <div id="view-overview">
+    <div class="page-header">
+      <div>
+        <div class="page-title">API Services Overview</div>
+        <div class="page-sub">Updated 10s ago &nbsp;·&nbsp; Production &nbsp;·&nbsp; us-east-1</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary" id="new-deploy-btn" onclick="openModal()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Deployment
+        </button>
+      </div>
+    </div>
+
+    <!-- METRICS ROW -->
+    <div class="metrics">
+      <div class="metric-card" id="metric-requests">
+        <div class="metric-label"><span style="font-size:13px">⚡</span> Requests / min</div>
+        <div class="metric-value">142,847</div>
+        <div class="metric-change up-good">↑ 12.3% vs yesterday</div>
+      </div>
+      <div class="metric-card warn" id="metric-errors">
+        <div class="metric-label"><span style="font-size:13px;color:var(--amber)">⚠</span> Error Rate</div>
+        <div class="metric-value" style="color:var(--amber)">2.41<span style="font-size:18px;opacity:.65">%</span></div>
+        <div class="metric-change up-bad">↑ 0.8% vs yesterday</div>
+      </div>
+      <div class="metric-card" id="metric-latency">
+        <div class="metric-label"><span style="font-size:13px">⏱</span> Avg Latency</div>
+        <div class="metric-value">84<span style="font-size:18px;opacity:.65">ms</span></div>
+        <div class="metric-change down-good">↓ 15.2% vs yesterday</div>
+      </div>
+      <div class="metric-card" id="metric-uptime">
+        <div class="metric-label"><span style="font-size:13px;color:var(--green)">●</span> Uptime (30d)</div>
+        <div class="metric-value" style="color:var(--green)">99.97<span style="font-size:18px;opacity:.65">%</span></div>
+        <div class="metric-change up-good">↑ 0.01% vs last month</div>
+      </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="chart-section">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Requests / min</div>
+          <div class="chart-sub">API gateway ingress — Production</div>
+        </div>
+        <div class="chart-tabs">
+          <button class="chart-tab" id="tab-1h" onclick="switchChart('1h')">1H</button>
+          <button class="chart-tab active" id="tab-7d" onclick="switchChart('7d')">7D</button>
+          <button class="chart-tab" id="tab-30d" onclick="switchChart('30d')">30D</button>
+          <button class="chart-tab" id="tab-90d" onclick="switchChart('90d')">90D</button>
+        </div>
+      </div>
+      <div class="chart-area">
+        <svg class="chart-svg" id="main-chart" viewBox="0 0 900 190" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="grad-purple" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#7c3aed" stop-opacity=".32"/>
+              <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="grad-cyan" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#06b6d4" stop-opacity=".25"/>
+              <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="47" x2="900" y2="47" stroke="rgba(255,255,255,0.035)" stroke-width="1"/>
+          <line x1="0" y1="95" x2="900" y2="95" stroke="rgba(255,255,255,0.035)" stroke-width="1"/>
+          <line x1="0" y1="143" x2="900" y2="143" stroke="rgba(255,255,255,0.035)" stroke-width="1"/>
+          <text x="6" y="45" fill="rgba(255,255,255,0.22)" font-size="10" font-family="-apple-system,sans-serif">200K</text>
+          <text x="6" y="93" fill="rgba(255,255,255,0.22)" font-size="10" font-family="-apple-system,sans-serif">100K</text>
+          <text x="6" y="141" fill="rgba(255,255,255,0.22)" font-size="10" font-family="-apple-system,sans-serif">50K</text>
+          <path id="chart-fill" fill="url(#grad-purple)" stroke="none"/>
+          <path id="chart-line" fill="none" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle id="chart-tip" r="5" fill="#a855f7" stroke="#050810" stroke-width="2.5" opacity="0"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- BOTTOM GRID -->
+    <div class="bottom-grid">
+      <!-- ERRORS TABLE -->
+      <div class="section-box">
+        <div class="section-hdr">
+          <div class="section-title">Recent Errors <span class="badge bd-red">12 today</span></div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="switchView('errors')">View all</button>
+        </div>
+
+        <div class="err-row" id="error-row-1" onclick="toggleErr(1)">
+          <div class="err-row-main">
+            <span class="expand-ico">▶</span>
+            <span class="badge bd-red" style="flex-shrink:0">ERR</span>
+            <span class="err-type">TypeError</span>
+            <span class="err-msg">Cannot read properties of undefined (reading 'userId')</span>
+            <span class="err-count">×47</span>
+            <span class="err-time">2m ago</span>
+          </div>
+          <div class="err-detail" id="err-detail-1">
+            <div class="err-trace">
+              <div class="trace-hi">→ TypeError: Cannot read properties of undefined (reading 'userId')</div>
+              <div class="trace-hi">&nbsp;&nbsp;&nbsp;&nbsp;at getUserProfile (/api/users.js:142:24)</div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;at async AuthMiddleware.validate (/middleware/auth.js:89:16)</div>
+              <div class="trace-dim">&nbsp;&nbsp;&nbsp;&nbsp;at Layer.handle_request (express/lib/router/layer.js:95:5)</div>
+              <div class="trace-dim">&nbsp;&nbsp;&nbsp;&nbsp;at next (express/lib/router/route.js:137:13)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="err-row" id="error-row-2" onclick="toggleErr(2)">
+          <div class="err-row-main">
+            <span class="expand-ico">▶</span>
+            <span class="badge bd-amber" style="flex-shrink:0">WARN</span>
+            <span class="err-type">UnhandledPromise</span>
+            <span class="err-msg">Connection to Redis timed out after 5000ms</span>
+            <span class="err-count">×12</span>
+            <span class="err-time">8m ago</span>
+          </div>
+          <div class="err-detail" id="err-detail-2">
+            <div class="err-trace">
+              <div class="trace-hi">→ Error: Redis connection timeout (5000ms)</div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;at RedisClient.connect (/lib/cache/redis.js:67:18)</div>
+              <div class="trace-dim">&nbsp;&nbsp;&nbsp;&nbsp;at CacheManager.initialize (/lib/cache/index.js:34:5)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="err-row" id="error-row-3" onclick="toggleErr(3)">
+          <div class="err-row-main">
+            <span class="expand-ico">▶</span>
+            <span class="badge bd-red" style="flex-shrink:0">ERR</span>
+            <span class="err-type">RangeError</span>
+            <span class="err-msg">Maximum call stack size exceeded in recursive transform</span>
+            <span class="err-count">×3</span>
+            <span class="err-time">24m ago</span>
+          </div>
+          <div class="err-detail" id="err-detail-3">
+            <div class="err-trace">
+              <div class="trace-hi">→ RangeError: Maximum call stack size exceeded</div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;at transform (/api/pipeline/transform.js:211:22)</div>
+              <div class="trace-dim">&nbsp;&nbsp;&nbsp;&nbsp;at transform (/api/pipeline/transform.js:211:22) [×9840]</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="err-row" style="cursor:default">
+          <div class="err-row-main">
+            <span class="expand-ico" style="visibility:hidden">▶</span>
+            <span class="badge bd-gray" style="flex-shrink:0">INFO</span>
+            <span class="err-type" style="color:var(--text2)">PrismaClient</span>
+            <span class="err-msg">Slow query: getUsersByOrg took 2340ms</span>
+            <span class="err-count" style="color:var(--text3)">×1</span>
+            <span class="err-time">1h ago</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DEPLOYS -->
+      <div class="section-box">
+        <div class="section-hdr">
+          <div class="section-title">Recent Deployments <span class="badge bd-green">Live</span></div>
+        </div>
+        <div class="dep-item" style="background:rgba(16,185,129,0.035)">
+          <div class="dep-dot dot-g"></div>
+          <div class="dep-info"><div class="dep-tag">v2.3.9</div><div class="dep-meta">main · <span class="dep-sha">3fa2c1d</span> · jseo</div></div>
+          <div class="dep-time">12m ago</div>
+        </div>
+        <div class="dep-item">
+          <div class="dep-dot dot-r"></div>
+          <div class="dep-info"><div class="dep-tag">v2.3.8</div><div class="dep-meta">main · <span class="dep-sha">7e91bfd</span> · jseo</div></div>
+          <div class="dep-time">2h ago</div>
+        </div>
+        <div class="dep-item">
+          <div class="dep-dot dot-g"></div>
+          <div class="dep-info"><div class="dep-tag">v2.3.7</div><div class="dep-meta">feat/auth · <span class="dep-sha">a03f22c</span> · mk</div></div>
+          <div class="dep-time">5h ago</div>
+        </div>
+        <div class="dep-item">
+          <div class="dep-dot dot-a"></div>
+          <div class="dep-info"><div class="dep-tag">v2.3.6-hotfix</div><div class="dep-meta">hotfix · <span class="dep-sha">c7d1e8a</span> · jseo</div></div>
+          <div class="dep-time">1d ago</div>
+        </div>
+        <div class="dep-item" style="border:none">
+          <div class="dep-dot dot-g"></div>
+          <div class="dep-info"><div class="dep-tag">v2.3.5</div><div class="dep-meta">main · <span class="dep-sha">f88a001</span> · pk</div></div>
+          <div class="dep-time">2d ago</div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /view-overview -->
+
+  <!-- ── DEPLOYMENTS ── -->
+  <div id="view-deployments" style="display:none">
+    <div class="page-header">
+      <div><div class="page-title">Deployments</div><div class="page-sub">Full deployment history · API Services</div></div>
+      <button class="btn btn-primary" onclick="openModal()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Deployment
+      </button>
+    </div>
+    <div class="dep-full">
+      <div class="dep-row-full hdr"><span>Version / Branch</span><span>Status</span><span>Author</span><span>Commit</span><span>Time</span></div>
+      <div class="dep-row-full"><div><div style="font-weight:600">v2.3.9</div><div style="font-size:11px;color:var(--text2)">main</div></div><span class="badge bd-green">Live</span><span style="color:var(--text2);font-size:12px">jseo</span><span class="dep-sha" style="font-size:12px">3fa2c1d</span><span style="color:var(--text2);font-size:12px">12m ago</span></div>
+      <div class="dep-row-full"><div><div style="font-weight:600">v2.3.8</div><div style="font-size:11px;color:var(--text2)">main</div></div><span class="badge bd-red">Failed</span><span style="color:var(--text2);font-size:12px">jseo</span><span class="dep-sha" style="font-size:12px">7e91bfd</span><span style="color:var(--text2);font-size:12px">2h ago</span></div>
+      <div class="dep-row-full"><div><div style="font-weight:600">v2.3.7</div><div style="font-size:11px;color:var(--text2)">feat/auth</div></div><span class="badge bd-gray">Rolled back</span><span style="color:var(--text2);font-size:12px">mk</span><span class="dep-sha" style="font-size:12px">a03f22c</span><span style="color:var(--text2);font-size:12px">5h ago</span></div>
+      <div class="dep-row-full"><div><div style="font-weight:600">v2.3.6-hotfix</div><div style="font-size:11px;color:var(--text2)">hotfix</div></div><span class="badge bd-amber">Degraded</span><span style="color:var(--text2);font-size:12px">jseo</span><span class="dep-sha" style="font-size:12px">c7d1e8a</span><span style="color:var(--text2);font-size:12px">1d ago</span></div>
+      <div class="dep-row-full" style="border:none"><div><div style="font-weight:600">v2.3.5</div><div style="font-size:11px;color:var(--text2)">main</div></div><span class="badge bd-green">Archived</span><span style="color:var(--text2);font-size:12px">pk</span><span class="dep-sha" style="font-size:12px">f88a001</span><span style="color:var(--text2);font-size:12px">2d ago</span></div>
+    </div>
+  </div>
+
+  <!-- ── ERRORS ── -->
+  <div id="view-errors" style="display:none">
+    <div class="page-header">
+      <div><div class="page-title">Error Tracking</div><div class="page-sub">12 unresolved errors · Last 24 hours</div></div>
+    </div>
+    <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
+      <div class="metric-card"><div class="metric-label">Total Errors (24h)</div><div class="metric-value" style="color:var(--red)">3,847</div><div class="metric-change up-bad">↑ 23.4%</div></div>
+      <div class="metric-card"><div class="metric-label">Affected Users</div><div class="metric-value">482</div><div class="metric-change up-bad">↑ 15.1%</div></div>
+      <div class="metric-card"><div class="metric-label">MTTR</div><div class="metric-value">14<span style="font-size:18px;opacity:.65">min</span></div><div class="metric-change down-good">↓ 8.2%</div></div>
+    </div>
+    <div class="errs-full">
+      <div class="section-hdr"><div class="section-title">All Errors (12)</div></div>
+      <div class="err-row"><div class="err-row-main"><span class="badge bd-red" style="flex-shrink:0">ERR</span><span class="err-type">TypeError</span><span class="err-msg">Cannot read properties of undefined (reading 'userId')</span><span class="err-count">×47</span><span class="err-time">2m ago</span></div></div>
+      <div class="err-row"><div class="err-row-main"><span class="badge bd-amber" style="flex-shrink:0">WARN</span><span class="err-type">UnhandledPromise</span><span class="err-msg">Redis connection timeout after 5000ms</span><span class="err-count">×12</span><span class="err-time">8m ago</span></div></div>
+      <div class="err-row"><div class="err-row-main"><span class="badge bd-red" style="flex-shrink:0">ERR</span><span class="err-type">RangeError</span><span class="err-msg">Maximum call stack size exceeded in recursive transform</span><span class="err-count">×3</span><span class="err-time">24m ago</span></div></div>
+      <div class="err-row"><div class="err-row-main"><span class="badge bd-red" style="flex-shrink:0">ERR</span><span class="err-type">HttpError</span><span class="err-msg">503 Service Unavailable from upstream payment processor</span><span class="err-count">×28</span><span class="err-time">1h ago</span></div></div>
+      <div class="err-row" style="border:none"><div class="err-row-main"><span class="badge bd-amber" style="flex-shrink:0">WARN</span><span class="err-type">MemoryLeak</span><span class="err-msg">Suspected memory leak in WebSocket handler — heap 94% full</span><span class="err-count">×1</span><span class="err-time">2h ago</span></div></div>
+    </div>
+  </div>
+
+  <!-- ── PERFORMANCE ── -->
+  <div id="view-performance" style="display:none">
+    <div class="page-header">
+      <div><div class="page-title">Performance</div><div class="page-sub">API endpoint metrics · Last 7 days</div></div>
+    </div>
+    <div class="perf-grid">
+      <div class="perf-card"><div class="metric-label">P50 Latency</div><div class="metric-value">42<span style="font-size:18px;opacity:.65">ms</span></div><div class="metric-change down-good">↓ 8% vs last week</div></div>
+      <div class="perf-card"><div class="metric-label">P95 Latency</div><div class="metric-value">180<span style="font-size:18px;opacity:.65">ms</span></div><div class="metric-change up-bad">↑ 4.2%</div></div>
+      <div class="perf-card"><div class="metric-label">P99 Latency</div><div class="metric-value">620<span style="font-size:18px;opacity:.65">ms</span></div><div class="metric-change up-bad">↑ 12.1%</div></div>
+      <div class="perf-card"><div class="metric-label">Throughput</div><div class="metric-value">8.4<span style="font-size:18px;opacity:.65">K/s</span></div><div class="metric-change up-good">↑ 18%</div></div>
+      <div class="perf-card"><div class="metric-label">Cache Hit Rate</div><div class="metric-value" style="color:var(--green)">91.4<span style="font-size:18px;opacity:.65">%</span></div><div class="metric-change up-good">↑ 3.2%</div></div>
+      <div class="perf-card"><div class="metric-label">DB Query Time</div><div class="metric-value">14<span style="font-size:18px;opacity:.65">ms</span></div><div class="metric-change down-good">↓ 22%</div></div>
+    </div>
+  </div>
+
+</main>
+</div><!-- /body -->
+</div><!-- /app -->
+
+<!-- NOTIFICATION PANEL -->
+<div class="notif-overlay" id="notif-overlay" onclick="closeNotif(event)">
+  <div class="notif-panel" onclick="event.stopPropagation()">
+    <div class="notif-hdr">
+      <span class="notif-hdr-title">Notifications</span>
+      <button class="notif-close-btn" id="notif-close" onclick="closeNotif()">×</button>
+    </div>
+    <div class="notif-item">
+      <div class="n-dot" style="background:var(--red)"></div>
+      <div><div class="n-body"><strong>Deployment v2.3.8 failed</strong></div><div class="n-body"><span>Build error in TypeScript compilation · main branch</span></div><div class="n-ts">2 hours ago</div></div>
+    </div>
+    <div class="notif-item">
+      <div class="n-dot" style="background:var(--amber)"></div>
+      <div><div class="n-body"><strong>Error rate spike detected</strong></div><div class="n-body"><span>TypeError increased 340% in the last 15 minutes</span></div><div class="n-ts">8 minutes ago</div></div>
+    </div>
+    <div class="notif-item">
+      <div class="n-dot" style="background:var(--green)"></div>
+      <div><div class="n-body"><strong>Deployment v2.3.9 live</strong></div><div class="n-body"><span>All health checks passing · 0 errors in last 5 min</span></div><div class="n-ts">12 minutes ago</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DEPLOYMENT MODAL -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div id="modal-form">
+      <div class="modal-hdr">
+        <div class="modal-title">New Deployment</div>
+        <button class="modal-x" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grp">
+          <label class="form-lbl" for="deploy-tag-input">Version Tag</label>
+          <input class="form-input" id="deploy-tag-input" placeholder="e.g. v2.4.0-rc.1" autocomplete="off" spellcheck="false"/>
+          <div class="form-hint">Semantic version tag for this release</div>
+        </div>
+        <div class="form-row">
+          <div class="form-grp" style="margin:0">
+            <label class="form-lbl">Branch</label>
+            <select class="form-select"><option>main</option><option>feat/auth-v2</option><option>hotfix/redis-timeout</option></select>
+          </div>
+          <div class="form-grp" style="margin:0">
+            <label class="form-lbl">Environment</label>
+            <select class="form-select"><option>Production</option><option>Staging</option><option>Preview</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="deploy-confirm-btn" onclick="confirmDeploy()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Deploy Now
+        </button>
+      </div>
+    </div>
+    <div class="success-view" id="modal-success">
+      <div class="success-ico">🚀</div>
+      <div class="success-title">Deployment triggered!</div>
+      <div class="success-sub" id="success-msg">v2.4.0-rc.1 is being deployed to Production</div>
+      <div style="margin-top:22px"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CHART ─────────────────────────────────────────────────
+const DATA = {
+  '1h': [118,132,126,140,154,146,159,168,152,164,156,170,178,172,163,170,167,173,181,188,176,184,187,191,179,174,183,188,184,187],
+  '7d': [78,84,88,75,90,94,86,100,96,104,110,103,116,120,113,118,128,123,132,126,140,145,136,150,143,153,158,148,156,162],
+  '30d': [58,64,60,68,66,73,70,76,74,80,78,85,83,90,87,93,96,100,98,105,103,109,107,115,112,120,118,126,122,132],
+  '90d': [38,43,46,41,50,53,48,56,54,60,58,63,66,70,68,73,76,80,78,84,83,88,90,93,96,100,98,104,102,108],
+};
+let activeTab = '7d';
+
+function pts(data, W=900, H=190, px=22, py=18) {
+  const mn = Math.min(...data), mx = Math.max(...data), rng = mx-mn||1, n = data.length;
+  return data.map((v,i) => [px + i*(W-px*2)/(n-1), py + ((mx-v)/rng)*(H-py*2)]);
+}
+
+function toPath(points) {
+  let d = `M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+  for (let i=1; i<points.length; i++) {
+    const cx = (points[i-1][0]+points[i][0])/2;
+    d += ` C ${cx.toFixed(1)} ${points[i-1][1].toFixed(1)}, ${cx.toFixed(1)} ${points[i][1].toFixed(1)}, ${points[i][0].toFixed(1)} ${points[i][1].toFixed(1)}`;
+  }
+  return d;
+}
+
+function renderChart(tab, animate=true) {
+  const chart = document.getElementById('main-chart');
+  const line = document.getElementById('chart-line');
+  const fill = document.getElementById('chart-fill');
+  const tip = document.getElementById('chart-tip');
+  const data = DATA[tab];
+  const p = pts(data);
+  const ld = toPath(p);
+  const W=900, H=190;
+  const area = ld + ` L ${p[p.length-1][0].toFixed(1)} ${H} L ${p[0][0].toFixed(1)} ${H} Z`;
+
+  const usePurple = (tab === '7d' || tab === '1h');
+  const color = usePurple ? '#a855f7' : '#06b6d4';
+  const grad = usePurple ? 'url(#grad-purple)' : 'url(#grad-cyan)';
+
+  if (animate) {
+    chart.style.transition = 'opacity 0.22s ease';
+    chart.style.opacity = '0';
+    setTimeout(() => {
+      line.setAttribute('d', ld);
+      line.setAttribute('stroke', color);
+      fill.setAttribute('d', area);
+      fill.setAttribute('fill', grad);
+      const last = p[p.length-1];
+      tip.setAttribute('cx', last[0]);
+      tip.setAttribute('cy', last[1]);
+      tip.setAttribute('fill', color);
+      tip.setAttribute('opacity', '1');
+      chart.style.opacity = '1';
+    }, 180);
+  } else {
+    line.setAttribute('d', ld);
+    line.setAttribute('stroke', color);
+    fill.setAttribute('d', area);
+    fill.setAttribute('fill', grad);
+    const last = p[p.length-1];
+    tip.setAttribute('cx', last[0]);
+    tip.setAttribute('cy', last[1]);
+    tip.setAttribute('fill', color);
+    tip.setAttribute('opacity', '1');
+  }
+}
+
+function switchChart(tab) {
+  document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  activeTab = tab;
+  renderChart(tab);
+}
+
+// ── ERRORS ────────────────────────────────────────────────
+function toggleErr(n) {
+  document.getElementById('error-row-' + n).classList.toggle('open');
+}
+
+// ── VIEWS ─────────────────────────────────────────────────
+function switchView(v) {
+  ['overview','deployments','errors','performance'].forEach(id => {
+    const el = document.getElementById('view-' + id);
+    if (el) el.style.display = 'none';
+  });
+  const el = document.getElementById('view-' + v);
+  if (el) el.style.display = '';
+  document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
+  const nav = document.getElementById('nav-' + v);
+  if (nav) nav.classList.add('active');
+  const labels = {overview:'Overview',deployments:'Deployments',errors:'Error Tracking',performance:'Performance'};
+  document.getElementById('bc-label').textContent = labels[v] || v;
+  document.getElementById('main-content').scrollTop = 0;
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────
+document.getElementById('notification-bell').addEventListener('click', () => {
+  document.getElementById('notif-overlay').classList.add('open');
+});
+function closeNotif(e) {
+  if (!e || e.target === document.getElementById('notif-overlay') || e.target.id === 'notif-close' || (e.currentTarget && e.currentTarget.id === 'notif-close')) {
+    document.getElementById('notif-overlay').classList.remove('open');
+  }
+}
+
+// ── MODAL ─────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modal-form').style.display = '';
+  document.getElementById('modal-success').classList.remove('show');
+  document.getElementById('modal-backdrop').classList.add('open');
+}
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-backdrop')) {
+    document.getElementById('modal-backdrop').classList.remove('open');
+    document.getElementById('deploy-tag-input').value = '';
+  }
+}
+function confirmDeploy() {
+  const tag = document.getElementById('deploy-tag-input').value || 'latest';
+  document.getElementById('success-msg').textContent = `${tag} is being deployed to Production`;
+  document.getElementById('modal-form').style.display = 'none';
+  document.getElementById('modal-success').classList.add('show');
+}
+
+// ── INIT ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => renderChart('7d', false));
+</script>
+</body>
+</html>
