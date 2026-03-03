@@ -8,7 +8,7 @@ Scriptable cinematic screen recorder for product demos — YAML in, polished MP4
   <img src="https://kwakseongjae.github.io/clipwise/demo.gif" alt="Clipwise demo" width="100%" />
 </p>
 
-> *Generated with `npx clipwise demo` — zero config, one command.*
+> *Generated with `npx clipwise demo` — 1 YAML file, 239 lines, one command.*
 
 ## Quick Start
 
@@ -189,14 +189,23 @@ Adaptive zoom follows cursor and zooms in on click targets.
 ```yaml
 zoom:
   enabled: true
-  scale: 1.8          # Peak zoom level (1-5)
+  intensity: moderate  # subtle | light | moderate | strong | dramatic
+                       # 1.15x  | 1.25x | 1.35x    | 1.5x   | 1.8x
+  # scale: 1.35       # Override with a numeric value instead of intensity
   duration: 500        # Zoom animation ms
   autoZoom:
     followCursor: true
-    maxScale: 2.0
     transitionDuration: 300
     padding: 200
 ```
+
+| Intensity | Scale | Best for |
+|-----------|-------|----------|
+| `subtle` | 1.15× | Dense UIs, large viewports |
+| `light` | 1.25× | Loom-style gentle pull-in (recommended) |
+| `moderate` | 1.35× | Balanced default — Camtasia range |
+| `strong` | 1.5× | Clear focus, some context sacrificed |
+| `dramatic` | 1.8× | Maximum emphasis, sparse UIs only |
 
 ### Cursor
 
@@ -248,11 +257,14 @@ deviceFrame:
 
 ### Keystroke HUD
 
-Displays typed keys at the bottom of the screen.
+Displays a HUD at the bottom of the screen showing what was typed. By default, only modifier+key shortcuts are shown (industry standard — same as Screen Studio, KeyCastr, ScreenFlow). Set `showTyping: true` to also show regular typed text.
+
+When typing across multiple input fields, each field gets its own line in the HUD (up to 3 recent sessions, oldest dimmed at top, newest bright at bottom).
 
 ```yaml
 keystroke:
   enabled: true
+  showTyping: true       # show typed text (default: false — shortcuts only)
   position: bottom-center
   fontSize: 16
   fadeAfter: 1500
@@ -285,15 +297,16 @@ speedRamp:
 
 Measured on **Apple M1 Max (10 cores)** — Pulse Dashboard demo, 44s @ 30fps, 1280×800:
 
-| Stage | v0.3.0 | v0.4.0 | Change |
+| Stage | v0.3.0 | v0.4.0 | v0.5.0 |
 |-------|--------|--------|--------|
-| Recording | 30.8 s | 31.1 s | — |
-| Compose + Encode | 97.2 s | 60.6 s | **−38%** |
-| **Total** | **127.9 s** | **91.7 s** | **−28%** |
-| ms / frame | 69 ms | 67 ms | −3% |
-| Frames captured | 1,303 | 902 | −31% (dedup) |
+| Recording | 30.8 s | 31.1 s | 31.1 s |
+| Compose + Encode | 97.2 s | 60.6 s | 60.6 s |
+| **Total** | **127.9 s** | **91.7 s** | **91.7 s** |
+| Frames captured | 1,303 | 902 | 902 |
 
 Key optimisations in v0.4.0: concurrent streaming pipeline, static frame deduplication (~33% skipped), per-worker StaticLayers cache, and raw RGBA buffer pipeline.
+
+v0.5.0 focuses on **recording quality** rather than throughput: smooth cursor movement (CSS transition suppression), zoom intensity presets, and multi-session keystroke HUD.
 
 ## Output Compression
 

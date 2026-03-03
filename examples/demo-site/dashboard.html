@@ -23,10 +23,11 @@
   .sb-logo{padding:0 20px 28px;font-size:20px;font-weight:800;background:var(--gr);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.5px}
   .sb-section{padding:0 12px;margin-bottom:4px}
   .sb-label{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:1px;padding:8px 8px 6px}
-  .ni{display:flex;align-items:center;gap:10px;padding:9px 12px;color:var(--t2);font-size:13px;font-weight:500;cursor:pointer;border-radius:8px;transition:all .15s;margin-bottom:1px}
-  .ni:hover{color:var(--t);background:rgba(255,255,255,0.04)}
-  .ni.active{color:var(--t);background:rgba(108,92,231,0.1);box-shadow:inset 3px 0 0 var(--p)}
-  .ni-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:14px;opacity:.7}
+  .ni{display:flex;align-items:center;gap:10px;padding:9px 12px;color:var(--t2);font-size:13px;font-weight:500;cursor:pointer;border-radius:8px;transition:all .2s;margin-bottom:1px}
+  .ni:hover{color:var(--t);background:rgba(108,92,231,0.08);box-shadow:inset 3px 0 0 rgba(108,92,231,0.4)}
+  .ni:hover .ni-icon{transform:scale(1.2);opacity:1}
+  .ni.active{color:var(--t);background:rgba(108,92,231,0.12);box-shadow:inset 3px 0 0 var(--p)}
+  .ni-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:14px;opacity:.7;transition:transform .2s cubic-bezier(.34,1.56,.64,1),opacity .2s}
   .ni.active .ni-icon{opacity:1}
   .sb-foot{margin-top:auto;padding:16px 20px;border-top:1px solid var(--bdr)}
   .sb-user{display:flex;align-items:center;gap:10px}
@@ -73,11 +74,17 @@
   /* Stats */
   @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-  .sc{background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:18px 20px;transition:all .25s;opacity:0;animation:fadeUp .4s ease forwards;position:relative;overflow:hidden}
+  .sc{background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:18px 20px;transition:none;opacity:0;animation:fadeUp .4s ease forwards;position:relative;overflow:hidden}
   .sc:nth-child(1){animation-delay:.05s}.sc:nth-child(2){animation-delay:.1s}.sc:nth-child(3){animation-delay:.15s}.sc:nth-child(4){animation-delay:.2s}
   .sc::after{content:'';position:absolute;top:0;right:0;width:80px;height:80px;border-radius:50%;filter:blur(40px);opacity:.08;pointer-events:none}
   .sc:nth-child(1)::after{background:var(--p)}.sc:nth-child(2)::after{background:var(--g)}.sc:nth-child(3)::after{background:var(--acc)}.sc:nth-child(4)::after{background:var(--o)}
-  .sc:hover{border-color:var(--bdr2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  /* transition:none — border/shadow transitions generate extra CDP frames as the
+     cursor passes over stat cards on the way to other targets (e.g. search input).
+     Instant hover state is cleaner for recordings; effect is still fully visible. */
+  .sc:hover{border-color:rgba(108,92,231,0.5);box-shadow:0 12px 32px rgba(108,92,231,0.2),0 4px 12px rgba(0,0,0,.4);transition:none}
+  .sc:hover .sc-val{background:var(--gr);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .sc:hover .sc-icon{transform:scale(1.12)}
+  .sc .sc-icon{transition:none}
   .sc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
   .sc-label{font-size:12px;color:var(--t3);font-weight:500}
   .sc-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px}
@@ -95,13 +102,19 @@
   .chart-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .chart-t{font-size:15px;font-weight:600}
   .chart-tabs{display:flex;gap:2px;background:var(--s2);border-radius:8px;padding:2px}
-  .ct-tab{padding:6px 14px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;color:var(--t3);background:transparent;border:none;transition:all .15s}
+  /* transition:none — hover-out transition on chart tab generates ~4 extra CDP
+     frames as cursor moves away, causing stutter. Tab active state is instant. */
+  .ct-tab{padding:6px 14px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;color:var(--t3);background:transparent;border:none;transition:none}
   .ct-tab:hover{color:var(--t2)}
   .ct-tab.active{background:var(--p);color:white;box-shadow:0 2px 8px rgba(108,92,231,0.3)}
   .chart-area{height:180px;display:flex;align-items:flex-end;gap:6px;padding:0 4px}
   .c-bar{flex:1;border-radius:6px 6px 0 0;transition:height .5s cubic-bezier(.34,1.56,.64,1);min-height:4px;position:relative;cursor:pointer}
-  .c-bar:hover{filter:brightness(1.3)}
-  .c-bar::after{content:attr(data-val);position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--t3);opacity:0;transition:opacity .15s}
+  /* No transform on hover — scaleX transition creates ~8 extra CDP frames per bar
+     during cursor movement, causing visible stutter in recordings. */
+  .c-bar:hover{filter:brightness(1.35)}
+  /* transition:none — tooltip fade-in generates CSS-animation CDP frames that
+     desync with cursor movement steps, causing stutter. Instant show is fine. */
+  .c-bar::after{content:attr(data-val);position:absolute;top:-28px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--t);background:var(--s1);border:1px solid var(--bdr2);border-radius:5px;padding:2px 7px;white-space:nowrap;opacity:0;transition:none;pointer-events:none}
   .c-bar:hover::after{opacity:1}
   .chart-labels{display:flex;justify-content:space-between;margin-top:8px;padding:0 4px}
   .chart-labels span{font-size:10px;color:var(--t3)}
@@ -114,15 +127,16 @@
   .btn-new:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(108,92,231,0.35)}
   table{width:100%;border-collapse:collapse}
   th{padding:10px 20px;text-align:left;font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--bdr)}
-  td{padding:12px 20px;font-size:13px;border-bottom:1px solid var(--bdr)}
-  tr{transition:background .1s}
-  tr:hover td{background:rgba(255,255,255,0.015)}
+  td{padding:12px 20px;font-size:13px;border-bottom:1px solid var(--bdr);transition:background .15s}
+  tr{transition:all .15s;position:relative}
+  tr:hover td{background:rgba(108,92,231,0.06)}
+  tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--p)}
   .badge-s{display:inline-flex;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:600;letter-spacing:.2px}
   .badge-s.active{background:rgba(34,197,94,0.1);color:var(--g)}
   .badge-s.pending{background:rgba(234,179,8,0.1);color:var(--y)}
   .badge-s.closed{background:rgba(113,113,122,0.1);color:var(--t3)}
-  .btn-v{padding:4px 12px;border:1px solid var(--bdr);background:transparent;color:var(--t3);border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s;font-weight:500}
-  .btn-v:hover{border-color:var(--p);color:var(--t);background:rgba(108,92,231,0.06)}
+  .btn-v{padding:4px 12px;border:1px solid var(--bdr);background:transparent;color:var(--t3);border-radius:6px;font-size:11px;cursor:pointer;transition:all .18s;font-weight:500}
+  .btn-v:hover{border-color:var(--p);color:white;background:var(--p);box-shadow:0 2px 10px rgba(108,92,231,0.35);transform:translateY(-1px)}
   .uc{display:flex;align-items:center;gap:8px}
   .ua{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0}
   .prog{display:flex;align-items:center;gap:8px}
@@ -133,8 +147,11 @@
   /* Activity */
   .act-sec{background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:20px;margin-bottom:20px}
   .act-t{font-size:15px;font-weight:600;margin-bottom:14px}
-  .act-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bdr)}
+  .act-item{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 -12px;border-bottom:1px solid var(--bdr);border-radius:8px;cursor:pointer;transition:all .18s}
   .act-item:last-child{border-bottom:none}
+  .act-item:hover{background:rgba(108,92,231,0.08);border-color:transparent;box-shadow:inset 3px 0 0 var(--p)}
+  .act-item:hover .act-dot{transform:scale(1.5);box-shadow:0 0 6px currentColor}
+  .act-dot{transition:transform .18s,box-shadow .18s}
   .act-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
   .act-txt{font-size:12px;flex:1;color:var(--t2)}.act-txt strong{color:var(--t);font-weight:600}
   .act-time{font-size:10px;color:var(--t3);white-space:nowrap}

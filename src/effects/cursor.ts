@@ -54,9 +54,13 @@ export async function renderCursor(
   const cursorSvg = buildCursorSvg(size, config.color);
   const cursorBuffer = Buffer.from(cursorSvg);
 
-  // Scale CSS pixel position to physical pixel position, then clamp
-  const left = Math.max(0, Math.min(Math.round(position.x * dpr), frameWidth - 1));
-  const top = Math.max(0, Math.min(Math.round(position.y * dpr), frameHeight - 1));
+  // The SVG arrow tip sits at (4/24 × size, 0) within the bounding box.
+  // Subtract that x-offset so the rendered tip aligns with position.x exactly.
+  const tipOffsetX = Math.round((4 / 24) * size);
+  const px = Math.round(position.x * dpr);
+  const py = Math.round(position.y * dpr);
+  const left = Math.max(0, Math.min(px - tipOffsetX, frameWidth - size));
+  const top  = Math.max(0, Math.min(py, frameHeight - size));
 
   return sharp(frameBuffer)
     .composite([{ input: cursorBuffer, left, top }])

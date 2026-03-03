@@ -113,16 +113,46 @@ export type StepAction = z.infer<typeof StepActionSchema>;
 
 // ─── Effects Configuration ──────────────────────────────
 
+/**
+ * Preset zoom intensity levels — see ZoomIntensity in effects/zoom.ts for scale values.
+ * When set, overrides the numeric `scale` field.
+ *
+ * subtle   1.15x  — barely noticeable; dense UIs, large viewports
+ * light    1.25x  — Loom-style gentle pull-in (recommended for most demos)
+ * moderate 1.35x  — balanced default; Camtasia-range
+ * strong   1.5x   — clear focus, some peripheral context sacrificed
+ * dramatic 1.8x   — maximum emphasis; simple/sparse UIs only
+ */
+export const ZoomIntensitySchema = z.enum([
+  "subtle",
+  "light",
+  "moderate",
+  "strong",
+  "dramatic",
+]);
+
+export type ZoomIntensity = z.infer<typeof ZoomIntensitySchema>;
+
 export const AutoZoomConfigSchema = z.object({
   followCursor: z.boolean().default(true),
-  maxScale: z.number().min(1).max(5).default(2.0),
+  /** @deprecated Use `intensity` on the parent zoom config instead. */
+  maxScale: z.number().min(1).max(5).default(1.35),
   transitionDuration: z.number().default(400),
   padding: z.number().default(200),
 });
 
 export const ZoomEffectSchema = z.object({
   enabled: z.boolean().default(true),
-  scale: z.number().min(1).max(5).default(1.8),
+  /**
+   * Numeric zoom scale (1.0 = no zoom).  Overridden by `intensity` when set.
+   * Default lowered from 1.8 → 1.35 to match "moderate" intensity.
+   */
+  scale: z.number().min(1).max(5).default(1.35),
+  /**
+   * Intensity preset — overrides `scale` when set.
+   * Calibrated against Loom (light≈1.25x) and Camtasia (moderate≈1.35x).
+   */
+  intensity: ZoomIntensitySchema.optional(),
   duration: z.number().default(600),
   easing: z
     .enum(["ease-in-out", "ease-in", "ease-out", "linear"])
@@ -172,6 +202,17 @@ export const SpeedRampConfigSchema = z.object({
 
 export const KeystrokeConfigSchema = z.object({
   enabled: z.boolean().default(false),
+  /**
+   * Show regular typed text (alphabetic/numeric characters) in the HUD.
+   *
+   * Industry default is false — Screen Studio, KeyCastr, and ScreenFlow all
+   * hide regular typing by default, showing only modifier+key shortcuts.
+   * Typed content is already visible inside the focused input element, so
+   * displaying it again in the HUD is redundant and creates overflow issues.
+   *
+   * Set to true to display a 2-line rolling HUD that follows the typed text.
+   */
+  showTyping: z.boolean().default(false),
   position: z.enum(["bottom-center", "bottom-left", "bottom-right"]).default("bottom-center"),
   fontSize: z.number().default(18),
   backgroundColor: z.string().default("rgba(0, 0, 0, 0.75)"),
@@ -253,6 +294,12 @@ export type Scenario = z.infer<typeof ScenarioSchema>;
 export interface KeystrokeEvent {
   key: string;
   timestamp: number;
+  /**
+   * Typing session ID — incremented each time a new input is focused via the
+   * `type` action.  HUD groups keystrokes by sessionId so each input field's
+   * typed content appears on its own line.  Undefined for legacy recordings.
+   */
+  sessionId?: number;
 }
 
 export interface CapturedFrame {

@@ -8,15 +8,15 @@ viewport:
 effects:
   zoom:
     enabled: true
-    scale: 1.8
+    intensity: moderate   # subtle/light/moderate/strong/dramatic → 1.15/1.25/1.35/1.5/1.8
     duration: 500
     autoZoom:
       followCursor: true
-      maxScale: 2.0
       transitionDuration: 300
   cursor:
     enabled: true
     size: 20
+    speed: normal
     smoothing: true
     clickEffect: true
     clickColor: "rgba(108, 92, 231, 0.35)"
@@ -38,6 +38,7 @@ effects:
     darkMode: true
   keystroke:
     enabled: true
+    showTyping: true     # 타이핑 내용 HUD 표시 (기본값 false — 업계 표준은 비활성)
     position: bottom-center
     fontSize: 16
     backgroundColor: "rgba(0, 0, 0, 0.8)"
@@ -118,7 +119,7 @@ steps:
       - action: type
         selector: "#search-input"
         text: "conversion"
-        delay: 18
+        delay: 55
 
   - name: "Scroll to projects"
     captureDelay: 100
@@ -151,48 +152,44 @@ steps:
         selector: "#btn-view-2"
 
   - name: "Open New Project modal"
-    captureDelay: 100
-    holdDuration: 700
+    captureDelay: 150
+    holdDuration: 1000
     actions:
       - action: click
         selector: "#btn-new-project"
 
+  # action: type already does its own moveCursor + click to focus,
+  # so the redundant action: click before each type is removed.
   - name: "Type project name"
-    captureDelay: 50
-    holdDuration: 500
+    captureDelay: 80
+    holdDuration: 700
     actions:
-      - action: click
-        selector: "#project-name"
       - action: type
         selector: "#project-name"
         text: "Q1 Launch Campaign"
-        delay: 16
+        delay: 55
 
   - name: "Type description"
-    captureDelay: 50
-    holdDuration: 500
+    captureDelay: 80
+    holdDuration: 700
     actions:
-      - action: click
-        selector: "#project-desc"
       - action: type
         selector: "#project-desc"
         text: "Sprint planning and launch prep for Q1"
-        delay: 15
+        delay: 50
 
   - name: "Type team lead"
-    captureDelay: 50
-    holdDuration: 500
+    captureDelay: 80
+    holdDuration: 700
     actions:
-      - action: click
-        selector: "#project-lead"
       - action: type
         selector: "#project-lead"
         text: "Sarah J."
-        delay: 18
+        delay: 60
 
   - name: "Create project (toast)"
-    captureDelay: 100
-    holdDuration: 800
+    captureDelay: 150
+    holdDuration: 1200
     actions:
       - action: click
         selector: "#btn-create"

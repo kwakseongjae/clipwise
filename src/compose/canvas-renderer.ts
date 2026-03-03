@@ -15,6 +15,7 @@ import {
   buildZoomClickLookup,
   calculateAdaptiveZoomFromLookup,
   calculateAdaptiveZoomInWindow,
+  resolveZoomScale,
 } from "../effects/zoom.js";
 import { applyCrossfade } from "../effects/transition.js";
 
@@ -203,6 +204,11 @@ export class CanvasRenderer {
       ? buildZoomClickLookup(frames)
       : [];
 
+    const effectiveScale = resolveZoomScale(
+      this.effects.zoom.scale,
+      this.effects.zoom.intensity,
+    );
+
     for (let i = 0; i < frames.length; i++) {
       const frame = frames[i];
 
@@ -211,7 +217,7 @@ export class CanvasRenderer {
         zoomScale = calculateAdaptiveZoomFromLookup(
           clickLookup,
           i,
-          this.effects.zoom.scale,
+          effectiveScale,
           transitionFrames,
         );
       }
@@ -365,6 +371,11 @@ export class CanvasRenderer {
     const canDispatch = (i: number): boolean =>
       i < frames.length && (sourceComplete || frames.length > i + transitionFrames);
 
+    const effectiveScale = resolveZoomScale(
+      this.effects.zoom.scale,
+      this.effects.zoom.intensity,
+    );
+
     const computeContext = (i: number): FrameContext => {
       const frame = frames[i];
       let zoomScale = 1;
@@ -375,7 +386,7 @@ export class CanvasRenderer {
           frames.slice(lo, hi + 1) as ReadonlyArray<{ clickPosition: unknown }>,
           lo,
           i,
-          this.effects.zoom.scale,
+          effectiveScale,
           transitionFrames,
         );
       }

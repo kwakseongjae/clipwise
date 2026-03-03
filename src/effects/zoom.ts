@@ -7,6 +7,41 @@ export interface ZoomConfig {
 }
 
 /**
+ * Preset zoom intensity levels for auto-zoom.
+ *
+ * Calibrated against industry tools (Loom ≈1.2x, Camtasia SmartFocus ≈1.3-1.4x,
+ * ScreenFlow ≈1.25x) so the focus point is clear without cutting off surrounding
+ * context (navigation bars, sidebars, etc.).
+ *
+ * - subtle   1.15x  — barely noticeable; good for dense UIs or large viewports
+ * - light    1.25x  — Loom-style gentle pull-in; draws attention, keeps context
+ * - moderate 1.35x  — balanced default; Camtasia-range, works for most demos
+ * - strong   1.5x   — clear focus; some peripheral context sacrificed
+ * - dramatic 1.8x   — maximum emphasis; use only for simple, sparse UIs
+ */
+export type ZoomIntensity = "subtle" | "light" | "moderate" | "strong" | "dramatic";
+
+export const ZOOM_INTENSITY_SCALES: Record<ZoomIntensity, number> = {
+  subtle:   1.15,
+  light:    1.25,
+  moderate: 1.35,
+  strong:   1.5,
+  dramatic: 1.8,
+};
+
+/**
+ * Resolve the effective zoom scale from an explicit `scale` value or an
+ * `intensity` preset.  When both are provided, `intensity` takes precedence.
+ */
+export function resolveZoomScale(
+  scale: number,
+  intensity?: ZoomIntensity,
+): number {
+  if (intensity !== undefined) return ZOOM_INTENSITY_SCALES[intensity];
+  return scale;
+}
+
+/**
  * Apply a zoom effect to a frame buffer by cropping around a focus point
  * and resizing back to the original dimensions.
  */

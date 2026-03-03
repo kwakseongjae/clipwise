@@ -160,6 +160,18 @@ export async function composeFrame(
     cursorTrail: context?.cursorTrail ?? [],
   };
 
+  // Pre-compute the pixel offset that the device frame injects at the top-left.
+  // Cursor positions come from CDP in CSS viewport coordinates (no frame offset).
+  // Steps 2-5 render directly onto the extended buffer, so we must shift every
+  // cursor/click coordinate by this amount before passing it to the renderers.
+  // (Step 7 zoom already applies the same offset independently.)
+  const frameOffset = getFrameOffset(effects.deviceFrame, dpr);
+  // Helper: CSS-space position → CSS-space position shifted by frame offset
+  const withFrameOffset = (pos: { x: number; y: number }) => ({
+    x: pos.x + frameOffset.left / Math.max(1, dpr),
+    y: pos.y + frameOffset.top  / Math.max(1, dpr),
+  });
+
   // 1. Device frame (SVG constants are scaled by dpr internally)
   if (effects.deviceFrame.enabled) {
     const sl = ctx.staticLayers;
@@ -185,45 +197,44 @@ export async function composeFrame(
     height = meta.height ?? height;
   }
 
-  // 2. Cursor highlight (position scaled to physical pixels by dpr)
+  // 2. Cursor highlight (shift by frame offset so it lands on content, not chrome bar)
   if (effects.cursor.enabled && effects.cursor.highlight && frame.cursorPosition) {
     buffer = await renderCursorHighlight(
-      buffer, frame.cursorPosition, effects.cursor, width, height, dpr,
+      buffer, withFrameOffset(frame.cursorPosition), effects.cursor, width, height, dpr,
     );
   }
 
-  // 3. Cursor trail (positions scaled to physical pixels by dpr)
+  // 3. Cursor trail (shift each trail position by frame offset)
   if (effects.cursor.enabled && effects.cursor.trail && ctx.cursorTrail.length >= 2) {
     buffer = await renderCursorTrail(
-      buffer, ctx.cursorTrail, effects.cursor, width, height, dpr,
+      buffer, ctx.cursorTrail.map(withFrameOffset), effects.cursor, width, height, dpr,
     );
   }
 
-  // 4. Cursor rendering (position scaled to physical pixels by dpr)
+  // 4. Cursor rendering (shift by frame offset)
   if (effects.cursor.enabled && frame.cursorPosition) {
     buffer = await renderCursor(
-      buffer, frame.cursorPosition, effects.cursor, width, height, dpr,
+      buffer, withFrameOffset(frame.cursorPosition), effects.cursor, width, height, dpr,
     );
   }
 
-  // 5. Click ripple effect (position scaled to physical pixels by dpr)
+  // 5. Click ripple effect (shift by frame offset)
   if (effects.cursor.enabled && effects.cursor.clickEffect && frame.clickPosition) {
     const progress = ctx.clickProgress ?? frame.clickProgress ?? 0.5;
     buffer = await renderClickEffect(
-      buffer, frame.clickPosition, effects.cursor, progress, width, height, dpr,
+      buffer, withFrameOffset(frame.clickPosition), effects.cursor, progress, width, height, dpr,
     );
   }
 
-  // 6. Keystroke HUD (font/positions scaled by dpr)
-  if (effects.keystroke.enabled && frame.keystrokes) {
-    buffer = await renderKeystrokeHud(
-      buffer, frame.keystrokes, frame.timestamp, effects.keystroke, width, height, dpr,
-    );
-  }
-
-  // 7. Zoom (adaptive, follows cursor)
+  // 6. Zoom (adaptive, follows cursor)
   // With dpr=2, the source buffer is 2x resolution → zoom crops from 2x more pixels
   // for dramatically sharper output after downscaling to output dimensions.
+  //
+  // NOTE: Keystroke HUD is intentionally applied AFTER zoom (step 7) so that it
+  // is always fully visible regardless of where the zoom crops the frame.
+  // Rendering the HUD before zoom would cause it to be clipped at the bottom
+  // whenever the focus point is in the upper half of the viewport (e.g. modal
+  // inputs near the top of the modal, which is centered in the viewport).
   const scale = ctx.zoomScale;
   if (effects.zoom.enabled && scale > 1) {
     // Focus point: convert CSS pixel coords to physical pixel coords
@@ -235,6 +246,15 @@ export async function composeFrame(
       y: rawFocus.y * dpr + offset.top,
     };
     buffer = await applyZoom(buffer, focusPoint, scale, width, height);
+  }
+
+  // 7. Keystroke HUD — rendered AFTER zoom so it is never cropped out.
+  // Zoom resizes back to the original (width × height) dimensions, so dpr
+  // and position calculations remain identical to the pre-zoom buffer.
+  if (effects.keystroke.enabled && frame.keystrokes) {
+    buffer = await renderKeystrokeHud(
+      buffer, frame.keystrokes, frame.timestamp, effects.keystroke, width, height, dpr,
+    );
   }
 
   // 8. Background

@@ -15,14 +15,17 @@ const CLICK_EFFECT_DURATION_MS = 500;
 const REPAINT_INTERVAL_MS = 25;
 const ACTION_GAP_MS = 30;
 
-// Step delay must be >= REPAINT_INTERVAL_MS (25ms) so each intermediate cursor
-// position falls in a distinct CDP screencast frame. At 6-8ms the ACK cycle
-// can't keep up and multiple steps collapse into one captured frame, making
-// the cursor appear to teleport rather than glide smoothly.
+// Cursor speed presets.
+// pixelsPerStep: target distance (px) each bezier step covers.
+//   Lower = more steps = slower, smoother movement.
+// stepDelayMs: time between each step.  Must be >= REPAINT_INTERVAL_MS so
+//   the forced repaint is flushed and CDP can ACK + capture before the next step.
+// minSteps / maxSteps: adaptive clamp so short distances don't overshoot and
+//   very long distances don't take forever.
 const CURSOR_SPEED_PRESETS = {
-  fast:   { steps: 10, delay: 22 },  // ~220ms, ~9 frames captured
-  normal: { steps: 14, delay: 25 },  // ~350ms, ~14 frames captured
-  slow:   { steps: 20, delay: 25 },  // ~500ms, ~20 frames captured
+  fast:   { pixelsPerStep: 22, stepDelayMs: 22, minSteps: 8,  maxSteps: 35 },
+  normal: { pixelsPerStep: 16, stepDelayMs: 26, minSteps: 10, maxSteps: 45 },
+  slow:   { pixelsPerStep: 12, stepDelayMs: 32, minSteps: 12, maxSteps: 55 },
 } as const;
 
 interface RawFrame {
@@ -92,6 +95,9 @@ export class ClipwiseRecorder {
   private cursorTimeline: CursorKeyframe[] = [];
   private clickTimeline: ClickEvent[] = [];
   private keystrokeTimeline: KeystrokeEvent[] = [];
+  /** Incremented at the start of each `type` action so the HUD can render
+   *  each input field's text on a separate line. */
+  private keystrokeSessionId = 0;
   private currentStepIndex = 0;
 
   private cursorPosition: { x: number; y: number } = { x: 0, y: 0 };
@@ -135,6 +141,7 @@ export class ClipwiseRecorder {
     this.cursorTimeline = [];
     this.clickTimeline = [];
     this.keystrokeTimeline = [];
+    this.keystrokeSessionId = 0;
     this.currentStepIndex = 0;
     this.cursorPosition = { x: 0, y: 0 };
     this.isCapturing = false;
@@ -446,6 +453,38 @@ export class ClipwiseRecorder {
   }
 
   /**
+   * Force a unique DOM repaint visible in the top scanlines of the captured PNG.
+   *
+   * Uses a 1×1 px fixed-position element at z-index MAX, sitting above ALL
+   * overlays including modals (position:fixed;z-index:100;backdrop-filter:blur).
+   * Alternates background between #000001 and #000100 — two colors that are
+   * visually indistinguishable (1/255 difference in R or G channel against a
+   * dark page) but produce distinct PNG byte sequences, defeating dedup.
+   *
+   * This replaces the previous `document.documentElement.style.outline` approach
+   * which failed whenever a full-viewport fixed overlay (e.g. modal backdrop)
+   * was composited on top of the outline, making y=0 PNG bytes identical across
+   * frames and causing dedup to collapse all modal-typing frames into one.
+   */
+  private async forceRepaint(t: boolean): Promise<void> {
+    if (!this.page) return;
+    await this.page
+      .evaluate((toggle: boolean) => {
+        let el = document.getElementById("__cw_rf__");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "__cw_rf__";
+          el.style.cssText =
+            "position:fixed;top:0;left:0;width:1px;height:1px;" +
+            "z-index:2147483647;pointer-events:none";
+          (document.body ?? document.documentElement).appendChild(el);
+        }
+        el.style.background = toggle ? "#000001" : "#000100";
+      }, t)
+      .catch(() => {});
+  }
+
+  /**
    * Wait for a given duration while forcing periodic repaints
    * so CDP screencast keeps sending frames even on static pages.
    */
@@ -456,14 +495,7 @@ export class ClipwiseRecorder {
     let toggle = false;
 
     while (Date.now() < endTime && this.isCapturing) {
-      await this.page
-        .evaluate((t: boolean) => {
-          // Minimal invisible change that triggers a repaint
-          document.documentElement.style.outline = t
-            ? "0.001px solid transparent"
-            : "none";
-        }, toggle)
-        .catch(() => {});
+      await this.forceRepaint(toggle);
       toggle = !toggle;
 
       const remaining = endTime - Date.now();
@@ -560,13 +592,32 @@ export class ClipwiseRecorder {
         });
         await this.page.click(action.selector);
 
-        // Type character by character for visual effect
+        // New input field → new session line in the keystroke HUD.
+        // Incrementing here (after focus click, before first char) ensures
+        // each `type` action appears on its own line regardless of timing.
+        this.keystrokeSessionId++;
+        const currentSessionId = this.keystrokeSessionId;
+
+        // Type character by character with forced repaint per keystroke.
+        //
+        // Why the forced repaint is required:
+        //   The dedup signature only covers the first ~2048 bytes of the PNG
+        //   which corresponds to the top ~8px of a 1280×800 frame.  Input
+        //   fields are typically at y > 100px, so changes to their text are
+        //   NOT visible in the signature.  Without a forced repaint the dedup
+        //   logic treats every keystroke frame as a duplicate of the previous
+        //   one and discards it — making typing appear to happen in an instant.
+        let typeRepaintToggle = false;
         for (const char of action.text) {
-          await this.page.keyboard.type(char, { delay: action.delay });
+          await this.page.keyboard.type(char);
+          typeRepaintToggle = !typeRepaintToggle;
+          await this.forceRepaint(typeRepaintToggle);
           this.keystrokeTimeline.push({
             key: char,
             timestamp: Date.now(),
+            sessionId: currentSessionId,
           });
+          await new Promise((resolve) => setTimeout(resolve, action.delay));
         }
         break;
       }
@@ -576,31 +627,45 @@ export class ClipwiseRecorder {
           ? await getElementCenter(this.page, action.selector, action.timeout)
           : null;
 
-        await this.page.evaluate(
-          ({ x, y, smooth, selector }) => {
-            const target = selector
-              ? document.querySelector(selector)
-              : window;
-            if (target) {
-              const options: ScrollToOptions = {
-                left: x,
-                top: y,
-                behavior: smooth ? "smooth" : "instant",
-              };
-              if (target === window) {
-                window.scrollBy(options);
-              } else {
-                (target as Element).scrollBy(options);
+        const scrollDistance = Math.abs(action.y) + Math.abs(action.x);
+
+        if (action.smooth && scrollDistance > 0) {
+          // Drive scroll incrementally so CDP captures a frame for each step.
+          // A single scrollBy({behavior:'smooth'}) hands control to the browser's
+          // CSS scroll animation, which CDP can't reliably sample frame-by-frame.
+          // ~25px per step at 30ms delay gives ~750px/s — visually comfortable.
+          const scrollSteps = Math.max(12, Math.round(scrollDistance / 25));
+          const yStep = action.y / scrollSteps;
+          const xStep = action.x / scrollSteps;
+
+          for (let s = 0; s < scrollSteps; s++) {
+            await this.page.evaluate(
+              ({ dy, dx, sel }: { dy: number; dx: number; sel: string | null }) => {
+                const el = sel ? document.querySelector(sel) : window;
+                if (!el) return;
+                const opts = { left: dx, top: dy, behavior: "instant" as ScrollBehavior };
+                if (el === window) window.scrollBy(opts);
+                else (el as Element).scrollBy(opts);
+              },
+              { dy: yStep, dx: xStep, sel: action.selector ?? null },
+            );
+            await new Promise((resolve) => setTimeout(resolve, 30));
+          }
+          await this.waitWithRepaints(150);
+        } else {
+          await this.page.evaluate(
+            ({ x, y, selector }: { x: number; y: number; selector: string | null }) => {
+              const target = selector ? document.querySelector(selector) : window;
+              if (target) {
+                const options = { left: x, top: y, behavior: "instant" as ScrollBehavior };
+                if (target === window) window.scrollBy(options);
+                else (target as Element).scrollBy(options);
               }
-            }
-          },
-          {
-            x: action.x,
-            y: action.y,
-            smooth: action.smooth,
-            selector: action.selector ?? null,
-          },
-        );
+            },
+            { x: action.x, y: action.y, selector: action.selector ?? null },
+          );
+          await this.waitWithRepaints(100);
+        }
 
         if (scrollTarget) {
           this.cursorPosition = scrollTarget;
@@ -610,14 +675,7 @@ export class ClipwiseRecorder {
           });
         }
 
-        // Wait for scroll animation — scale with distance for long scrolls
-        const scrollDistance = Math.abs(action.y) + Math.abs(action.x);
-        const scrollWait = action.smooth
-          ? Math.max(600, Math.round(scrollDistance * 0.8))
-          : 100;
-        await this.waitWithRepaints(scrollWait);
-        // Brief settle time to ensure final scroll position is captured
-        await this.waitWithRepaints(150);
+        await this.waitWithRepaints(120);
         break;
       }
 
@@ -683,35 +741,108 @@ export class ClipwiseRecorder {
   }
 
   /**
-   * Move cursor smoothly from current position to target using
-   * manual step-by-step movement with delays between each step.
-   * Speed is controlled by the cursor.speed preset (fast/normal/slow).
+   * Suppress all CSS transitions and animations on the page during cursor
+   * movement.  Hover-state transitions (background, transform, box-shadow,
+   * etc.) on elements the cursor passes over generate CSS-animation-driven
+   * CDP frames that arrive asynchronously relative to our cursor step
+   * intervals.  Those extra frames are timestamped when they're ACK-drained,
+   * which can be many milliseconds after the actual cursor moved — causing
+   * interpolateCursorAt() to map them to a newer cursor position while the
+   * screenshot still shows older content → visible stutter.
+   *
+   * Suppressing transitions during movement eliminates these extra frames
+   * entirely regardless of which elements the path crosses.  Transitions are
+   * restored immediately after arrival, so hover effects on the final target
+   * element still appear during the subsequent holdDuration.
+   */
+  private async suppressTransitions(): Promise<void> {
+    if (!this.page) return;
+    await this.page
+      .evaluate(() => {
+        if (document.getElementById("__cw_notrans__")) return;
+        const s = document.createElement("style");
+        s.id = "__cw_notrans__";
+        s.textContent =
+          "*{transition-duration:0s!important;transition-delay:0s!important}";
+        (document.head ?? document.documentElement).appendChild(s);
+      })
+      .catch(() => {});
+  }
+
+  private async restoreTransitions(): Promise<void> {
+    if (!this.page) return;
+    await this.page
+      .evaluate(() => {
+        document.getElementById("__cw_notrans__")?.remove();
+      })
+      .catch(() => {});
+  }
+
+  /**
+   * Move cursor smoothly from current position to target.
+   *
+   * Key design decisions:
+   *  1. Adaptive step count — proportional to travel distance so short and
+   *     long movements feel equally paced (pixelsPerStep controls speed).
+   *  2. Forced repaint per step — moving the mouse in headless Chrome does NOT
+   *     visually change the screenshot (the cursor is rendered in post-processing).
+   *     Without a forced repaint, dedup collapses every intermediate frame into
+   *     the first one, making the cursor appear to teleport.
+   *  3. Transition suppression — CSS transitions on hovered elements generate
+   *     asynchronous CDP frames that desync cursor position from screenshot
+   *     content.  All transitions are suppressed for the duration of movement
+   *     and restored on arrival (see suppressTransitions / restoreTransitions).
+   *  4. Capped bezier curve — perpendicular offset is capped at 30 px regardless
+   *     of distance, preventing a visible arc on long-distance movements.
    */
   private async moveCursorSmooth(
     target: { x: number; y: number },
   ): Promise<void> {
     if (!this.page) return;
 
-    const { steps, delay } = CURSOR_SPEED_PRESETS[this.cursorSpeed];
+    const preset = CURSOR_SPEED_PRESETS[this.cursorSpeed];
     const from = { ...this.cursorPosition };
+    const distance = Math.hypot(target.x - from.x, target.y - from.y);
 
-    // Calculate bezier path from current position to target
+    // Skip sub-pixel movements
+    if (distance < 2) {
+      this.cursorPosition = { ...target };
+      return;
+    }
+
+    // Adaptive step count — clamp between preset min/max
+    const steps = Math.round(
+      Math.min(Math.max(distance / preset.pixelsPerStep, preset.minSteps), preset.maxSteps),
+    );
+
     const path = interpolatePath(from, target, steps);
+    let repaintToggle = false;
 
-    // Step through each point with a delay so CDP can capture frames
-    for (const point of path) {
-      await this.page.mouse.move(point.x, point.y);
-      this.cursorTimeline.push({
-        position: { x: point.x, y: point.y },
-        timestamp: Date.now(),
-      });
-      await new Promise((resolve) => setTimeout(resolve, delay));
+    // Suppress CSS transitions for the entire movement so hover-state
+    // animations on intermediate elements don't generate extra CDP frames.
+    await this.suppressTransitions();
+    try {
+      for (const point of path) {
+        await this.page.mouse.move(point.x, point.y);
+
+        // Force a unique DOM paint so CDP doesn't dedup this frame away.
+        repaintToggle = !repaintToggle;
+        await this.forceRepaint(repaintToggle);
+
+        this.cursorTimeline.push({
+          position: { x: point.x, y: point.y },
+          timestamp: Date.now(),
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, preset.stepDelayMs));
+      }
+    } finally {
+      // Always restore transitions, even if movement throws.
+      await this.restoreTransitions();
     }
 
     this.cursorPosition = { ...target };
-
-    // Settle time after movement completes
-    await this.waitWithRepaints(100);
+    await this.waitWithRepaints(80);
   }
 
   /**

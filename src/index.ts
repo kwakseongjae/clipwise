@@ -16,7 +16,10 @@ export {
   calculateAdaptiveZoomInWindow,
   calculatePanOffset,
   lerpZoom,
+  resolveZoomScale,
+  ZOOM_INTENSITY_SCALES,
 } from "./effects/zoom.js";
+export type { ZoomIntensity } from "./effects/zoom.js";
 export { renderCursorTrail, renderCursorHighlight } from "./effects/cursor.js";
 export { renderKeystrokeHud } from "./effects/keystroke.js";
 export { applyCrossfade } from "./effects/transition.js";

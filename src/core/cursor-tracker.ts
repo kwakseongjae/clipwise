@@ -14,6 +14,9 @@ export function easeInOutCubic(t: number): number {
 /**
  * Generate a smooth path between two points using cubic bezier interpolation.
  * The control points create a natural curved movement rather than a straight line.
+ *
+ * Perpendicular offset is capped at 30px regardless of distance, so long-distance
+ * movements stay visually straight rather than drawing a large visible arc.
  */
 export function interpolatePath(
   from: Point,
@@ -25,16 +28,21 @@ export function interpolatePath(
 
   const dx = to.x - from.x;
   const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
 
-  // Control points for cubic bezier - offset perpendicular to direction
-  // for a natural arc movement
+  // Perpendicular unit vector (rotate 90°).  Cap the offset at 30px so large
+  // movements don't produce a visually exaggerated arc.
+  const perpScale = Math.min(distance * 0.06, 30);
+  const normX = distance > 0 ? (dy / distance) * perpScale : 0;
+  const normY = distance > 0 ? (-dx / distance) * perpScale : 0;
+
   const cp1: Point = {
-    x: from.x + dx * 0.25 + dy * 0.1,
-    y: from.y + dy * 0.25 - dx * 0.1,
+    x: from.x + dx * 0.25 + normX,
+    y: from.y + dy * 0.25 + normY,
   };
   const cp2: Point = {
-    x: from.x + dx * 0.75 - dy * 0.1,
-    y: from.y + dy * 0.75 + dx * 0.1,
+    x: from.x + dx * 0.75 - normX,
+    y: from.y + dy * 0.75 - normY,
   };
 
   const points: Point[] = [];
