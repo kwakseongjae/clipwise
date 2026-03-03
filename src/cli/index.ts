@@ -30,7 +30,6 @@ program
   .option(
     "-f, --format <format>",
     "Output format (gif|mp4|png-sequence)",
-    "gif",
   )
   .option("--no-effects", "Disable all effects")
   .action(async (scenarioPath: string, options) => {
