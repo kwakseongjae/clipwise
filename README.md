@@ -109,7 +109,10 @@ steps:
         url: "https://example.com"
     captureDelay: 200       # ms to wait after actions
     holdDuration: 800       # ms to hold on result
-    transition: none        # none | fade
+    transition: none        # none | fade | slide-left | slide-up | blur
+    effects:                # Per-step effects override (optional)
+      zoom:
+        enabled: false      # Disable zoom for this step only
 ```
 
 ### Actions
@@ -189,12 +192,12 @@ Adaptive zoom follows cursor and zooms in on click targets.
 ```yaml
 zoom:
   enabled: true
-  intensity: moderate  # subtle | light | moderate | strong | dramatic
+  intensity: light     # subtle | light | moderate | strong | dramatic
                        # 1.15x  | 1.25x | 1.35x    | 1.5x   | 1.8x
-  # scale: 1.35       # Override with a numeric value instead of intensity
-  duration: 500        # Zoom animation ms
+  # scale: 1.25       # Override with a numeric value instead of intensity
+  duration: 800        # Zoom animation ms
   autoZoom:
-    followCursor: true
+    followCursor: true   # Viewport pans to follow cursor position
     transitionDuration: 300
     padding: 200
 ```
@@ -202,10 +205,12 @@ zoom:
 | Intensity | Scale | Best for |
 |-----------|-------|----------|
 | `subtle` | 1.15× | Dense UIs, large viewports |
-| `light` | 1.25× | Loom-style gentle pull-in (recommended) |
-| `moderate` | 1.35× | Balanced default — Camtasia range |
+| `light` | 1.25× | Loom-style gentle pull-in **(default)** |
+| `moderate` | 1.35× | Balanced — Camtasia range |
 | `strong` | 1.5× | Clear focus, some context sacrificed |
 | `dramatic` | 1.8× | Maximum emphasis, sparse UIs only |
+
+**Smart camera**: Zoom is automatically suppressed during scroll actions to avoid disorienting motion. When `followCursor` is enabled, the focal point smoothly pans to follow cursor position (not just click targets).
 
 ### Cursor
 
@@ -215,7 +220,7 @@ Custom cursor with click ripple, trail, glow highlight, and speed control.
 cursor:
   enabled: true
   size: 20
-  speed: "fast"        # fast (~72ms) | normal (~144ms) | slow (~288ms)
+  speed: "normal"      # fast (~72ms) | normal (~144ms) | slow (~288ms)
   clickEffect: true
   clickColor: "rgba(59, 130, 246, 0.3)"
   trail: true
@@ -289,24 +294,81 @@ Automatically slows down near clicks and speeds up idle sections.
 ```yaml
 speedRamp:
   enabled: true
-  idleSpeed: 3.0        # Skip factor for idle frames
+  idleSpeed: 2.0        # Skip factor for idle frames (default: 2.0)
   actionSpeed: 0.8      # Slow factor near clicks
+```
+
+### Transitions
+
+Control how steps transition to each other.
+
+```yaml
+steps:
+  - name: "Step 1"
+    transition: fade        # none | fade | slide-left | slide-up | blur
+    actions: [...]
+```
+
+| Transition | Description |
+|------------|-------------|
+| `none` | Hard cut (default) |
+| `fade` | Cross-dissolve between steps |
+| `slide-left` | Outgoing frame slides left, incoming slides in from right |
+| `slide-up` | Outgoing frame slides up, incoming slides in from bottom |
+| `blur` | Outgoing frame blurs out while cross-fading to incoming |
+
+### Per-Step Effects Override
+
+Override global effects on a per-step basis. Any effect property can be overridden — unset properties inherit from the global config.
+
+```yaml
+effects:
+  zoom:
+    enabled: true
+    intensity: light
+
+steps:
+  - name: "Overview"
+    effects:
+      zoom:
+        enabled: false      # No zoom for this step
+    actions: [...]
+
+  - name: "Detail view"
+    effects:
+      zoom:
+        intensity: strong   # Extra zoom for this step only
+    actions: [...]
+```
+
+### Audio Narration
+
+Attach an audio file (MP3, WAV, etc.) to the output MP4.
+
+```yaml
+audio:
+  file: "./narration.mp3"
+  volume: 1.0              # 0.0 - 2.0 (default: 1.0)
+  fadeIn: 0                 # Fade-in duration in seconds
+  fadeOut: 0                # Fade-out duration in seconds
 ```
 
 ## Performance
 
 Measured on **Apple M1 Max (10 cores)** — Pulse Dashboard demo, 44s @ 30fps, 1280×800:
 
-| Stage | v0.3.0 | v0.4.0 | v0.5.0 |
-|-------|--------|--------|--------|
-| Recording | 30.8 s | 31.1 s | 31.1 s |
-| Compose + Encode | 97.2 s | 60.6 s | 60.6 s |
-| **Total** | **127.9 s** | **91.7 s** | **91.7 s** |
-| Frames captured | 1,303 | 902 | 902 |
+| Stage | v0.3.0 | v0.4.0 | v0.5.0 | v0.6.0 |
+|-------|--------|--------|--------|--------|
+| Recording | 30.8 s | 31.1 s | 31.1 s | 31.1 s |
+| Compose + Encode | 97.2 s | 60.6 s | 60.6 s | 60.6 s |
+| **Total** | **127.9 s** | **91.7 s** | **91.7 s** | **91.7 s** |
+| Frames captured | 1,303 | 902 | 902 | 902 |
 
 Key optimisations in v0.4.0: concurrent streaming pipeline, static frame deduplication (~33% skipped), per-worker StaticLayers cache, and raw RGBA buffer pipeline.
 
-v0.5.0 focuses on **recording quality** rather than throughput: smooth cursor movement (CSS transition suppression), zoom intensity presets, and multi-session keystroke HUD.
+v0.5.0 focuses on **recording quality**: smooth cursor, zoom intensity presets, multi-session keystroke HUD.
+
+v0.6.0 focuses on **convention alignment & expressiveness**: gentler defaults (light zoom, normal cursor speed), per-step effects override, new transitions (slide, blur), audio narration, and smart camera (scroll-aware zoom suppression + cursor-following focal point).
 
 ## Output Compression
 
@@ -415,7 +477,7 @@ npx clipwise record my-scenario.yaml -f mp4 -o ./output
 - Start each interaction with enough scroll to make the target element visible
 - Use `waitUntil: "networkidle"` for pages with API calls
 - Keep `type.delay` at 15-25ms for a fast but readable typing effect
-- Use `transition: fade` between major sections for cinematic cuts
+- Use `transition: fade` or `transition: blur` between major sections for cinematic cuts
 
 ### Writing Scenarios with AI
 
@@ -462,11 +524,7 @@ Clipwise includes a documentation site and a live demo dashboard in the `docs/` 
 4. Docs go live at `https://kwakseongjae.github.io/clipwise/`
 5. Demo dashboard at `https://kwakseongjae.github.io/clipwise/demo/`
 
-Then anyone can record the demo site:
-
-```bash
-npx clipwise demo --url https://kwakseongjae.github.io/clipwise/demo/
-```
+The built-in `npx clipwise demo` already points to this URL by default.
 
 ## Security
 

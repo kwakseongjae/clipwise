@@ -21,7 +21,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.1.0");
+  .version("0.6.0");
 
 program
   .command("record")
@@ -345,7 +345,7 @@ program
     const spinner = ora();
 
     try {
-      const demoUrl = options.url ?? "https://kwakseongjae.github.io/clipwise/";
+      const demoUrl = options.url ?? "https://kwakseongjae.github.io/clipwise/demo/";
 
       const device = options.device as string;
       const isMobile = device === "iphone" || device === "android";
@@ -361,7 +361,10 @@ program
 
       const steps = [
         { name: "Load dashboard", captureDelay: 100, holdDuration: 1000,
-          actions: [{ action: "navigate", url: demoUrl, waitUntil: "load" }] },
+          actions: [
+            { action: "navigate", url: demoUrl, waitUntil: "load" },
+            { action: "waitForSelector", selector: "#stat-users", state: "visible", timeout: 15000 },
+          ] },
         { name: "Hover Users stat", captureDelay: 50, holdDuration: 700,
           actions: [{ action: "hover", selector: "#stat-users" }] },
         { name: "Hover Revenue", captureDelay: 50, holdDuration: 700,
