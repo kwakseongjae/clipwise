@@ -9,9 +9,10 @@ import { CanvasRenderer } from "../compose/canvas-renderer.js";
 import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-encoder.js";
 import { StreamingSession, ConcurrentSession } from "../compose/streaming-session.js";
 import type { PipelineProgress } from "../compose/streaming-session.js";
-import { writeFile, mkdir, access } from "fs/promises";
+import { writeFile, mkdir, access, copyFile, readFile } from "fs/promises";
 import { join, resolve, dirname } from "path";
-import { pathToFileURL } from "url";
+import { pathToFileURL, fileURLToPath } from "url";
+import { homedir } from "os";
 
 const program = new Command();
 
@@ -495,6 +496,68 @@ program
       spinner.fail("Demo recording failed");
       const message = error instanceof Error ? error.message : String(error);
       console.error(chalk.red(`\nError: ${message}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command("install-skill")
+  .description("Install the Clipwise skill for Claude Code")
+  .action(async () => {
+    try {
+      // Locate the skill source file bundled with clipwise
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const skillSource = resolve(__dirname, "..", "..", "skills", "clipwise.md");
+
+      // Verify the skill file exists in the package
+      try {
+        await access(skillSource);
+      } catch {
+        console.error(chalk.red("Error: Skill file not found in clipwise package."));
+        console.error(chalk.yellow("This may happen if you're running from source. Try: npm rebuild clipwise"));
+        process.exit(1);
+      }
+
+      // Determine target directory: project-level .claude/skills/ first, fallback to global
+      const projectSkillDir = resolve(".claude", "skills");
+      const globalSkillDir = join(homedir(), ".claude", "skills");
+
+      // Prefer project-level if .claude/ directory already exists in cwd
+      let targetDir: string;
+      try {
+        await access(resolve(".claude"));
+        targetDir = projectSkillDir;
+      } catch {
+        targetDir = globalSkillDir;
+      }
+
+      await mkdir(targetDir, { recursive: true });
+      const targetPath = join(targetDir, "clipwise.md");
+
+      // Check if already installed and up-to-date
+      try {
+        const existing = await readFile(targetPath, "utf-8");
+        const incoming = await readFile(skillSource, "utf-8");
+        if (existing === incoming) {
+          console.log(chalk.green("Clipwise skill is already up to date."));
+          console.log(`  Location: ${chalk.bold(targetPath)}`);
+          console.log(`\nUse ${chalk.bold("/clipwise")} in Claude Code to get started.`);
+          return;
+        }
+      } catch {
+        // File doesn't exist yet, proceed with install
+      }
+
+      await copyFile(skillSource, targetPath);
+
+      console.log(chalk.green("Clipwise skill installed successfully!"));
+      console.log(`  Location: ${chalk.bold(targetPath)}`);
+      console.log(`\nUsage in Claude Code:`);
+      console.log(`  ${chalk.bold("/clipwise")} — Generate YAML scenarios, validate, and record demos`);
+      console.log(`\nTo update the skill later, run this command again.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`Failed to install skill: ${message}`));
       process.exit(1);
     }
   });

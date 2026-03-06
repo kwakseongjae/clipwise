@@ -1,0 +1,373 @@
+# Clipwise — Cinematic Screen Recorder
+
+You are an expert at creating Clipwise YAML scenarios. Clipwise is a Playwright + CDP-based scriptable screen recorder that turns YAML scenarios into polished MP4/GIF demo videos with cinematic effects (zoom, cursor trail, device frame, keystroke HUD, etc.).
+
+TRIGGER: when the user wants to record a demo video, create a screen recording scenario, generate a product demo, or mentions "clipwise".
+
+## Setup Check
+
+Before creating a scenario, verify clipwise is installed:
+
+```bash
+npx clipwise --version
+```
+
+If not installed:
+```bash
+npm install -D clipwise
+```
+
+ffmpeg is required for MP4 output:
+```bash
+# macOS
+brew install ffmpeg
+# Ubuntu
+sudo apt install ffmpeg
+```
+
+## YAML Schema Reference
+
+### Top-Level Structure
+
+```yaml
+name: string              # Scenario name (required)
+description: string       # Optional description
+
+viewport:
+  width: 1280             # Browser width (100-3840, default: 1280)
+  height: 800             # Browser height (100-3840, default: 800)
+
+effects:                  # All optional, sensible defaults
+  zoom: ...
+  cursor: ...
+  background: ...
+  deviceFrame: ...
+  keystroke: ...
+  watermark: ...
+  speedRamp: ...
+
+output:
+  format: mp4             # mp4 | gif | png-sequence
+  width: 1280             # Output width
+  height: 800             # Output height
+  fps: 30                 # 1-60
+  preset: balanced        # social | balanced | archive
+  outputDir: "./output"
+  filename: "my-recording"
+
+steps: []                 # Array of steps (min 1, first must have navigate)
+```
+
+### Step Structure
+
+```yaml
+- name: "Step name"           # Optional label
+  captureDelay: 50            # ms to wait after actions before capturing (50-100 for snappy)
+  holdDuration: 700           # ms to hold on result (500-800 for snappy)
+  transition: none            # none | fade
+  actions: []                 # Array of actions
+```
+
+### Actions (12 types)
+
+#### Basic Actions
+
+1. **navigate** — Open a URL (MUST be the first action in step 1)
+```yaml
+- action: navigate
+  url: "https://example.com"
+  waitUntil: load             # load | domcontentloaded | networkidle (default)
+```
+
+2. **click** — Click an element
+```yaml
+- action: click
+  selector: "#my-button"
+  delay: 0                    # Optional click delay (ms)
+  timeout: 15000              # Optional element wait timeout
+```
+
+3. **type** — Type text character-by-character (auto-focuses the element)
+```yaml
+- action: type
+  selector: "#email-input"
+  text: "user@example.com"
+  delay: 18                   # ms per character (15-25 recommended, default: 50)
+  timeout: 15000              # Optional
+```
+
+4. **hover** — Hover over an element
+```yaml
+- action: hover
+  selector: ".card"
+  timeout: 15000              # Optional
+```
+
+5. **scroll** — Scroll the page
+```yaml
+- action: scroll
+  y: 400                      # Vertical px (positive=down, negative=up)
+  x: 0                        # Horizontal px
+  selector: ".container"      # Optional: scroll within element
+  smooth: true                # Default: true
+  timeout: 15000              # Optional
+```
+
+6. **wait** — Pause for a fixed duration
+```yaml
+- action: wait
+  duration: 1000              # ms
+```
+
+7. **screenshot** — Capture marker (for png-sequence)
+```yaml
+- action: screenshot
+  name: "result"              # Optional label
+  fullPage: false             # Default: false
+```
+
+#### Async Wait Actions (for dynamic/API content)
+
+8. **waitForSelector** — Wait for element state
+```yaml
+- action: waitForSelector
+  selector: ".result-panel"
+  state: visible              # visible (default) | attached | hidden
+  timeout: 15000
+```
+
+9. **waitForNavigation** — Wait for page load
+```yaml
+- action: waitForNavigation
+  waitUntil: networkidle      # load | domcontentloaded | networkidle
+  timeout: 15000
+```
+
+10. **waitForURL** — Wait for URL match
+```yaml
+- action: waitForURL
+  url: "https://example.com/dashboard"
+  timeout: 15000
+```
+
+11. **waitForFunction** — Wait for JS expression to be truthy
+```yaml
+- action: waitForFunction
+  expression: "document.querySelector('.done') !== null"
+  polling: raf                # raf (default) | number in ms (e.g. 500)
+  timeout: 30000
+```
+
+12. **waitForResponse** — Wait for network response (URL substring match)
+```yaml
+- action: waitForResponse
+  url: "/api/chat/completions"
+  status: 200                 # Optional HTTP status filter
+  timeout: 30000
+```
+
+### Effects Configuration
+
+#### Zoom — Adaptive zoom follows cursor on clicks
+```yaml
+zoom:
+  enabled: true
+  intensity: moderate         # subtle(1.15x) | light(1.25x) | moderate(1.35x) | strong(1.5x) | dramatic(1.8x)
+  # scale: 1.35              # Or use numeric value (overridden by intensity)
+  duration: 500               # Zoom animation ms
+  easing: ease-in-out         # ease-in-out | ease-in | ease-out | linear
+  autoZoom:
+    followCursor: true
+    transitionDuration: 300
+    padding: 200
+```
+
+#### Cursor — Custom cursor with click effect, trail, highlight
+```yaml
+cursor:
+  enabled: true
+  size: 20
+  color: "#000000"
+  speed: fast                 # fast (~72ms) | normal (~144ms) | slow (~288ms)
+  smoothing: true
+  clickEffect: true
+  clickColor: "rgba(59, 130, 246, 0.3)"
+  clickRadius: 30
+  trail: true
+  trailLength: 8
+  trailColor: "rgba(59, 130, 246, 0.2)"
+  highlight: true
+  highlightRadius: 40
+  highlightColor: "rgba(255, 215, 0, 0.18)"
+```
+
+#### Background — Gradient/solid padding with corners and shadow
+```yaml
+background:
+  type: gradient              # gradient | solid | image
+  value: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+  padding: 48
+  borderRadius: 14
+  shadow: true
+```
+
+#### Device Frame — Wraps recording in a device mockup
+```yaml
+deviceFrame:
+  enabled: true
+  type: browser               # browser | macbook | iphone | ipad | android | none
+  darkMode: true
+```
+
+| Type | Description |
+|------|-------------|
+| browser | macOS browser chrome with traffic lights |
+| macbook | MacBook Pro frame |
+| iphone | iPhone 15 Pro with Dynamic Island |
+| ipad | iPad Pro with camera dot |
+| android | Android with punch-hole camera |
+
+#### Keystroke HUD — Shows typed keys on screen
+```yaml
+keystroke:
+  enabled: true
+  showTyping: false           # true = show regular typing; false = shortcuts only (industry default)
+  position: bottom-center     # bottom-center | bottom-left | bottom-right
+  fontSize: 16
+  backgroundColor: "rgba(0, 0, 0, 0.75)"
+  textColor: "#ffffff"
+  padding: 8
+  fadeAfter: 1500
+```
+
+#### Watermark — Text overlay at corner
+```yaml
+watermark:
+  enabled: true
+  text: "My App"
+  position: bottom-right      # top-left | top-right | bottom-left | bottom-right
+  opacity: 0.5
+  fontSize: 14
+  color: "#ffffff"
+```
+
+#### Speed Ramp — Auto-adjusts speed near actions
+```yaml
+speedRamp:
+  enabled: true
+  idleSpeed: 3.0              # Skip factor for idle frames (0.5-8)
+  actionSpeed: 0.8            # Slow factor near clicks (0.25-2)
+  transitionFrames: 15
+```
+
+### Output Presets
+
+| Preset | Use case | Approx size (30s) |
+|--------|----------|--------------------|
+| social | Twitter, LinkedIn, Loom | ~2-4 MB |
+| balanced | General purpose, portfolio | ~4-6 MB |
+| archive | High-fidelity storage | larger |
+
+## Critical Rules
+
+1. **First step MUST contain a `navigate` action** — the browser needs a page to start
+2. **Selectors**: use CSS selectors (`#id`, `.class`, `[data-testid="..."]`). No control chars, semicolons, backticks, or backslashes
+3. **Type needs focus**: the `type` action auto-focuses, but the element must exist and be visible
+4. **Scroll before interact**: if an element is below the fold, `scroll` to it first
+5. **Prefer async waits over fixed `wait`**: use `waitForSelector`, `waitForFunction`, `waitForResponse` instead of guessing durations
+6. **Viewport = output**: if viewport and output dimensions differ, output will be scaled (a warning is shown)
+7. **Mobile scenarios**: use `viewport: {width: 390, height: 844}` with `deviceFrame.type: iphone` and `output: {width: 540, height: 1080}`
+
+## Timing Presets
+
+### Snappy demo (~30s)
+- `captureDelay: 50-100`
+- `holdDuration: 500-800`
+- `type.delay: 15-25`
+
+### Cinematic demo (~60s)
+- `captureDelay: 200-400`
+- `holdDuration: 1500-2500`
+- `type.delay: 40-60`
+
+## CLI Commands
+
+```bash
+# Record from YAML scenario
+npx clipwise record <scenario.yaml> -f mp4 -o ./output
+
+# Instant demo with built-in dashboard
+npx clipwise demo
+npx clipwise demo --device iphone
+npx clipwise demo --url https://my-app.com
+
+# Create template YAML
+npx clipwise init
+
+# Validate scenario without recording
+npx clipwise validate <scenario.yaml>
+```
+
+## Workflow
+
+1. Ask the user for: target URL, what actions to demo, and preferred style (snappy/cinematic)
+2. Generate a complete `clipwise.yaml` scenario
+3. Run `npx clipwise validate clipwise.yaml` to check for errors
+4. If valid, run `npx clipwise record clipwise.yaml -f mp4 -o ./output`
+5. If the user has specific selectors, use them. Otherwise suggest inspecting the page first
+
+## Selector Discovery
+
+If the user doesn't know selectors, help them find them:
+```bash
+# Open the target URL in a browser and inspect elements
+npx playwright open <url>
+```
+
+Or read the page HTML to find appropriate selectors:
+```bash
+curl -s <url> | head -200
+```
+
+## Example: Minimal Scenario
+
+```yaml
+name: "My App Demo"
+viewport:
+  width: 1280
+  height: 800
+
+effects:
+  deviceFrame:
+    enabled: true
+    type: browser
+  cursor:
+    enabled: true
+    clickEffect: true
+    highlight: true
+  background:
+    padding: 48
+    borderRadius: 14
+    shadow: true
+
+output:
+  format: mp4
+  fps: 30
+  preset: balanced
+
+steps:
+  - name: "Open app"
+    captureDelay: 100
+    holdDuration: 1000
+    actions:
+      - action: navigate
+        url: "http://localhost:3000"
+        waitUntil: load
+
+  - name: "Click CTA"
+    captureDelay: 50
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#cta-button"
+```

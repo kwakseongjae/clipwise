@@ -18,6 +18,7 @@
     <a href="#quickstart" class="nav-link">빠른 시작</a>
     <a href="#effects" class="nav-link">이펙트</a>
     <a href="#ai-schema" class="nav-link">AI-Ready</a>
+    <a href="#claude-code" class="nav-link">Claude Code</a>
     <a href="../demo/" class="nav-link">데모</a>
     <div class="nav-lang">
       <a href="../" class="lang-btn">EN</a>
@@ -436,6 +437,51 @@ effects:
 # - waitForResponse: 트리거 액션 전에 자동으로 리스너 등록됨
 # - 타이밍: captureDelay 50-100ms, holdDuration 500-800ms (빠른 데모)</code></pre>
   </div>
+</section>
+
+<!-- Claude Code 스킬 -->
+<section class="section" id="claude-code">
+  <div class="section-label">Claude Code</div>
+  <h2 class="section-title">AI 기반 워크플로</h2>
+  <p class="section-sub">내장된 <a href="https://claude.com/claude-code" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Claude Code</a> 스킬을 설치하면 자연어로 시나리오를 생성할 수 있습니다. 설치 한 번, 슬래시 커맨드 한 번이면 끝.</p>
+
+  <div class="steps-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">스킬 설치</div>
+        <div class="step-desc">Clipwise 스킬을 <code>.claude/skills/</code> 디렉토리에 복사합니다. 프로젝트당 한 번(또는 글로벌) 실행.</div>
+        <div class="code-block">
+          <div class="code-header">bash</div>
+          <pre><code>npx clipwise install-skill</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Claude Code에서 사용</div>
+        <div class="step-desc">Claude Code 세션에서 <code>/clipwise</code>를 입력하세요. 녹화할 내용을 자연어로 설명하면 됩니다.</div>
+        <div class="code-block">
+          <div class="code-header">Claude Code</div>
+          <pre><code>/clipwise
+> http://localhost:3000 대시보드 데모 녹화해줘
+  — 로그인 클릭, 이메일/비밀번호 입력, 분석 페이지 이동</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">나머지는 Claude가 처리</div>
+        <div class="step-desc">Claude가 YAML 시나리오를 생성하고, <code>npx clipwise validate</code>로 검증한 후, MP4를 녹화합니다 — 전부 자동.</div>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:20px;font-size:14px;color:var(--muted);">clipwise 업그레이드 후 <code>npx clipwise install-skill</code>을 다시 실행하면 최신 스킬로 업데이트됩니다.</p>
 </section>
 
 <!-- Effects -->
