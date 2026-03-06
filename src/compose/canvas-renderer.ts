@@ -8,6 +8,7 @@ import type {
   EffectsConfig,
   OutputConfig,
   Step,
+  TransitionType,
 } from "../script/types.js";
 import { composeFrame, getFrameOffset } from "./compose-frame.js";
 import type { FrameContext } from "./compose-frame.js";
@@ -17,7 +18,33 @@ import {
   calculateAdaptiveZoomInWindow,
   resolveZoomScale,
 } from "../effects/zoom.js";
-import { applyCrossfade } from "../effects/transition.js";
+import { applyCrossfade, applyTransition } from "../effects/transition.js";
+
+// ─── Per-step effects merge ──────────────────────────────────────────────────
+
+/**
+ * Deep-merge a per-step effects override onto the global effects config.
+ * Only the fields explicitly set in the override are applied; everything
+ * else falls back to the global config.
+ */
+function mergeStepEffects(
+  global: EffectsConfig,
+  stepIndex: number | undefined,
+  steps: Step[],
+): EffectsConfig {
+  if (stepIndex === undefined || !steps[stepIndex]?.effects) return global;
+  const override = steps[stepIndex].effects!;
+
+  return {
+    zoom: override.zoom ? { ...global.zoom, ...override.zoom } : global.zoom,
+    cursor: override.cursor ? { ...global.cursor, ...override.cursor } : global.cursor,
+    background: override.background ? { ...global.background, ...override.background } : global.background,
+    deviceFrame: override.deviceFrame ? { ...global.deviceFrame, ...override.deviceFrame } : global.deviceFrame,
+    speedRamp: override.speedRamp ? { ...global.speedRamp, ...override.speedRamp } : global.speedRamp,
+    keystroke: override.keystroke ? { ...global.keystroke, ...override.keystroke } : global.keystroke,
+    watermark: override.watermark ? { ...global.watermark, ...override.watermark } : global.watermark,
+  };
+}
 
 export type { FrameContext };
 
@@ -96,14 +123,19 @@ export class CanvasRenderer {
       workerCount >= 2 &&
       processFrames.length >= workerCount * MIN_FRAMES_PER_WORKER;
 
+    // Build per-frame effects (merge step overrides with global)
+    const perFrameEffects = processFrames.map((f) =>
+      mergeStepEffects(this.effects, f.stepIndex, this.steps),
+    );
+
     let composed: ComposedFrame[];
     if (useWorkers) {
-      composed = await this.processWithWorkers(processFrames, contexts, workerCount);
+      composed = await this.processWithWorkers(processFrames, contexts, workerCount, perFrameEffects);
     } else {
       composed = [];
       for (let i = 0; i < processFrames.length; i++) {
         composed.push(
-          await composeFrame(processFrames[i], this.effects, this.output, contexts[i]),
+          await composeFrame(processFrames[i], perFrameEffects[i], this.output, contexts[i]),
         );
       }
     }
@@ -124,6 +156,7 @@ export class CanvasRenderer {
     frames: CapturedFrame[],
     contexts: FrameContext[],
     workerCount: number,
+    perFrameEffects?: EffectsConfig[],
   ): Promise<ComposedFrame[]> {
     return new Promise((resolve, reject) => {
       const results: ComposedFrame[] = new Array(frames.length);
@@ -140,7 +173,7 @@ export class CanvasRenderer {
         worker.postMessage({
           taskId: i,
           frame: frames[i],
-          effects: this.effects,
+          effects: perFrameEffects ? perFrameEffects[i] : this.effects,
           output: this.output,
           context: contexts[i],
         });
@@ -220,6 +253,10 @@ export class CanvasRenderer {
           effectiveScale,
           transitionFrames,
         );
+        // Suppress zoom during scroll — zoom out smoothly to show more context
+        if (frame.isScrolling && zoomScale > 1) {
+          zoomScale = 1;
+        }
       }
 
       const clickProgress =
@@ -313,7 +350,7 @@ export class CanvasRenderer {
   async *composeStreamOnline(
     source: AsyncIterable<CapturedFrame>,
   ): AsyncGenerator<ComposedFrame> {
-    const hasFadeTransitions = this.steps.some((s) => s.transition === "fade");
+    const hasFadeTransitions = this.steps.some((s) => s.transition !== "none");
 
     if (!hasFadeTransitions) {
       // Fast path (common case): no crossfades needed.
@@ -389,6 +426,10 @@ export class CanvasRenderer {
           effectiveScale,
           transitionFrames,
         );
+        // Suppress zoom during scroll
+        if (frame.isScrolling && zoomScale > 1) {
+          zoomScale = 1;
+        }
       }
       const clickProgress = frame.clickPosition != null ? (frame.clickProgress ?? 0.5) : null;
       const trail: Array<{ x: number; y: number }> = [];
@@ -402,10 +443,11 @@ export class CanvasRenderer {
     const dispatch = (worker: Worker): void => {
       if (canDispatch(nextToDispatch)) {
         const i = nextToDispatch++;
+        const frameEffects = mergeStepEffects(this.effects, frames[i].stepIndex, this.steps);
         worker.postMessage({
           taskId: i,
           frame: frames[i],
-          effects: this.effects,
+          effects: frameEffects,
           output: this.output,
           context: computeContext(i),
         });
@@ -549,13 +591,18 @@ export class CanvasRenderer {
     const workers: Worker[] = [];
     let nextToDispatch = 0;
 
+    // Build per-frame effects (merge step overrides with global)
+    const perFrameEffects = frames.map((f) =>
+      mergeStepEffects(this.effects, f.stepIndex, this.steps),
+    );
+
     const dispatch = (worker: Worker): void => {
       if (nextToDispatch >= frames.length || workerError) return;
       const i = nextToDispatch++;
       worker.postMessage({
         taskId: i,
         frame: frames[i],
-        effects: this.effects,
+        effects: perFrameEffects[i],
         output: this.output,
         context: contexts[i],
       });
@@ -616,7 +663,8 @@ export class CanvasRenderer {
     contexts: FrameContext[],
   ): AsyncGenerator<ComposedFrame> {
     for (let i = 0; i < frames.length; i++) {
-      yield await composeFrame(frames[i], this.effects, this.output, contexts[i]);
+      const frameEffects = mergeStepEffects(this.effects, frames[i].stepIndex, this.steps);
+      yield await composeFrame(frames[i], frameEffects, this.output, contexts[i]);
     }
   }
 
@@ -626,11 +674,11 @@ export class CanvasRenderer {
    */
   private getTransitionWindows(
     frames: CapturedFrame[],
-  ): Array<{ startIdx: number; endIdx: number }> {
+  ): Array<{ startIdx: number; endIdx: number; type: TransitionType }> {
     if (this.steps.length === 0) return [];
 
     const transitionFrames = Math.max(2, Math.round(this.output.fps * 0.3));
-    const windows: Array<{ startIdx: number; endIdx: number }> = [];
+    const windows: Array<{ startIdx: number; endIdx: number; type: TransitionType }> = [];
 
     for (let i = 1; i < frames.length; i++) {
       if (
@@ -640,11 +688,11 @@ export class CanvasRenderer {
       ) {
         const stepIdx = frames[i].stepIndex!;
         const step = this.steps[stepIdx];
-        if (step && step.transition === "fade") {
+        if (step && step.transition !== "none") {
           const startIdx = Math.max(0, i - Math.floor(transitionFrames / 2));
           const endIdx = Math.min(frames.length - 1, i + Math.ceil(transitionFrames / 2));
           if (endIdx - startIdx >= 2) {
-            windows.push({ startIdx, endIdx });
+            windows.push({ startIdx, endIdx, type: step.transition });
           }
         }
       }
@@ -663,7 +711,7 @@ export class CanvasRenderer {
    */
   private async *applyTransitionsToStream(
     source: AsyncGenerator<ComposedFrame>,
-    windows: Array<{ startIdx: number; endIdx: number }>,
+    windows: Array<{ startIdx: number; endIdx: number; type: TransitionType }>,
   ): AsyncGenerator<ComposedFrame> {
     if (windows.length === 0) {
       yield* source;
@@ -703,16 +751,17 @@ export class CanvasRenderer {
         state.received++;
 
         if (state.received === state.frames.length) {
-          // Both endpoints ready — apply crossfade to middle frames
+          // Both endpoints ready — apply transition to middle frames
           const fromBuf = state.frames[0].buffer;
           const toBuf = state.frames[state.frames.length - 1].buffer;
           const range = state.frames.length - 1;
+          const transType = win.type;
 
           const fromRawInfo = state.frames[0].rawInfo;
           const toRawInfo = state.frames[state.frames.length - 1].rawInfo;
           for (let j = 1; j < state.frames.length - 1; j++) {
-            const blended = await applyCrossfade(
-              fromBuf, toBuf, j / range,
+            const blended = await applyTransition(
+              transType, fromBuf, toBuf, j / range,
               this.output.width, this.output.height,
               fromRawInfo, toRawInfo,
             );
@@ -755,7 +804,7 @@ export class CanvasRenderer {
   ): Promise<void> {
     const transitionFrames = Math.max(2, Math.round(this.output.fps * 0.3));
 
-    const boundaries: Array<{ index: number; stepIndex: number }> = [];
+    const boundaries: Array<{ index: number; stepIndex: number; type: TransitionType }> = [];
     for (let i = 1; i < frames.length; i++) {
       if (
         frames[i].stepIndex !== undefined &&
@@ -764,8 +813,8 @@ export class CanvasRenderer {
       ) {
         const stepIdx = frames[i].stepIndex!;
         const step = this.steps[stepIdx];
-        if (step && step.transition === "fade") {
-          boundaries.push({ index: i, stepIndex: stepIdx });
+        if (step && step.transition !== "none") {
+          boundaries.push({ index: i, stepIndex: stepIdx, type: step.transition });
         }
       }
     }
@@ -783,7 +832,8 @@ export class CanvasRenderer {
 
       for (let i = startIdx + 1; i < endIdx; i++) {
         const progress = (i - startIdx) / range;
-        const blended = await applyCrossfade(
+        const blended = await applyTransition(
+          boundary.type,
           fromBuffer,
           toBuffer,
           progress,

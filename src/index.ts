@@ -22,7 +22,7 @@ export {
 export type { ZoomIntensity } from "./effects/zoom.js";
 export { renderCursorTrail, renderCursorHighlight } from "./effects/cursor.js";
 export { renderKeystrokeHud } from "./effects/keystroke.js";
-export { applyCrossfade } from "./effects/transition.js";
+export { applyCrossfade, applySlide, applyBlur, applyTransition } from "./effects/transition.js";
 export { renderWatermark } from "./effects/watermark.js";
 
 // Scenario parsing & validation
@@ -34,6 +34,9 @@ export type {
   Scenario,
   Step,
   StepAction,
+  StepEffectsOverride,
+  TransitionType,
+  AudioConfig,
   EffectsConfig,
   OutputConfig,
   CapturedFrame,

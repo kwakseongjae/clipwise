@@ -175,7 +175,8 @@ program
           }
           await writeFile(outputPath, mp4Buffer);
           const sizeMB = (mp4Buffer.length / (1024 * 1024)).toFixed(2);
-          spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`);
+          const audioMsg = scenario.audio ? ` + audio: ${scenario.audio.file}` : "";
+          spinner.succeed(`MP4 saved to ${chalk.bold(outputPath)} (${sizeMB} MB${audioMsg})`);
         } else {
           // GIF: compose all first (palette quantization needs all frames)
           let composedFrames;

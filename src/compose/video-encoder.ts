@@ -5,7 +5,7 @@ import { writeFile, mkdir, readFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { spawn } from "child_process";
-import type { ComposedFrame, OutputConfig } from "../script/types.js";
+import type { ComposedFrame, OutputConfig, AudioConfig } from "../script/types.js";
 
 // ─── Encoding Presets ────────────────────────────────────
 
@@ -126,6 +126,7 @@ export async function encodeGif(
 export async function encodeMp4(
   frames: ComposedFrame[],
   config: OutputConfig,
+  audio?: AudioConfig,
 ): Promise<Buffer> {
   if (frames.length === 0) {
     throw new Error("Cannot encode MP4: no frames provided");
@@ -137,7 +138,7 @@ export async function encodeMp4(
     const encoder = await detectVideoEncoder();
     const params = resolveEncodingParams(config);
 
-    await pipeFramesToFfmpeg(frames, config, params, encoder, outputPath);
+    await pipeFramesToFfmpeg(frames, config, params, encoder, outputPath, audio);
     return await readFile(outputPath);
   } finally {
     await rm(outputPath, { force: true }).catch(() => {});
@@ -153,6 +154,7 @@ async function pipeFramesToFfmpeg(
   params: EncodingParams,
   encoder: VideoEncoder,
   outputPath: string,
+  audio?: AudioConfig,
 ): Promise<void> {
   const videoArgs =
     encoder === "hevc_videotoolbox"
@@ -178,6 +180,22 @@ async function pipeFramesToFfmpeg(
           "-pix_fmt", "yuv420p",
         ];
 
+  // Audio input: use provided file or silent track
+  const audioInputArgs = audio
+    ? ["-i", audio.file]
+    : ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"];
+
+  // Audio filter: volume + fade
+  const audioFilters: string[] = [];
+  if (audio) {
+    if (audio.volume !== 1.0) audioFilters.push(`volume=${audio.volume}`);
+    if (audio.fadeIn > 0) audioFilters.push(`afade=t=in:d=${audio.fadeIn / 1000}`);
+    if (audio.fadeOut > 0) audioFilters.push(`afade=t=out:st=999999:d=${audio.fadeOut / 1000}`);
+  }
+  const audioFilterArgs = audioFilters.length > 0
+    ? ["-af", audioFilters.join(",")]
+    : [];
+
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(
       "ffmpeg",
@@ -189,12 +207,12 @@ async function pipeFramesToFfmpeg(
         "-video_size", `${config.width}x${config.height}`,
         "-framerate", String(config.fps),
         "-i", "pipe:0",
-        // Silent audio track for platform compatibility
-        "-f", "lavfi",
-        "-i", "anullsrc=r=48000:cl=stereo",
+        // Audio input
+        ...audioInputArgs,
         ...videoArgs,
         "-c:a", "aac",
         "-b:a", "128k",
+        ...audioFilterArgs,
         "-shortest",
         "-movflags", "+faststart",
         outputPath,
@@ -266,13 +284,14 @@ async function pipeFramesToFfmpeg(
 export async function encodeMp4Stream(
   frames: AsyncIterable<ComposedFrame>,
   config: OutputConfig,
+  audio?: AudioConfig,
 ): Promise<Buffer> {
   const outputPath = join(tmpdir(), `clipwise-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
 
   try {
     const encoder = await detectVideoEncoder();
     const params = resolveEncodingParams(config);
-    await pipeStreamToFfmpeg(frames, config, params, encoder, outputPath);
+    await pipeStreamToFfmpeg(frames, config, params, encoder, outputPath, audio);
     return await readFile(outputPath);
   } finally {
     await rm(outputPath, { force: true }).catch(() => {});
@@ -290,6 +309,7 @@ async function pipeStreamToFfmpeg(
   params: EncodingParams,
   encoder: VideoEncoder,
   outputPath: string,
+  audio?: AudioConfig,
 ): Promise<void> {
   const videoArgs =
     encoder === "hevc_videotoolbox"
@@ -315,6 +335,21 @@ async function pipeStreamToFfmpeg(
           "-pix_fmt", "yuv420p",
         ];
 
+  // Audio input: use provided file or silent track
+  const audioInputArgs = audio
+    ? ["-i", audio.file]
+    : ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"];
+
+  const audioFilters: string[] = [];
+  if (audio) {
+    if (audio.volume !== 1.0) audioFilters.push(`volume=${audio.volume}`);
+    if (audio.fadeIn > 0) audioFilters.push(`afade=t=in:d=${audio.fadeIn / 1000}`);
+    if (audio.fadeOut > 0) audioFilters.push(`afade=t=out:st=999999:d=${audio.fadeOut / 1000}`);
+  }
+  const audioFilterArgs = audioFilters.length > 0
+    ? ["-af", audioFilters.join(",")]
+    : [];
+
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(
       "ffmpeg",
@@ -325,11 +360,11 @@ async function pipeStreamToFfmpeg(
         "-video_size", `${config.width}x${config.height}`,
         "-framerate", String(config.fps),
         "-i", "pipe:0",
-        "-f", "lavfi",
-        "-i", "anullsrc=r=48000:cl=stereo",
+        ...audioInputArgs,
         ...videoArgs,
         "-c:a", "aac",
         "-b:a", "128k",
+        ...audioFilterArgs,
         "-shortest",
         "-movflags", "+faststart",
         outputPath,
