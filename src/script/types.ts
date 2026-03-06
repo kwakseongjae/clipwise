@@ -145,15 +145,16 @@ export const ZoomEffectSchema = z.object({
   enabled: z.boolean().default(true),
   /**
    * Numeric zoom scale (1.0 = no zoom).  Overridden by `intensity` when set.
-   * Default lowered from 1.8 → 1.35 to match "moderate" intensity.
+   * Default: 1.25 to match "light" intensity (industry standard).
    */
-  scale: z.number().min(1).max(5).default(1.35),
+  scale: z.number().min(1).max(5).default(1.25),
   /**
    * Intensity preset — overrides `scale` when set.
    * Calibrated against Loom (light≈1.25x) and Camtasia (moderate≈1.35x).
+   * Default: "light" (1.25x) — matches industry standard (Screen Studio, Loom).
    */
-  intensity: ZoomIntensitySchema.optional(),
-  duration: z.number().default(600),
+  intensity: ZoomIntensitySchema.default("light"),
+  duration: z.number().default(800),
   easing: z
     .enum(["ease-in-out", "ease-in", "ease-out", "linear"])
     .default("ease-in-out"),
@@ -164,7 +165,7 @@ export const CursorEffectSchema = z.object({
   enabled: z.boolean().default(true),
   size: z.number().default(20),
   color: z.string().default("#000000"),
-  speed: z.enum(["fast", "normal", "slow"]).default("fast"),
+  speed: z.enum(["fast", "normal", "slow"]).default("normal"),
   smoothing: z.boolean().default(true),
   clickEffect: z.boolean().default(true),
   clickColor: z.string().default("rgba(59, 130, 246, 0.3)"),
@@ -195,7 +196,7 @@ export const DeviceFrameSchema = z.object({
 
 export const SpeedRampConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  idleSpeed: z.number().min(0.5).max(8).default(3.0),
+  idleSpeed: z.number().min(0.5).max(8).default(2.0),
   actionSpeed: z.number().min(0.25).max(2).default(0.8),
   transitionFrames: z.number().default(15),
 });
@@ -245,10 +246,11 @@ export type EffectsConfig = z.infer<typeof EffectsConfigSchema>;
 // ─── Output Configuration ───────────────────────────────
 
 export const OutputConfigSchema = z.object({
-  format: z.enum(["gif", "mp4", "webm", "png-sequence"]).default("gif"),
+  format: z.enum(["gif", "mp4", "webm", "png-sequence"]).default("mp4"),
   width: z.number().default(1280),
   height: z.number().default(800),
   fps: z.number().min(1).max(60).default(30),
+  /** @deprecated Use `preset` instead. Will be removed in v0.7. */
   quality: z.number().min(1).max(100).default(80),
   // Encoding preset for MP4 output. Overrides quality when set.
   // social   — optimized for Twitter/X and YouTube (CRF 25, capped bitrate)
@@ -263,15 +265,60 @@ export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 
 // ─── Scenario (Top-Level) ───────────────────────────────
 
+/**
+ * Per-step effects override — allows each step to customize effects
+ * independently from the global effects config.  Only the fields
+ * specified here are merged; everything else falls back to global.
+ */
+export const StepEffectsOverrideSchema = z.object({
+  zoom: ZoomEffectSchema.partial().optional(),
+  cursor: CursorEffectSchema.partial().optional(),
+  background: BackgroundSchema.partial().optional(),
+  deviceFrame: DeviceFrameSchema.partial().optional(),
+  speedRamp: SpeedRampConfigSchema.partial().optional(),
+  keystroke: KeystrokeConfigSchema.partial().optional(),
+  watermark: WatermarkConfigSchema.partial().optional(),
+}).optional();
+
+export type StepEffectsOverride = z.infer<typeof StepEffectsOverrideSchema>;
+
+export const TransitionTypeSchema = z.enum([
+  "none",
+  "fade",
+  "slide-left",
+  "slide-up",
+  "blur",
+]);
+
+export type TransitionType = z.infer<typeof TransitionTypeSchema>;
+
 export const StepSchema = z.object({
   name: z.string().optional(),
   actions: z.array(StepActionSchema),
   captureDelay: z.number().default(300),
   holdDuration: z.number().default(1500),
-  transition: z.enum(["fade", "none"]).default("none"),
+  transition: TransitionTypeSchema.default("none"),
+  /** Per-step effects override — merges with global effects config. */
+  effects: StepEffectsOverrideSchema,
 });
 
 export type Step = z.infer<typeof StepSchema>;
+
+/**
+ * Audio narration configuration — mux an audio file into the MP4 output.
+ */
+export const AudioConfigSchema = z.object({
+  /** Path to the audio file (MP3, WAV, AAC, etc.). */
+  file: z.string().min(1),
+  /** Volume level (0.0 = silent, 1.0 = full). */
+  volume: z.number().min(0).max(1).default(1.0),
+  /** Fade-in duration in milliseconds. */
+  fadeIn: z.number().min(0).default(0),
+  /** Fade-out duration in milliseconds. */
+  fadeOut: z.number().min(0).default(0),
+});
+
+export type AudioConfig = z.infer<typeof AudioConfigSchema>;
 
 export const ScenarioSchema = z.object({
   name: z.string(),
@@ -284,6 +331,8 @@ export const ScenarioSchema = z.object({
     .default({}),
   effects: EffectsConfigSchema.default({}),
   output: OutputConfigSchema.default({}),
+  /** Optional audio narration — muxed into MP4 output. */
+  audio: AudioConfigSchema.optional(),
   steps: z.array(StepSchema).min(1),
 });
 
@@ -316,6 +365,8 @@ export interface CapturedFrame {
   stepIndex?: number;
   actionType?: string;
   keystrokes?: KeystrokeEvent[];
+  /** True when the frame was captured during a scroll action. */
+  isScrolling?: boolean;
 }
 
 export interface ComposedFrame {

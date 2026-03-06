@@ -33,6 +33,8 @@ interface RawFrame {
   timestamp: number;
   /** Step index at capture time — set to this.currentStepIndex when the CDP frame arrives. */
   stepIndex: number;
+  /** True when captured during a scroll action. */
+  isScrolling: boolean;
 }
 
 // ─── Async frame channel (Phase 3-B) ────────────────────────────────────────
@@ -99,13 +101,14 @@ export class ClipwiseRecorder {
    *  each input field's text on a separate line. */
   private keystrokeSessionId = 0;
   private currentStepIndex = 0;
+  private isScrolling = false;
 
   private cursorPosition: { x: number; y: number } = { x: 0, y: 0 };
   private viewport = { width: 1280, height: 800 };
   private deviceScaleFactor = 1;
   private isCapturing = false;
   private targetFps = 30;
-  private cursorSpeed: keyof typeof CURSOR_SPEED_PRESETS = "fast";
+  private cursorSpeed: keyof typeof CURSOR_SPEED_PRESETS = "normal";
   private firstContentTimestamp = 0;
   private pendingResponsePromises: Map<number, Promise<unknown>> = new Map();
 
@@ -143,6 +146,7 @@ export class ClipwiseRecorder {
     this.keystrokeTimeline = [];
     this.keystrokeSessionId = 0;
     this.currentStepIndex = 0;
+    this.isScrolling = false;
     this.cursorPosition = { x: 0, y: 0 };
     this.isCapturing = false;
     this.firstContentTimestamp = 0;
@@ -184,14 +188,15 @@ export class ClipwiseRecorder {
         } else {
           this.lastFrameSignature = Buffer.from(signature); // 복사 후 저장
           const captureTime = Date.now();
-          this.rawFrames.push({ buffer, timestamp: captureTime, stepIndex: this.currentStepIndex });
+          const rawFrame: RawFrame = { buffer, timestamp: captureTime, stepIndex: this.currentStepIndex, isScrolling: this.isScrolling };
+          this.rawFrames.push(rawFrame);
           this.dedupStats.stored++;
 
           // Phase 3-B: push to channel for concurrent composition.
           // Only emit after first content is available (same trim as buildCapturedFrames).
           if (this.frameChannel && this.firstContentTimestamp > 0) {
             const frame = this.buildFrameOnline(
-              { buffer, timestamp: captureTime, stepIndex: this.currentStepIndex },
+              rawFrame,
               this.channelIndex++,
             );
             this.frameChannel.push(frame);
@@ -449,6 +454,7 @@ export class ClipwiseRecorder {
       deviceScaleFactor: this.deviceScaleFactor,
       stepIndex: raw.stepIndex,
       keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
+      isScrolling: raw.isScrolling || undefined,
     };
   }
 
@@ -628,6 +634,7 @@ export class ClipwiseRecorder {
           : null;
 
         const scrollDistance = Math.abs(action.y) + Math.abs(action.x);
+        this.isScrolling = true;
 
         if (action.smooth && scrollDistance > 0) {
           // Drive scroll incrementally so CDP captures a frame for each step.
@@ -675,6 +682,7 @@ export class ClipwiseRecorder {
           });
         }
 
+        this.isScrolling = false;
         await this.waitWithRepaints(120);
         break;
       }
@@ -890,6 +898,7 @@ export class ClipwiseRecorder {
         deviceScaleFactor: this.deviceScaleFactor,
         keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
         stepIndex: raw.stepIndex, // use per-frame step index captured at event time
+        isScrolling: raw.isScrolling || undefined,
       };
     });
   }

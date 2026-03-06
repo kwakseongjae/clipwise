@@ -109,7 +109,10 @@ steps:
         url: "https://example.com"
     captureDelay: 200       # 액션 후 대기(ms)
     holdDuration: 800       # 결과 화면 유지(ms)
-    transition: none        # none | fade
+    transition: none        # none | fade | slide-left | slide-up | blur
+    effects:                # 스텝별 이펙트 오버라이드 (선택)
+      zoom:
+        enabled: false      # 이 스텝에서만 줌 비활성화
 ```
 
 ### 액션
@@ -189,19 +192,25 @@ steps:
 ```yaml
 zoom:
   enabled: true
-  intensity: moderate  # subtle | light | moderate | strong | dramatic
+  intensity: light     # subtle | light | moderate | strong | dramatic
                        # 1.15x  | 1.25x | 1.35x    | 1.5x   | 1.8x
-  # scale: 1.35       # 숫자로 직접 지정할 때 사용 (intensity 미설정 시)
-  duration: 500        # 애니메이션 ms
+  # scale: 1.25       # 숫자로 직접 지정할 때 사용 (intensity 미설정 시)
+  duration: 800        # 애니메이션 ms
+  autoZoom:
+    followCursor: true   # 커서 위치를 따라 뷰포트 패닝
+    transitionDuration: 300
+    padding: 200
 ```
 
 | 강도 | 스케일 | 권장 사용처 |
 |------|--------|------------|
 | `subtle` | 1.15× | 정보 밀도 높은 UI, 큰 화면 |
-| `light` | 1.25× | Loom 스타일 부드러운 줌 (권장) |
-| `moderate` | 1.35× | 균형잡힌 기본값 (Camtasia 수준) |
+| `light` | 1.25× | Loom 스타일 부드러운 줌 **(기본값)** |
+| `moderate` | 1.35× | 균형잡힌 수준 (Camtasia 범위) |
 | `strong` | 1.5× | 명확한 포커스 |
 | `dramatic` | 1.8× | 최대 강조, 단순 UI 전용 |
+
+**스마트 카메라**: 스크롤 중에는 줌이 자동 억제되어 어지러운 움직임을 방지합니다. `followCursor` 활성화 시 초점이 클릭 위치뿐 아니라 커서 위치를 부드럽게 따라갑니다.
 
 ### 커서
 
@@ -211,7 +220,7 @@ zoom:
 cursor:
   enabled: true
   size: 20
-  speed: "fast"        # fast (~72ms) | normal (~144ms) | slow (~288ms)
+  speed: "normal"      # fast (~72ms) | normal (~144ms) | slow (~288ms)
   clickEffect: true
   trail: true
   highlight: true
@@ -282,24 +291,81 @@ watermark:
 ```yaml
 speedRamp:
   enabled: true
-  idleSpeed: 3.0
+  idleSpeed: 2.0        # 유휴 프레임 스킵 배수 (기본: 2.0)
   actionSpeed: 0.8
+```
+
+### 트랜지션
+
+스텝 간 전환 효과를 지정합니다.
+
+```yaml
+steps:
+  - name: "스텝 1"
+    transition: fade        # none | fade | slide-left | slide-up | blur
+    actions: [...]
+```
+
+| 트랜지션 | 설명 |
+|----------|------|
+| `none` | 하드 컷 (기본값) |
+| `fade` | 크로스 디졸브 |
+| `slide-left` | 나가는 프레임 왼쪽 슬라이드, 들어오는 프레임 오른쪽에서 진입 |
+| `slide-up` | 나가는 프레임 위로 슬라이드, 들어오는 프레임 아래에서 진입 |
+| `blur` | 나가는 프레임 블러 처리 + 크로스페이드 |
+
+### 스텝별 이펙트 오버라이드
+
+글로벌 이펙트를 스텝 단위로 오버라이드할 수 있습니다. 설정하지 않은 속성은 글로벌 설정을 상속합니다.
+
+```yaml
+effects:
+  zoom:
+    enabled: true
+    intensity: light
+
+steps:
+  - name: "개요"
+    effects:
+      zoom:
+        enabled: false      # 이 스텝에서만 줌 비활성화
+    actions: [...]
+
+  - name: "상세 보기"
+    effects:
+      zoom:
+        intensity: strong   # 이 스텝에서만 강한 줌
+    actions: [...]
+```
+
+### 오디오 내레이션
+
+출력 MP4에 오디오 파일(MP3, WAV 등)을 첨부합니다.
+
+```yaml
+audio:
+  file: "./narration.mp3"
+  volume: 1.0              # 0.0 - 2.0 (기본: 1.0)
+  fadeIn: 0                 # 페이드인 시간(초)
+  fadeOut: 0                # 페이드아웃 시간(초)
 ```
 
 ## 성능
 
 **Apple M1 Max (10코어)** 기준 — Pulse Dashboard 데모, 44초 @ 30fps, 1280×800:
 
-| 단계 | v0.3.0 | v0.4.0 | v0.5.0 |
-|------|--------|--------|--------|
-| 녹화 | 30.8 s | 31.1 s | 31.1 s |
-| 합성 + 인코딩 | 97.2 s | 60.6 s | 60.6 s |
-| **전체** | **127.9 s** | **91.7 s** | **91.7 s** |
-| 캡처 프레임 수 | 1,303 | 902 | 902 |
+| 단계 | v0.3.0 | v0.4.0 | v0.5.0 | v0.6.0 |
+|------|--------|--------|--------|--------|
+| 녹화 | 30.8 s | 31.1 s | 31.1 s | 31.1 s |
+| 합성 + 인코딩 | 97.2 s | 60.6 s | 60.6 s | 60.6 s |
+| **전체** | **127.9 s** | **91.7 s** | **91.7 s** | **91.7 s** |
+| 캡처 프레임 수 | 1,303 | 902 | 902 | 902 |
 
 v0.4.0 주요 최적화: 동시 스트리밍 파이프라인, 정적 프레임 중복 제거(~33% 건너뜀), 워커별 StaticLayers 캐시, raw RGBA 버퍼 파이프라인.
 
-v0.5.0은 **녹화 품질** 개선에 집중: CSS 트랜지션 억제로 커서 부드러운 이동, 줌 강도 프리셋, 멀티세션 키스트로크 HUD.
+v0.5.0은 **녹화 품질** 개선에 집중: 부드러운 커서, 줌 강도 프리셋, 멀티세션 키스트로크 HUD.
+
+v0.6.0은 **컨벤션 정렬 & 표현력** 강화: 부드러운 기본값 (light 줌, normal 커서 속도), 스텝별 이펙트 오버라이드, 새 트랜지션 (slide, blur), 오디오 내레이션, 스마트 카메라 (스크롤 줌 억제 + 커서 추적 포컬 포인트).
 
 ## 출력 압축
 

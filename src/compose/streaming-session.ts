@@ -78,6 +78,7 @@ export class ConcurrentSession extends EventEmitter {
         }
       })(),
       this.scenario.output,
+      this.scenario.audio,
     );
 
     // Wait for recording to fully complete (always resolves before encoding
@@ -144,6 +145,7 @@ export class StreamingSession extends EventEmitter {
         }
       })(),
       scenario.output,
+      scenario.audio,
     );
   }
 }

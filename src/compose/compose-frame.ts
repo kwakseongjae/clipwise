@@ -237,9 +237,13 @@ export async function composeFrame(
   // inputs near the top of the modal, which is centered in the viewport).
   const scale = ctx.zoomScale;
   if (effects.zoom.enabled && scale > 1) {
-    // Focus point: convert CSS pixel coords to physical pixel coords
-    const rawFocus = frame.clickPosition ??
-      frame.cursorPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 };
+    // Focus point: when followCursor is enabled, always use cursor position
+    // for smooth viewport panning (Screen Studio behavior). Otherwise fall
+    // back to click position → cursor → center.
+    const followCursor = effects.zoom.autoZoom.followCursor;
+    const rawFocus = followCursor
+      ? (frame.cursorPosition ?? frame.clickPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 })
+      : (frame.clickPosition ?? frame.cursorPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 });
     const offset = getFrameOffset(effects.deviceFrame, dpr);
     const focusPoint = {
       x: rawFocus.x * dpr + offset.left,
