@@ -16,9 +16,9 @@
   <div class="nav-links">
     <a href="#features" class="nav-link">기능</a>
     <a href="#quickstart" class="nav-link">빠른 시작</a>
+    <a href="#claude-code" class="nav-link">Claude Code</a>
     <a href="#effects" class="nav-link">이펙트</a>
     <a href="#ai-schema" class="nav-link">AI-Ready</a>
-    <a href="#claude-code" class="nav-link">Claude Code</a>
     <a href="../demo/" class="nav-link">데모</a>
     <div class="nav-lang">
       <a href="../" class="lang-btn">EN</a>
@@ -177,6 +177,146 @@ const mp4      = await encodeMp4(frames, scenario.output);</code></pre>
   </div>
 </section>
 
+<!-- Claude Code 스킬 -->
+<section class="section" id="claude-code">
+  <div class="section-label">Claude Code</div>
+  <h2 class="section-title">AI 기반 워크플로</h2>
+  <p class="section-sub">내장된 <a href="https://claude.com/claude-code" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Claude Code</a> 스킬을 설치하면 자연어로 시나리오를 생성할 수 있습니다. 설치 한 번, 슬래시 커맨드 한 번이면 끝.</p>
+
+  <div class="steps-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">스킬 설치</div>
+        <div class="step-desc">Clipwise 스킬을 <code>.claude/skills/</code> 디렉토리에 복사합니다. 프로젝트당 한 번(또는 글로벌) 실행.</div>
+        <div class="code-block">
+          <div class="code-header">bash</div>
+          <pre><code>npx clipwise install-skill</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Claude Code에서 사용</div>
+        <div class="step-desc">Claude Code 세션에서 <code>/clipwise</code>를 입력하세요. 녹화할 내용을 자연어로 설명하면 됩니다.</div>
+        <div class="code-block">
+          <div class="code-header">Claude Code</div>
+          <pre><code>/clipwise
+> http://localhost:3000 대시보드 데모 녹화해줘
+  — 로그인 클릭, 이메일/비밀번호 입력, 분석 페이지 이동</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">나머지는 Claude가 처리</div>
+        <div class="step-desc">Claude가 YAML 시나리오를 생성하고, <code>npx clipwise validate</code>로 검증한 후, MP4를 녹화합니다 — 전부 자동.</div>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:20px;font-size:14px;color:var(--muted);">clipwise 업그레이드 후 <code>npx clipwise install-skill</code>을 다시 실행하면 최신 스킬로 업데이트됩니다.</p>
+</section>
+
+<!-- 이펙트 -->
+<section class="section" id="effects">
+  <div class="section-label">이펙트</div>
+  <h2 class="section-title">시네마틱 이펙트</h2>
+  <p class="section-sub">모든 이펙트는 선택사항이며 합리적인 기본값이 있습니다. 원하는 스타일로 조합하세요.</p>
+
+  <div class="effects-grid">
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>줌</div>
+      <div class="effect-desc">커서를 따라가며 클릭 대상에 자동으로 줌인합니다. 스마트 카메라: 스크롤 중 줌 자동 억제, 커서 위치 추적. 강도 프리셋(subtle → dramatic) 또는 숫자 스케일 설정.</div>
+      <span class="effect-tag">followCursor</span>
+      <span class="effect-tag">intensity</span>
+      <span class="effect-tag">smart camera</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>zoom:
+  enabled: true
+  intensity: light   # subtle|light|moderate|strong|dramatic
+  duration: 800</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>커서</div>
+      <div class="effect-desc">커스텀 커서 + 클릭 리플 + 트레일 + 하이라이트 + 속도 조절.</div>
+      <span class="effect-tag">trail</span>
+      <span class="effect-tag">highlight</span>
+      <span class="effect-tag">clickEffect</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>cursor:
+  enabled: true
+  speed: "normal"
+  trail: true
+  highlight: true</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>배경</div>
+      <div class="effect-desc">그라디언트/단색 패딩 + 라운드 코너 + 드롭 섀도.</div>
+      <span class="effect-tag">gradient</span>
+      <span class="effect-tag">shadow</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>background:
+  type: gradient
+  value: "linear-gradient(135deg,
+    #667eea 0%, #764ba2 100%)"
+  padding: 48
+  borderRadius: 14</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>디바이스 프레임</div>
+      <div class="effect-desc">브라우저, iPhone, iPad, Android 목업으로 녹화를 감쌉니다.</div>
+      <span class="effect-tag">browser</span>
+      <span class="effect-tag">iphone</span>
+      <span class="effect-tag">android</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>deviceFrame:
+  enabled: true
+  type: browser   # or iphone/ipad/android
+  darkMode: true</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>키스트로크 HUD</div>
+      <div class="effect-desc">타이핑 내용을 화면 하단에 실시간으로 표시합니다. 멀티세션: 각 입력 필드가 별도 줄로 표시 (최대 3줄, 오래된 줄은 흐리게). 기본은 단축키만 — <code>showTyping: true</code>로 일반 타이핑도 표시.</div>
+      <span class="effect-tag">bottom-center</span>
+      <span class="effect-tag">multi-session</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>keystroke:
+  enabled: true
+  showTyping: true   # 기본: false
+  position: bottom-center
+  fontSize: 16
+  fadeAfter: 1500</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>속도 램프</div>
+      <div class="effect-desc">클릭 근처 슬로우모션, 유휴 구간 자동 빨리감기.</div>
+      <span class="effect-tag">idleSpeed</span>
+      <span class="effect-tag">actionSpeed</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>speedRamp:
+  enabled: true
+  idleSpeed: 3.0
+  actionSpeed: 0.8</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- YAML Format -->
 <section class="section" id="yaml">
   <div class="section-label">YAML 형식</div>
@@ -209,7 +349,10 @@ steps:
         url: "https://example.com"
     captureDelay: 200       # 액션 후 대기(ms)
     holdDuration: 800       # 결과 화면 유지(ms)
-    transition: none        # none | fade</code></pre>
+    transition: none        # none | fade | slide-left | slide-up | blur
+    effects:                # 스텝별 이펙트 오버라이드 (선택)
+      zoom:
+        enabled: false      # 이 스텝에서만 줌 비활성화</code></pre>
   </div>
 
   <h3 class="action-group-title">기본 액션</h3>
@@ -295,7 +438,7 @@ steps:
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise 전체 스키마 레퍼런스</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.5.0)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.6.0)
 # 스크립터블 시네마틱 스크린 레코더 — YAML 작성, MP4 출력
 # 설치: npm install -D clipwise
 # 녹화: npx clipwise record scenario.yaml -f mp4
@@ -312,16 +455,25 @@ output:
   format: mp4                    # mp4 | gif | png-sequence
   fps: 30                        # 1-60 (기본: 30)
   preset: balanced               # social | balanced | archive (기본: balanced)
-  # quality: 80                  # 사용 중단 — preset 사용 권장
   width: 1280                    # 기본: 1280
   height: 800                    # 기본: 800
+
+# ─── 오디오 (MP4 전용) ───────────────────────────────
+audio:
+  file: "./narration.mp3"        # MP3, WAV 등
+  volume: 1.0                    # 0.0 - 2.0 (기본: 1.0)
+  fadeIn: 0                      # 초 (기본: 0)
+  fadeOut: 0                     # 초 (기본: 0)
 
 # ─── 스텝 ─────────────────────────────────────────────
 steps:
   - name: "스텝 이름"            # 선택
     captureDelay: 200            # 액션 후 대기 ms (기본: 300)
     holdDuration: 800            # 결과 화면 유지 ms (기본: 1500)
-    transition: none             # none | fade (기본: none)
+    transition: none             # none | fade | slide-left | slide-up | blur
+    effects:                     # 스텝별 오버라이드 (선택, 글로벌 상속)
+      zoom:
+        enabled: false           # 이 스텝에서만 줌 비활성화
     actions:
       # --- 기본 액션 (7종) ---
       - action: navigate
@@ -385,28 +537,30 @@ steps:
 effects:
   zoom:
     enabled: true                # 기본: true
-    scale: 1.8                   # 1-5 (기본: 1.8)
-    duration: 600                # ms (기본: 600)
+    intensity: light             # subtle(1.15x)|light(1.25x)|moderate(1.35x)|strong(1.5x)|dramatic(1.8x)
+    # scale: 1.25               # 숫자 오버라이드 (1-5); intensity 설정 시 무시
+    duration: 800                # ms (기본: 800)
     autoZoom:
-      followCursor: true         # 기본: true
-      maxScale: 2.0              # 기본: 2.0
+      followCursor: true         # 커서 위치를 따라 뷰포트 패닝
+      transitionDuration: 300    # ms (기본: 300)
       padding: 200               # px (기본: 200)
+    # 스마트 카메라: 스크롤 중 줌 자동 억제
   cursor:
     enabled: true                # 기본: true
     size: 20                     # px (기본: 20)
     color: "#000000"             # 기본: #000000
-    speed: fast                  # fast | normal | slow (기본: fast)
+    speed: normal                # fast (~72ms) | normal (~144ms) | slow (~288ms)
     clickEffect: true            # 기본: true
     clickColor: "rgba(59,130,246,0.3)"
-    trail: false                 # 기본: false
-    trailLength: 8               # 기본: 8
-    highlight: false             # 기본: false
-    highlightRadius: 40          # 기본: 40
+    trail: true                  # 기본: true
+    trailLength: 6               # 기본: 6
+    highlight: true              # 기본: true
+    highlightRadius: 35          # 기본: 35
   background:
     type: gradient               # gradient | solid | image (기본: gradient)
     value: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-    padding: 60                  # px (기본: 60)
-    borderRadius: 12             # px (기본: 12)
+    padding: 48                  # px (기본: 48)
+    borderRadius: 14             # px (기본: 14)
     shadow: true                 # 기본: true
   deviceFrame:
     enabled: false               # 기본: false
@@ -414,12 +568,13 @@ effects:
     darkMode: false              # 기본: false
   keystroke:
     enabled: false               # 기본: false
+    showTyping: false            # 타이핑 표시 (기본: false — 단축키만)
     position: bottom-center      # bottom-center | bottom-left | bottom-right
-    fontSize: 18                 # 기본: 18
+    fontSize: 16                 # 기본: 16
     fadeAfter: 1500              # ms (기본: 1500)
   speedRamp:
     enabled: false               # 기본: false
-    idleSpeed: 3.0               # 기본: 3.0
+    idleSpeed: 2.0               # 기본: 2.0
     actionSpeed: 0.8             # 기본: 0.8
   watermark:
     enabled: false               # 기본: false
@@ -435,144 +590,11 @@ effects:
 # - 고정 wait보다 비동기 대기 액션 우선 사용 (더 안정적)
 # - waitForFunction: AI 스트리밍, 동적 콘텐츠, DOM 변화 감지
 # - waitForResponse: 트리거 액션 전에 자동으로 리스너 등록됨
-# - 타이밍: captureDelay 50-100ms, holdDuration 500-800ms (빠른 데모)</code></pre>
-  </div>
-</section>
-
-<!-- Claude Code 스킬 -->
-<section class="section" id="claude-code">
-  <div class="section-label">Claude Code</div>
-  <h2 class="section-title">AI 기반 워크플로</h2>
-  <p class="section-sub">내장된 <a href="https://claude.com/claude-code" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Claude Code</a> 스킬을 설치하면 자연어로 시나리오를 생성할 수 있습니다. 설치 한 번, 슬래시 커맨드 한 번이면 끝.</p>
-
-  <div class="steps-list">
-    <div class="step-item">
-      <div class="step-num">1</div>
-      <div class="step-content">
-        <div class="step-title">스킬 설치</div>
-        <div class="step-desc">Clipwise 스킬을 <code>.claude/skills/</code> 디렉토리에 복사합니다. 프로젝트당 한 번(또는 글로벌) 실행.</div>
-        <div class="code-block">
-          <div class="code-header">bash</div>
-          <pre><code>npx clipwise install-skill</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="step-item">
-      <div class="step-num">2</div>
-      <div class="step-content">
-        <div class="step-title">Claude Code에서 사용</div>
-        <div class="step-desc">Claude Code 세션에서 <code>/clipwise</code>를 입력하세요. 녹화할 내용을 자연어로 설명하면 됩니다.</div>
-        <div class="code-block">
-          <div class="code-header">Claude Code</div>
-          <pre><code>/clipwise
-> http://localhost:3000 대시보드 데모 녹화해줘
-  — 로그인 클릭, 이메일/비밀번호 입력, 분석 페이지 이동</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="step-item">
-      <div class="step-num">3</div>
-      <div class="step-content">
-        <div class="step-title">나머지는 Claude가 처리</div>
-        <div class="step-desc">Claude가 YAML 시나리오를 생성하고, <code>npx clipwise validate</code>로 검증한 후, MP4를 녹화합니다 — 전부 자동.</div>
-      </div>
-    </div>
-  </div>
-
-  <p style="margin-top:20px;font-size:14px;color:var(--muted);">clipwise 업그레이드 후 <code>npx clipwise install-skill</code>을 다시 실행하면 최신 스킬로 업데이트됩니다.</p>
-</section>
-
-<!-- Effects -->
-<section class="section" id="effects">
-  <div class="section-label">이펙트</div>
-  <h2 class="section-title">시네마틱 이펙트</h2>
-  <p class="section-sub">모든 이펙트는 선택사항이며 합리적인 기본값이 있습니다. 원하는 스타일로 조합하세요.</p>
-
-  <div class="effects-grid">
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>줌</div>
-      <div class="effect-desc">커서를 따라가며 클릭 대상에 자동으로 줌인합니다.</div>
-      <span class="effect-tag">followCursor</span>
-      <span class="effect-tag">autoZoom</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>zoom:
-  enabled: true
-  scale: 1.8
-  duration: 500</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>커서</div>
-      <div class="effect-desc">커스텀 커서 + 클릭 리플 + 트레일 + 하이라이트 + 속도 조절.</div>
-      <span class="effect-tag">trail</span>
-      <span class="effect-tag">highlight</span>
-      <span class="effect-tag">clickEffect</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>cursor:
-  enabled: true
-  speed: "fast"
-  trail: true
-  highlight: true</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>배경</div>
-      <div class="effect-desc">그라디언트/단색 패딩 + 라운드 코너 + 드롭 섀도.</div>
-      <span class="effect-tag">gradient</span>
-      <span class="effect-tag">shadow</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>background:
-  type: gradient
-  value: "linear-gradient(135deg,
-    #667eea 0%, #764ba2 100%)"
-  padding: 48
-  borderRadius: 14</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>디바이스 프레임</div>
-      <div class="effect-desc">브라우저, iPhone, iPad, Android 목업으로 녹화를 감쌉니다.</div>
-      <span class="effect-tag">browser</span>
-      <span class="effect-tag">iphone</span>
-      <span class="effect-tag">android</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>deviceFrame:
-  enabled: true
-  type: browser   # or iphone/ipad/android
-  darkMode: true</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>키스트로크 HUD</div>
-      <div class="effect-desc">타이핑 내용을 화면 하단에 실시간으로 표시합니다.</div>
-      <span class="effect-tag">bottom-center</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>keystroke:
-  enabled: true
-  position: bottom-center
-  fontSize: 16
-  fadeAfter: 1500</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>속도 램프</div>
-      <div class="effect-desc">클릭 근처 슬로우모션, 유휴 구간 자동 빨리감기.</div>
-      <span class="effect-tag">idleSpeed</span>
-      <span class="effect-tag">actionSpeed</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>speedRamp:
-  enabled: true
-  idleSpeed: 3.0
-  actionSpeed: 0.8</code></pre>
-      </div>
-    </div>
+# - 타이밍: captureDelay 50-100ms, holdDuration 500-800ms (빠른 데모)
+# - 스텝별 이펙트: 글로벌 이펙트를 스텝 단위로 오버라이드 가능
+# - 스마트 카메라: 스크롤 중 줌 억제; followCursor로 커서 추적
+# - 트랜지션: fade/blur는 시네마틱 컷, slide-left/up은 순차 흐름에 적합
+# - 오디오: MP4 포맷에서만 작동; 파일 경로가 유효해야 함</code></pre>
   </div>
 </section>
 

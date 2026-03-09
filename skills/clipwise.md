@@ -64,7 +64,10 @@ steps: []                 # Array of steps (min 1, first must have navigate)
 - name: "Step name"           # Optional label
   captureDelay: 50            # ms to wait after actions before capturing (50-100 for snappy)
   holdDuration: 700           # ms to hold on result (500-800 for snappy)
-  transition: none            # none | fade
+  transition: none            # none | fade | slide-left | slide-up | blur
+  effects:                    # Per-step effects override (optional)
+    zoom:
+      enabled: false          # Disable zoom for this step only
   actions: []                 # Array of actions
 ```
 
@@ -168,16 +171,15 @@ steps: []                 # Array of steps (min 1, first must have navigate)
 
 ### Effects Configuration
 
-#### Zoom — Adaptive zoom follows cursor on clicks
+#### Zoom — Adaptive zoom follows cursor on clicks (smart camera: auto-suppressed during scroll)
 ```yaml
 zoom:
   enabled: true
-  intensity: moderate         # subtle(1.15x) | light(1.25x) | moderate(1.35x) | strong(1.5x) | dramatic(1.8x)
-  # scale: 1.35              # Or use numeric value (overridden by intensity)
-  duration: 500               # Zoom animation ms
-  easing: ease-in-out         # ease-in-out | ease-in | ease-out | linear
+  intensity: light            # subtle(1.15x) | light(1.25x) | moderate(1.35x) | strong(1.5x) | dramatic(1.8x)
+  # scale: 1.25              # Or use numeric value (overridden by intensity)
+  duration: 800               # Zoom animation ms
   autoZoom:
-    followCursor: true
+    followCursor: true        # Viewport pans to follow cursor position
     transitionDuration: 300
     padding: 200
 ```
@@ -188,7 +190,7 @@ cursor:
   enabled: true
   size: 20
   color: "#000000"
-  speed: fast                 # fast (~72ms) | normal (~144ms) | slow (~288ms)
+  speed: normal               # fast (~72ms) | normal (~144ms) | slow (~288ms)
   smoothing: true
   clickEffect: true
   clickColor: "rgba(59, 130, 246, 0.3)"
@@ -215,17 +217,16 @@ background:
 ```yaml
 deviceFrame:
   enabled: true
-  type: browser               # browser | macbook | iphone | ipad | android | none
+  type: browser               # browser | iphone | ipad | android | none
   darkMode: true
 ```
 
 | Type | Description |
 |------|-------------|
 | browser | macOS browser chrome with traffic lights |
-| macbook | MacBook Pro frame |
-| iphone | iPhone 15 Pro with Dynamic Island |
-| ipad | iPad Pro with camera dot |
-| android | Android with punch-hole camera |
+| iphone | iPhone 15 Pro with Dynamic Island + home bar |
+| ipad | iPad Pro with front camera dot |
+| android | Android generic with punch-hole camera |
 
 #### Keystroke HUD — Shows typed keys on screen
 ```yaml
@@ -260,6 +261,39 @@ speedRamp:
   transitionFrames: 15
 ```
 
+#### Audio Narration — Attach audio to MP4 output
+```yaml
+audio:
+  file: "./narration.mp3"     # MP3, WAV, etc.
+  volume: 1.0                 # 0.0 - 2.0 (default: 1.0)
+  fadeIn: 0                   # Fade-in duration in seconds
+  fadeOut: 0                  # Fade-out duration in seconds
+```
+
+### Per-Step Effects Override
+
+Override global effects on a per-step basis. Unset properties inherit from global config.
+
+```yaml
+effects:
+  zoom:
+    enabled: true
+    intensity: light
+
+steps:
+  - name: "Overview"
+    effects:
+      zoom:
+        enabled: false        # No zoom for this step
+    actions: [...]
+
+  - name: "Detail view"
+    effects:
+      zoom:
+        intensity: strong     # Extra zoom for this step only
+    actions: [...]
+```
+
 ### Output Presets
 
 | Preset | Use case | Approx size (30s) |
@@ -277,6 +311,10 @@ speedRamp:
 5. **Prefer async waits over fixed `wait`**: use `waitForSelector`, `waitForFunction`, `waitForResponse` instead of guessing durations
 6. **Viewport = output**: if viewport and output dimensions differ, output will be scaled (a warning is shown)
 7. **Mobile scenarios**: use `viewport: {width: 390, height: 844}` with `deviceFrame.type: iphone` and `output: {width: 540, height: 1080}`
+8. **Per-step effects**: any effect property can be overridden per step — unset properties inherit from global config
+9. **Smart camera**: zoom is automatically suppressed during scroll actions; `followCursor` pans to cursor position
+10. **Transitions**: use `fade` or `blur` for cinematic cuts between major sections; `slide-left`/`slide-up` for sequential flows
+11. **Audio**: audio file must exist at the specified path; only works with MP4 output format
 
 ## Timing Presets
 
