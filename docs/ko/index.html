@@ -209,7 +209,10 @@ steps:
         url: "https://example.com"
     captureDelay: 200       # 액션 후 대기(ms)
     holdDuration: 800       # 결과 화면 유지(ms)
-    transition: none        # none | fade</code></pre>
+    transition: none        # none | fade | slide-left | slide-up | blur
+    effects:                # 스텝별 이펙트 오버라이드 (선택)
+      zoom:
+        enabled: false      # 이 스텝에서만 줌 비활성화</code></pre>
   </div>
 
   <h3 class="action-group-title">기본 액션</h3>
@@ -295,7 +298,7 @@ steps:
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise 전체 스키마 레퍼런스</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.5.0)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.6.0)
 # 스크립터블 시네마틱 스크린 레코더 — YAML 작성, MP4 출력
 # 설치: npm install -D clipwise
 # 녹화: npx clipwise record scenario.yaml -f mp4
@@ -312,16 +315,25 @@ output:
   format: mp4                    # mp4 | gif | png-sequence
   fps: 30                        # 1-60 (기본: 30)
   preset: balanced               # social | balanced | archive (기본: balanced)
-  # quality: 80                  # 사용 중단 — preset 사용 권장
   width: 1280                    # 기본: 1280
   height: 800                    # 기본: 800
+
+# ─── 오디오 (MP4 전용) ───────────────────────────────
+audio:
+  file: "./narration.mp3"        # MP3, WAV 등
+  volume: 1.0                    # 0.0 - 2.0 (기본: 1.0)
+  fadeIn: 0                      # 초 (기본: 0)
+  fadeOut: 0                     # 초 (기본: 0)
 
 # ─── 스텝 ─────────────────────────────────────────────
 steps:
   - name: "스텝 이름"            # 선택
     captureDelay: 200            # 액션 후 대기 ms (기본: 300)
     holdDuration: 800            # 결과 화면 유지 ms (기본: 1500)
-    transition: none             # none | fade (기본: none)
+    transition: none             # none | fade | slide-left | slide-up | blur
+    effects:                     # 스텝별 오버라이드 (선택, 글로벌 상속)
+      zoom:
+        enabled: false           # 이 스텝에서만 줌 비활성화
     actions:
       # --- 기본 액션 (7종) ---
       - action: navigate
@@ -385,28 +397,30 @@ steps:
 effects:
   zoom:
     enabled: true                # 기본: true
-    scale: 1.8                   # 1-5 (기본: 1.8)
-    duration: 600                # ms (기본: 600)
+    intensity: light             # subtle(1.15x)|light(1.25x)|moderate(1.35x)|strong(1.5x)|dramatic(1.8x)
+    # scale: 1.25               # 숫자 오버라이드 (1-5); intensity 설정 시 무시
+    duration: 800                # ms (기본: 800)
     autoZoom:
-      followCursor: true         # 기본: true
-      maxScale: 2.0              # 기본: 2.0
+      followCursor: true         # 커서 위치를 따라 뷰포트 패닝
+      transitionDuration: 300    # ms (기본: 300)
       padding: 200               # px (기본: 200)
+    # 스마트 카메라: 스크롤 중 줌 자동 억제
   cursor:
     enabled: true                # 기본: true
     size: 20                     # px (기본: 20)
     color: "#000000"             # 기본: #000000
-    speed: fast                  # fast | normal | slow (기본: fast)
+    speed: normal                # fast (~72ms) | normal (~144ms) | slow (~288ms)
     clickEffect: true            # 기본: true
     clickColor: "rgba(59,130,246,0.3)"
-    trail: false                 # 기본: false
-    trailLength: 8               # 기본: 8
-    highlight: false             # 기본: false
-    highlightRadius: 40          # 기본: 40
+    trail: true                  # 기본: true
+    trailLength: 6               # 기본: 6
+    highlight: true              # 기본: true
+    highlightRadius: 35          # 기본: 35
   background:
     type: gradient               # gradient | solid | image (기본: gradient)
     value: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-    padding: 60                  # px (기본: 60)
-    borderRadius: 12             # px (기본: 12)
+    padding: 48                  # px (기본: 48)
+    borderRadius: 14             # px (기본: 14)
     shadow: true                 # 기본: true
   deviceFrame:
     enabled: false               # 기본: false
@@ -414,12 +428,13 @@ effects:
     darkMode: false              # 기본: false
   keystroke:
     enabled: false               # 기본: false
+    showTyping: false            # 타이핑 표시 (기본: false — 단축키만)
     position: bottom-center      # bottom-center | bottom-left | bottom-right
-    fontSize: 18                 # 기본: 18
+    fontSize: 16                 # 기본: 16
     fadeAfter: 1500              # ms (기본: 1500)
   speedRamp:
     enabled: false               # 기본: false
-    idleSpeed: 3.0               # 기본: 3.0
+    idleSpeed: 2.0               # 기본: 2.0
     actionSpeed: 0.8             # 기본: 0.8
   watermark:
     enabled: false               # 기본: false
@@ -435,7 +450,11 @@ effects:
 # - 고정 wait보다 비동기 대기 액션 우선 사용 (더 안정적)
 # - waitForFunction: AI 스트리밍, 동적 콘텐츠, DOM 변화 감지
 # - waitForResponse: 트리거 액션 전에 자동으로 리스너 등록됨
-# - 타이밍: captureDelay 50-100ms, holdDuration 500-800ms (빠른 데모)</code></pre>
+# - 타이밍: captureDelay 50-100ms, holdDuration 500-800ms (빠른 데모)
+# - 스텝별 이펙트: 글로벌 이펙트를 스텝 단위로 오버라이드 가능
+# - 스마트 카메라: 스크롤 중 줌 억제; followCursor로 커서 추적
+# - 트랜지션: fade/blur는 시네마틱 컷, slide-left/up은 순차 흐름에 적합
+# - 오디오: MP4 포맷에서만 작동; 파일 경로가 유효해야 함</code></pre>
   </div>
 </section>
 
@@ -493,14 +512,15 @@ effects:
   <div class="effects-grid">
     <div class="effect-card">
       <div class="effect-title"><span class="effect-dot"></span>줌</div>
-      <div class="effect-desc">커서를 따라가며 클릭 대상에 자동으로 줌인합니다.</div>
+      <div class="effect-desc">커서를 따라가며 클릭 대상에 자동으로 줌인합니다. 스마트 카메라: 스크롤 중 줌 자동 억제, 커서 위치 추적. 강도 프리셋(subtle → dramatic) 또는 숫자 스케일 설정.</div>
       <span class="effect-tag">followCursor</span>
-      <span class="effect-tag">autoZoom</span>
+      <span class="effect-tag">intensity</span>
+      <span class="effect-tag">smart camera</span>
       <div class="code-block" style="margin-top:10px;">
         <pre><code>zoom:
   enabled: true
-  scale: 1.8
-  duration: 500</code></pre>
+  intensity: light   # subtle|light|moderate|strong|dramatic
+  duration: 800</code></pre>
       </div>
     </div>
 
@@ -513,7 +533,7 @@ effects:
       <div class="code-block" style="margin-top:10px;">
         <pre><code>cursor:
   enabled: true
-  speed: "fast"
+  speed: "normal"
   trail: true
   highlight: true</code></pre>
       </div>
@@ -550,11 +570,13 @@ effects:
 
     <div class="effect-card">
       <div class="effect-title"><span class="effect-dot"></span>키스트로크 HUD</div>
-      <div class="effect-desc">타이핑 내용을 화면 하단에 실시간으로 표시합니다.</div>
+      <div class="effect-desc">타이핑 내용을 화면 하단에 실시간으로 표시합니다. 멀티세션: 각 입력 필드가 별도 줄로 표시 (최대 3줄, 오래된 줄은 흐리게). 기본은 단축키만 — <code>showTyping: true</code>로 일반 타이핑도 표시.</div>
       <span class="effect-tag">bottom-center</span>
+      <span class="effect-tag">multi-session</span>
       <div class="code-block" style="margin-top:10px;">
         <pre><code>keystroke:
   enabled: true
+  showTyping: true   # 기본: false
   position: bottom-center
   fontSize: 16
   fadeAfter: 1500</code></pre>
