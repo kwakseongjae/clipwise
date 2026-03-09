@@ -16,9 +16,9 @@
   <div class="nav-links">
     <a href="#features" class="nav-link">Features</a>
     <a href="#quickstart" class="nav-link">Quick Start</a>
+    <a href="#claude-code" class="nav-link">Claude Code</a>
     <a href="#effects" class="nav-link">Effects</a>
     <a href="#ai-schema" class="nav-link">AI-Ready</a>
-    <a href="#claude-code" class="nav-link">Claude Code</a>
     <a href="./demo/" class="nav-link">Demo</a>
     <div class="nav-lang">
       <span class="lang-btn active">EN</span>
@@ -174,6 +174,146 @@ const session  = await recorder.record(scenario);
 const renderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
 const frames   = await renderer.composeAll(session.frames);
 const mp4      = await encodeMp4(frames, scenario.output);</code></pre>
+  </div>
+</section>
+
+<!-- Claude Code Skill -->
+<section class="section" id="claude-code">
+  <div class="section-label">Claude Code</div>
+  <h2 class="section-title">AI-powered workflow</h2>
+  <p class="section-sub">Install the built-in <a href="https://claude.com/claude-code" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Claude Code</a> skill and generate scenarios with natural language. One command to install, one slash command to use.</p>
+
+  <div class="steps-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Install the skill</div>
+        <div class="step-desc">Copies the Clipwise skill to your <code>.claude/skills/</code> directory. Run once per project (or globally).</div>
+        <div class="code-block">
+          <div class="code-header">bash</div>
+          <pre><code>npx clipwise install-skill</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Use in Claude Code</div>
+        <div class="step-desc">Type <code>/clipwise</code> in any Claude Code session. Describe what you want to record in plain language.</div>
+        <div class="code-block">
+          <div class="code-header">Claude Code</div>
+          <pre><code>/clipwise
+> Record a demo of my dashboard at http://localhost:3000
+  — click login, type credentials, navigate to analytics</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Claude handles the rest</div>
+        <div class="step-desc">Claude generates a complete YAML scenario, validates it with <code>npx clipwise validate</code>, then records the MP4 — all automatically.</div>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:20px;font-size:14px;color:var(--muted);">After upgrading clipwise, re-run <code>npx clipwise install-skill</code> to get the latest skill.</p>
+</section>
+
+<!-- Effects -->
+<section class="section" id="effects">
+  <div class="section-label">Effects</div>
+  <h2 class="section-title">Cinematic effects</h2>
+  <p class="section-sub">All effects are optional with sensible defaults. Mix and match for your style.</p>
+
+  <div class="effects-grid">
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>Zoom</div>
+      <div class="effect-desc">Adaptive zoom follows the cursor and zooms in on click targets automatically. Smart camera: auto-suppressed during scroll, focal point follows cursor position. Use intensity presets (subtle → dramatic) or set a numeric scale.</div>
+      <span class="effect-tag">followCursor</span>
+      <span class="effect-tag">intensity</span>
+      <span class="effect-tag">smart camera</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>zoom:
+  enabled: true
+  intensity: light   # subtle|light|moderate|strong|dramatic
+  duration: 800</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>Cursor</div>
+      <div class="effect-desc">Custom cursor with click ripple, trail, glow highlight, and speed control.</div>
+      <span class="effect-tag">trail</span>
+      <span class="effect-tag">highlight</span>
+      <span class="effect-tag">clickEffect</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>cursor:
+  enabled: true
+  speed: "normal"
+  trail: true
+  highlight: true</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>Background</div>
+      <div class="effect-desc">Gradient or solid padding with rounded corners and drop shadow.</div>
+      <span class="effect-tag">gradient</span>
+      <span class="effect-tag">shadow</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>background:
+  type: gradient
+  value: "linear-gradient(135deg,
+    #667eea 0%, #764ba2 100%)"
+  padding: 48
+  borderRadius: 14</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>Device Frame</div>
+      <div class="effect-desc">Wrap recordings in a device mockup — browser, iPhone, iPad, or Android.</div>
+      <span class="effect-tag">browser</span>
+      <span class="effect-tag">iphone</span>
+      <span class="effect-tag">android</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>deviceFrame:
+  enabled: true
+  type: browser   # or iphone/ipad/android
+  darkMode: true</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>Keystroke HUD</div>
+      <div class="effect-desc">Shows what was typed at the bottom of the screen. Multi-session: each input field gets its own line (up to 3, oldest dimmed). Off by default — set <code>showTyping: true</code> to enable.</div>
+      <span class="effect-tag">bottom-center</span>
+      <span class="effect-tag">multi-session</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>keystroke:
+  enabled: true
+  showTyping: true   # default: false
+  position: bottom-center
+  fontSize: 16
+  fadeAfter: 1500</code></pre>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <div class="effect-title"><span class="effect-dot"></span>Speed Ramp</div>
+      <div class="effect-desc">Slows down near clicks and speeds up idle sections automatically.</div>
+      <span class="effect-tag">idleSpeed</span>
+      <span class="effect-tag">actionSpeed</span>
+      <div class="code-block" style="margin-top:10px;">
+        <pre><code>speedRamp:
+  enabled: true
+  idleSpeed: 3.0
+  actionSpeed: 0.8</code></pre>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -455,146 +595,6 @@ effects:
 # - Smart camera: zoom suppressed during scroll; followCursor pans to cursor
 # - Transitions: fade/blur for cinematic cuts; slide-left/up for sequences
 # - Audio: only works with MP4 format; file must exist at specified path</code></pre>
-  </div>
-</section>
-
-<!-- Claude Code Skill -->
-<section class="section" id="claude-code">
-  <div class="section-label">Claude Code</div>
-  <h2 class="section-title">AI-powered workflow</h2>
-  <p class="section-sub">Install the built-in <a href="https://claude.com/claude-code" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Claude Code</a> skill and generate scenarios with natural language. One command to install, one slash command to use.</p>
-
-  <div class="steps-list">
-    <div class="step-item">
-      <div class="step-num">1</div>
-      <div class="step-content">
-        <div class="step-title">Install the skill</div>
-        <div class="step-desc">Copies the Clipwise skill to your <code>.claude/skills/</code> directory. Run once per project (or globally).</div>
-        <div class="code-block">
-          <div class="code-header">bash</div>
-          <pre><code>npx clipwise install-skill</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="step-item">
-      <div class="step-num">2</div>
-      <div class="step-content">
-        <div class="step-title">Use in Claude Code</div>
-        <div class="step-desc">Type <code>/clipwise</code> in any Claude Code session. Describe what you want to record in plain language.</div>
-        <div class="code-block">
-          <div class="code-header">Claude Code</div>
-          <pre><code>/clipwise
-> Record a demo of my dashboard at http://localhost:3000
-  — click login, type credentials, navigate to analytics</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="step-item">
-      <div class="step-num">3</div>
-      <div class="step-content">
-        <div class="step-title">Claude handles the rest</div>
-        <div class="step-desc">Claude generates a complete YAML scenario, validates it with <code>npx clipwise validate</code>, then records the MP4 — all automatically.</div>
-      </div>
-    </div>
-  </div>
-
-  <p style="margin-top:20px;font-size:14px;color:var(--muted);">After upgrading clipwise, re-run <code>npx clipwise install-skill</code> to get the latest skill.</p>
-</section>
-
-<!-- Effects -->
-<section class="section" id="effects">
-  <div class="section-label">Effects</div>
-  <h2 class="section-title">Cinematic effects</h2>
-  <p class="section-sub">All effects are optional with sensible defaults. Mix and match for your style.</p>
-
-  <div class="effects-grid">
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>Zoom</div>
-      <div class="effect-desc">Adaptive zoom follows the cursor and zooms in on click targets automatically. Smart camera: auto-suppressed during scroll, focal point follows cursor position. Use intensity presets (subtle → dramatic) or set a numeric scale.</div>
-      <span class="effect-tag">followCursor</span>
-      <span class="effect-tag">intensity</span>
-      <span class="effect-tag">smart camera</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>zoom:
-  enabled: true
-  intensity: light   # subtle|light|moderate|strong|dramatic
-  duration: 800</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>Cursor</div>
-      <div class="effect-desc">Custom cursor with click ripple, trail, glow highlight, and speed control.</div>
-      <span class="effect-tag">trail</span>
-      <span class="effect-tag">highlight</span>
-      <span class="effect-tag">clickEffect</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>cursor:
-  enabled: true
-  speed: "normal"
-  trail: true
-  highlight: true</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>Background</div>
-      <div class="effect-desc">Gradient or solid padding with rounded corners and drop shadow.</div>
-      <span class="effect-tag">gradient</span>
-      <span class="effect-tag">shadow</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>background:
-  type: gradient
-  value: "linear-gradient(135deg,
-    #667eea 0%, #764ba2 100%)"
-  padding: 48
-  borderRadius: 14</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>Device Frame</div>
-      <div class="effect-desc">Wrap recordings in a device mockup — browser, iPhone, iPad, or Android.</div>
-      <span class="effect-tag">browser</span>
-      <span class="effect-tag">iphone</span>
-      <span class="effect-tag">android</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>deviceFrame:
-  enabled: true
-  type: browser   # or iphone/ipad/android
-  darkMode: true</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>Keystroke HUD</div>
-      <div class="effect-desc">Shows what was typed at the bottom of the screen. Multi-session: each input field gets its own line (up to 3, oldest dimmed). Off by default — set <code>showTyping: true</code> to enable.</div>
-      <span class="effect-tag">bottom-center</span>
-      <span class="effect-tag">multi-session</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>keystroke:
-  enabled: true
-  showTyping: true   # default: false
-  position: bottom-center
-  fontSize: 16
-  fadeAfter: 1500</code></pre>
-      </div>
-    </div>
-
-    <div class="effect-card">
-      <div class="effect-title"><span class="effect-dot"></span>Speed Ramp</div>
-      <div class="effect-desc">Slows down near clicks and speeds up idle sections automatically.</div>
-      <span class="effect-tag">idleSpeed</span>
-      <span class="effect-tag">actionSpeed</span>
-      <div class="code-block" style="margin-top:10px;">
-        <pre><code>speedRamp:
-  enabled: true
-  idleSpeed: 3.0
-  actionSpeed: 0.8</code></pre>
-      </div>
-    </div>
   </div>
 </section>
 

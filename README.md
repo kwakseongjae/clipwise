@@ -80,6 +80,37 @@ const frames = await renderer.composeAll(session.frames);
 const mp4 = await encodeMp4(frames, scenario.output);
 ```
 
+## Claude Code Skill
+
+Clipwise ships a built-in [Claude Code](https://claude.com/claude-code) skill. Once installed, type `/clipwise` in Claude Code to generate YAML scenarios, validate, and record — all through natural language.
+
+### Install the skill
+
+```bash
+npx clipwise install-skill
+```
+
+This copies the skill file to `.claude/skills/clipwise.md` (project-level if `.claude/` exists, otherwise `~/.claude/skills/`).
+
+### Usage
+
+In any Claude Code session:
+
+```
+/clipwise
+> Record a demo of my dashboard at http://localhost:3000
+  — click the login button, type credentials, navigate to analytics
+```
+
+Claude will:
+1. Generate a complete `clipwise.yaml` scenario
+2. Run `npx clipwise validate` to check for errors
+3. Run `npx clipwise record` to produce the MP4
+
+### Update
+
+Re-run `npx clipwise install-skill` after upgrading clipwise to get the latest skill.
+
 ## YAML Scenario Format
 
 A scenario has 4 sections: metadata, effects, output, and steps.
@@ -482,37 +513,6 @@ npx clipwise record my-scenario.yaml -f mp4 -o ./output
 ### Writing Scenarios with AI
 
 See [PROMPTS.md](./PROMPTS.md) for a ready-to-use prompt template. Copy-paste it to ChatGPT or Claude with your site URL, and get a working YAML scenario back.
-
-## Claude Code Skill
-
-Clipwise ships a built-in [Claude Code](https://claude.com/claude-code) skill. Once installed, type `/clipwise` in Claude Code to generate YAML scenarios, validate, and record — all through natural language.
-
-### Install the skill
-
-```bash
-npx clipwise install-skill
-```
-
-This copies the skill file to `.claude/skills/clipwise.md` (project-level if `.claude/` exists, otherwise `~/.claude/skills/`).
-
-### Usage
-
-In any Claude Code session:
-
-```
-/clipwise
-> Record a demo of my dashboard at http://localhost:3000
-  — click the login button, type credentials, navigate to analytics
-```
-
-Claude will:
-1. Generate a complete `clipwise.yaml` scenario
-2. Run `npx clipwise validate` to check for errors
-3. Run `npx clipwise record` to produce the MP4
-
-### Update
-
-Re-run `npx clipwise install-skill` after upgrading clipwise to get the latest skill.
 
 ## GitHub Pages
 

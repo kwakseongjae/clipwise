@@ -80,6 +80,37 @@ const frames = await renderer.composeAll(session.frames);
 const mp4 = await encodeMp4(frames, scenario.output);
 ```
 
+## Claude Code 스킬
+
+Clipwise에는 [Claude Code](https://claude.com/claude-code) 스킬이 내장되어 있습니다. 설치 후 Claude Code에서 `/clipwise`를 입력하면 자연어로 YAML 시나리오 생성, 검증, 녹화까지 한 번에 할 수 있습니다.
+
+### 스킬 설치
+
+```bash
+npx clipwise install-skill
+```
+
+`.claude/skills/clipwise.md`에 스킬 파일이 복사됩니다 (`.claude/` 디렉토리가 있으면 프로젝트 레벨, 없으면 `~/.claude/skills/`에 설치).
+
+### 사용법
+
+Claude Code 세션에서:
+
+```
+/clipwise
+> http://localhost:3000 대시보드 데모 녹화해줘
+  — 로그인 버튼 클릭, 이메일/비밀번호 입력, 분석 페이지 이동
+```
+
+Claude가 자동으로:
+1. `clipwise.yaml` 시나리오 생성
+2. `npx clipwise validate`로 검증
+3. `npx clipwise record`로 MP4 녹화
+
+### 업데이트
+
+clipwise 업그레이드 후 `npx clipwise install-skill`을 다시 실행하면 최신 스킬로 업데이트됩니다.
+
 ## YAML 시나리오 형식
 
 시나리오는 4개 섹션으로 구성됩니다: 메타데이터, 이펙트, 출력, 스텝.
@@ -402,37 +433,6 @@ VideoToolbox는 런타임에 자동 감지되며, 사용 불가 시 `libx264`로
 ## AI로 시나리오 작성
 
 [PROMPTS.md](./PROMPTS.md)에 바로 사용할 수 있는 AI 프롬프트 템플릿이 있습니다. ChatGPT나 Claude에 복붙하고 내 사이트 URL만 넣으면 YAML 시나리오를 생성해줍니다.
-
-## Claude Code 스킬
-
-Clipwise에는 [Claude Code](https://claude.com/claude-code) 스킬이 내장되어 있습니다. 설치 후 Claude Code에서 `/clipwise`를 입력하면 자연어로 YAML 시나리오 생성, 검증, 녹화까지 한 번에 할 수 있습니다.
-
-### 스킬 설치
-
-```bash
-npx clipwise install-skill
-```
-
-`.claude/skills/clipwise.md`에 스킬 파일이 복사됩니다 (`.claude/` 디렉토리가 있으면 프로젝트 레벨, 없으면 `~/.claude/skills/`에 설치).
-
-### 사용법
-
-Claude Code 세션에서:
-
-```
-/clipwise
-> http://localhost:3000 대시보드 데모 녹화해줘
-  — 로그인 버튼 클릭, 이메일/비밀번호 입력, 분석 페이지 이동
-```
-
-Claude가 자동으로:
-1. `clipwise.yaml` 시나리오 생성
-2. `npx clipwise validate`로 검증
-3. `npx clipwise record`로 MP4 녹화
-
-### 업데이트
-
-clipwise 업그레이드 후 `npx clipwise install-skill`을 다시 실행하면 최신 스킬로 업데이트됩니다.
 
 ## GitHub Pages
 
