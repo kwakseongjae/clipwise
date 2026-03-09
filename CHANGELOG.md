@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-03-09
+
+### Fixed
+- **Docs/Skill v0.6.0 alignment** — AI schema reference in static pages and Claude Code skill updated from v0.5.0 to v0.6.0 (was missing new transitions, audio narration, per-step effects override, smart camera)
+- **KO static page zoom** — fixed outdated `scale: 1.8` → `intensity: light` in zoom effect card
+- **KO keystroke HUD card** — added missing `showTyping` and `multi-session` tags (EN parity)
+- **Skill file** — removed non-existent `macbook` device type, added 4 new critical rules (#8–#11)
+
+### Changed
+- **Section ordering** — Claude Code Skill moved higher in README (after Usage) and static pages (after Quick Start), following popular repo conventions (Prettier, ESLint, Tailwind)
+- **Navigation links** in EN/KO static pages reordered to match new section flow
+
+---
+
+## [0.6.0] - 2026-03-07
+
+### Added
+- **Per-step effects override** — override any global effect on a per-step basis; unset properties inherit from global config
+- **New transitions** — `slide-left`, `slide-up`, `blur` (in addition to `none` and `fade`)
+- **Audio narration** — attach MP3/WAV audio to MP4 output with volume, fadeIn, fadeOut controls
+- **Smart camera** — zoom automatically suppressed during scroll actions to avoid disorienting motion; `followCursor` pans focal point to cursor position (not just click targets)
+
+### Changed
+- **Gentler defaults** — zoom intensity default changed to `light` (1.25×, was `moderate`), cursor speed default changed to `normal` (~144ms, was `fast`)
+- **Cursor trail/highlight** enabled by default
+
+---
+
+## [0.5.2] - 2026-03-03
+
+### Added
+- **Claude Code skill** — built-in skill file (`skills/clipwise.md`) for Claude Code integration
+- **`install-skill` CLI command** — `npx clipwise install-skill` copies the skill to `.claude/skills/`
+
+---
+
+## [0.5.1] - 2026-03-01
+
+### Fixed
+- **Record command** now respects YAML `output.format` field correctly
+- **Demo GIF** re-recorded in high quality
+
+---
+
+## [0.5.0] - 2026-02-28
+
+### Added
+- **Smooth cursor movement** — bezier interpolation with automatic CSS transition suppression for pixel-perfect cursor animation
+- **Zoom intensity presets** — `subtle` (1.15×), `light` (1.25×), `moderate` (1.35×), `strong` (1.5×), `dramatic` (1.8×) replace raw numeric scale
+- **Multi-session keystroke HUD** — each input field gets its own line (up to 3 recent sessions, oldest dimmed at top)
+- **`showTyping` option** for keystroke HUD — industry-standard default shows shortcuts only; set `showTyping: true` to also show regular typed text
+
+---
+
 ## [0.4.0] - 2026-02-26
 
 ### Added
@@ -112,6 +166,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI: `record`, `demo`, `init`, `validate`
 - Programmatic API: `ClipwiseRecorder`, `CanvasRenderer`, `encodeMp4`
 
+[0.6.1]: https://github.com/kwakseongjae/clipwise/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/kwakseongjae/clipwise/compare/v0.5.2...v0.6.0
+[0.5.2]: https://github.com/kwakseongjae/clipwise/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/kwakseongjae/clipwise/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/kwakseongjae/clipwise/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kwakseongjae/clipwise/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kwakseongjae/clipwise/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/kwakseongjae/clipwise/compare/v0.2.0...v0.2.1
