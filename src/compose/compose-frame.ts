@@ -11,10 +11,15 @@ import {
   renderClickEffect,
   renderCursorTrail,
   renderCursorHighlight,
+  buildCursorOverlay,
+  buildClickRippleOverlay,
+  buildHighlightOverlay,
+  buildTrailOverlay,
+  type OverlayDescriptor,
 } from "../effects/cursor.js";
 import { applyZoom } from "../effects/zoom.js";
 import { applyBackground, buildBackdropBuffer } from "../effects/background.js";
-import { renderKeystrokeHud } from "../effects/keystroke.js";
+import { renderKeystrokeHud, buildKeystrokeOverlay } from "../effects/keystroke.js";
 import { renderWatermark, buildWatermarkSvg } from "../effects/watermark.js";
 
 // ─── Static Layer Cache ──────────────────────────────────────────────────────
@@ -91,6 +96,12 @@ export interface FrameContext {
   cursorTrail: Array<{ x: number; y: number }>;
   /** When present, skip redundant per-frame SVG generation for background/watermark/device-frame. */
   staticLayers?: StaticLayers;
+  /**
+   * Interpolated focus point override (CSS viewport coordinates).
+   * When set, zoom uses this instead of per-frame click/cursor position,
+   * enabling smooth panning between adjacent click targets within a zone.
+   */
+  focusOverride?: { x: number; y: number };
 }
 
 /**
@@ -162,88 +173,108 @@ export async function composeFrame(
 
   // Pre-compute the pixel offset that the device frame injects at the top-left.
   // Cursor positions come from CDP in CSS viewport coordinates (no frame offset).
-  // Steps 2-5 render directly onto the extended buffer, so we must shift every
-  // cursor/click coordinate by this amount before passing it to the renderers.
-  // (Step 7 zoom already applies the same offset independently.)
+  // Overlay positions must shift by this amount to land on content, not chrome bar.
   const frameOffset = getFrameOffset(effects.deviceFrame, dpr);
-  // Helper: CSS-space position → CSS-space position shifted by frame offset
-  const withFrameOffset = (pos: { x: number; y: number }) => ({
+
+  // ── Batched pre-zoom pipeline ─────────────────────────────────────────
+  // Steps 1-5 (device frame + cursor effects) are merged into a single Sharp
+  // call.  Each overlay is collected as a descriptor (SVG buffer + position)
+  // and applied via one .composite([...]) invocation, eliminating 4 intermediate
+  // PNG encode/decode cycles (~12-16ms/frame savings).
+
+  const sl = context?.staticLayers;
+  const preZoomOverlays: OverlayDescriptor[] = [];
+  const hasBrowserChrome = effects.deviceFrame.enabled
+    && effects.deviceFrame.type === "browser"
+    && sl?.browserChromePng;
+
+  // Compute extended dimensions upfront so overlay positions are correct
+  const extTop = hasBrowserChrome ? sl!.browserChromeHeight : 0;
+  const extWidth = width;
+  const extHeight = height + extTop;
+
+  // 1. Browser chrome overlay (composited after extend)
+  if (hasBrowserChrome) {
+    preZoomOverlays.push({ input: sl!.browserChromePng!, left: 0, top: 0 });
+  }
+
+  // Frame offset helper for extended canvas
+  const withExtFrameOffset = (pos: { x: number; y: number }) => ({
     x: pos.x + frameOffset.left / Math.max(1, dpr),
     y: pos.y + frameOffset.top  / Math.max(1, dpr),
   });
 
-  // 1. Device frame (SVG constants are scaled by dpr internally)
-  if (effects.deviceFrame.enabled) {
-    const sl = ctx.staticLayers;
-    if (sl?.browserChromePng && effects.deviceFrame.type === "browser") {
-      // Fast path: pre-rasterized chrome bar — one Sharp call (extend + composite)
-      // instead of two (create blank canvas + composite).
-      buffer = await sharp(buffer)
-        .extend({
-          top: sl.browserChromeHeight,
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        })
-        .composite([{ input: sl.browserChromePng, left: 0, top: 0 }])
-        .png()
-        .toBuffer();
-    } else {
-      buffer = await applyDeviceFrame(buffer, effects.deviceFrame, width, height, dpr);
-    }
-    const meta = await sharp(buffer).metadata();
-    width = meta.width ?? width;
-    height = meta.height ?? height;
-  }
-
-  // 2. Cursor highlight (shift by frame offset so it lands on content, not chrome bar)
+  // 2. Cursor highlight
   if (effects.cursor.enabled && effects.cursor.highlight && frame.cursorPosition) {
-    buffer = await renderCursorHighlight(
-      buffer, withFrameOffset(frame.cursorPosition), effects.cursor, width, height, dpr,
+    const overlay = buildHighlightOverlay(
+      withExtFrameOffset(frame.cursorPosition), effects.cursor, extWidth, extHeight, dpr,
     );
+    if (overlay) preZoomOverlays.push(overlay);
   }
 
-  // 3. Cursor trail (shift each trail position by frame offset)
+  // 3. Cursor trail
   if (effects.cursor.enabled && effects.cursor.trail && ctx.cursorTrail.length >= 2) {
-    buffer = await renderCursorTrail(
-      buffer, ctx.cursorTrail.map(withFrameOffset), effects.cursor, width, height, dpr,
+    const overlay = buildTrailOverlay(
+      ctx.cursorTrail.map(withExtFrameOffset), effects.cursor, extWidth, extHeight, dpr,
     );
+    if (overlay) preZoomOverlays.push(overlay);
   }
 
-  // 4. Cursor rendering (shift by frame offset)
+  // 4. Cursor arrow
   if (effects.cursor.enabled && frame.cursorPosition) {
-    buffer = await renderCursor(
-      buffer, withFrameOffset(frame.cursorPosition), effects.cursor, width, height, dpr,
+    const overlay = buildCursorOverlay(
+      withExtFrameOffset(frame.cursorPosition), effects.cursor, extWidth, extHeight, dpr,
     );
+    if (overlay) preZoomOverlays.push(overlay);
   }
 
-  // 5. Click ripple effect (shift by frame offset)
+  // 5. Click ripple
   if (effects.cursor.enabled && effects.cursor.clickEffect && frame.clickPosition) {
     const progress = ctx.clickProgress ?? frame.clickProgress ?? 0.5;
-    buffer = await renderClickEffect(
-      buffer, withFrameOffset(frame.clickPosition), effects.cursor, progress, width, height, dpr,
+    const overlay = buildClickRippleOverlay(
+      withExtFrameOffset(frame.clickPosition), effects.cursor, progress, extWidth, extHeight, dpr,
     );
+    if (overlay) preZoomOverlays.push(overlay);
   }
 
-  // 6. Zoom (adaptive, follows cursor)
-  // With dpr=2, the source buffer is 2x resolution → zoom crops from 2x more pixels
-  // for dramatically sharper output after downscaling to output dimensions.
-  //
-  // NOTE: Keystroke HUD is intentionally applied AFTER zoom (step 7) so that it
+  // Execute: single Sharp call for device frame extension + all overlays
+  if (hasBrowserChrome || preZoomOverlays.length > 0) {
+    let pipeline = sharp(buffer);
+    if (hasBrowserChrome) {
+      pipeline = pipeline.extend({
+        top: extTop,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      });
+    }
+    if (preZoomOverlays.length > 0) {
+      pipeline = pipeline.composite(preZoomOverlays);
+    }
+    buffer = await pipeline.png().toBuffer();
+    width = extWidth;
+    height = extHeight;
+  } else if (effects.deviceFrame.enabled) {
+    // Non-browser device frame (iphone, ipad, android) — keep existing path
+    buffer = await applyDeviceFrame(buffer, effects.deviceFrame, width, height, dpr);
+    const devMeta = await sharp(buffer).metadata();
+    width = devMeta.width ?? width;
+    height = devMeta.height ?? height;
+  }
+
+  // ── Zoom ────────────────────────────────────────────────────────────────
+  // NOTE: Keystroke HUD is intentionally applied AFTER zoom so that it
   // is always fully visible regardless of where the zoom crops the frame.
-  // Rendering the HUD before zoom would cause it to be clipped at the bottom
-  // whenever the focus point is in the upper half of the viewport (e.g. modal
-  // inputs near the top of the modal, which is centered in the viewport).
   const scale = ctx.zoomScale;
   if (effects.zoom.enabled && scale > 1) {
-    // Focus point: when followCursor is enabled, always use cursor position
-    // for smooth viewport panning (Screen Studio behavior). Otherwise fall
-    // back to click position → cursor → center.
-    const followCursor = effects.zoom.autoZoom.followCursor;
-    const rawFocus = followCursor
-      ? (frame.cursorPosition ?? frame.clickPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 })
-      : (frame.clickPosition ?? frame.cursorPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 });
+    // focusOverride: pre-computed interpolated position from calculateFrameContexts().
+    // When set, produces smooth panning between click targets within a zone
+    // instead of jumping between per-frame clickPosition values.
+    const rawFocus = ctx.focusOverride
+      ?? (effects.zoom.autoZoom.followCursor
+        ? (frame.cursorPosition ?? frame.clickPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 })
+        : (frame.clickPosition ?? frame.cursorPosition ?? { x: frame.viewport.width / 2, y: frame.viewport.height / 2 }));
     const offset = getFrameOffset(effects.deviceFrame, dpr);
     const focusPoint = {
       x: rawFocus.x * dpr + offset.left,
@@ -252,17 +283,14 @@ export async function composeFrame(
     buffer = await applyZoom(buffer, focusPoint, scale, width, height);
   }
 
-  // 7. Keystroke HUD — rendered AFTER zoom so it is never cropped out.
-  // Zoom resizes back to the original (width × height) dimensions, so dpr
-  // and position calculations remain identical to the pre-zoom buffer.
+  // ── Keystroke HUD (post-zoom) ───────────────────────────────────────────
   if (effects.keystroke.enabled && frame.keystrokes) {
     buffer = await renderKeystrokeHud(
       buffer, frame.keystrokes, frame.timestamp, effects.keystroke, width, height, dpr,
     );
   }
 
-  // 8. Background
-  const sl = ctx.staticLayers;
+  // 8. Background (sl is already defined above from context?.staticLayers)
   if (sl) {
     // Fast path: composite the zoomed frame onto the pre-built backdrop (raw RGBA).
     // Eliminates per-frame background SVG + shadow SVG generation and 1 PNG encode.

@@ -35,6 +35,10 @@ interface RawFrame {
   stepIndex: number;
   /** True when captured during a scroll action. */
   isScrolling: boolean;
+  /** True when captured during a smartWait action. */
+  isWaitingPhase: boolean;
+  /** Display speed multiplier for smartWait frames. */
+  displaySpeed?: number;
 }
 
 // ─── Async frame channel (Phase 3-B) ────────────────────────────────────────
@@ -102,6 +106,13 @@ export class ClipwiseRecorder {
   private keystrokeSessionId = 0;
   private currentStepIndex = 0;
   private isScrolling = false;
+  private isWaitingPhase = false;
+  private currentDisplaySpeed?: number;
+
+  /** Tracks active infinite CSS animations (spinners/loaders). Count > 0 → loading state. */
+  private activeLoaderAnimations = new Set<string>();
+  /** Whether auto-loader detection is active (derived from smartSpeed.enabled). */
+  private loaderDetectionEnabled = false;
 
   private cursorPosition: { x: number; y: number } = { x: 0, y: 0 };
   private viewport = { width: 1280, height: 800 };
@@ -132,6 +143,8 @@ export class ClipwiseRecorder {
     };
     this.targetFps = scenario.output.fps;
     this.cursorSpeed = scenario.effects.cursor.speed;
+    // Enable passive loader detection when smartSpeed is active
+    this.loaderDetectionEnabled = scenario.effects.smartSpeed?.enabled ?? false;
 
     this.browser = await chromium.launch({ headless: true });
     this.context = await this.browser.newContext({
@@ -147,6 +160,9 @@ export class ClipwiseRecorder {
     this.keystrokeSessionId = 0;
     this.currentStepIndex = 0;
     this.isScrolling = false;
+    this.isWaitingPhase = false;
+    this.currentDisplaySpeed = undefined;
+    this.activeLoaderAnimations.clear();
     this.cursorPosition = { x: 0, y: 0 };
     this.isCapturing = false;
     this.firstContentTimestamp = 0;
@@ -177,18 +193,28 @@ export class ClipwiseRecorder {
         // 직전 프레임과 앞부분 시그니처 비교.
         // CDP PNG 인코더는 동일 화면 내용에 대해 결정론적으로 동일 bytes를 생성하므로
         // prefix 비교만으로 중복 여부를 신뢰성 있게 판단할 수 있다.
+        //
+        // Skip dedup during waiting phases: spinners/loaders change pixels in the
+        // center of the screen but the top-2048-byte signature stays identical,
+        // causing all loader frames to be discarded.  smartSpeed handles compression
+        // of these frames instead, so dedup can safely be bypassed.
         const signature = buffer.subarray(0, DEDUP_SIGNATURE_BYTES);
-        const isDuplicate =
-          this.lastFrameSignature !== null &&
-          this.lastFrameSignature.length === signature.length &&
-          this.lastFrameSignature.equals(signature);
+        const isInLoadingState = this.isWaitingPhase
+          || (this.loaderDetectionEnabled && this.activeLoaderAnimations.size > 0);
+        const isDuplicate = !isInLoadingState
+          && this.lastFrameSignature !== null
+          && this.lastFrameSignature.length === signature.length
+          && this.lastFrameSignature.equals(signature);
 
         if (isDuplicate) {
           this.dedupStats.skipped++;
         } else {
           this.lastFrameSignature = Buffer.from(signature); // 복사 후 저장
           const captureTime = Date.now();
-          const rawFrame: RawFrame = { buffer, timestamp: captureTime, stepIndex: this.currentStepIndex, isScrolling: this.isScrolling };
+          // Auto-detect loading state: explicit smartWait OR active loader animations
+          const isLoading = this.isWaitingPhase
+            || (this.loaderDetectionEnabled && this.activeLoaderAnimations.size > 0);
+          const rawFrame: RawFrame = { buffer, timestamp: captureTime, stepIndex: this.currentStepIndex, isScrolling: this.isScrolling, isWaitingPhase: isLoading, displaySpeed: this.currentDisplaySpeed };
           this.rawFrames.push(rawFrame);
           this.dedupStats.stored++;
 
@@ -211,6 +237,29 @@ export class ClipwiseRecorder {
           .catch(() => {});
       },
     );
+
+    // ── Auto loader detection via CDP Animation domain ─────────────────
+    // Passively listens for CSS animations with infinite iterations and
+    // rotation/pulse keyframes.  When such animations are active, frames
+    // are automatically marked as loading state for smartSpeed processing.
+    if (this.loaderDetectionEnabled) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.cdpClient.on("Animation.animationStarted", (event: any) => {
+        const anim = event.animation;
+        const iterations = anim?.source?.iterations ?? 0;
+        const isInfinite = iterations === -1 || iterations > 100;
+        const animName = anim?.name || "";
+        const isLoaderPattern = /spin|rotate|pulse|bounce|loading|skeleton|shimmer/i.test(animName);
+        if (anim?.type === "CSSAnimation" && isInfinite && isLoaderPattern) {
+          this.activeLoaderAnimations.add(anim.id);
+        }
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.cdpClient.on("Animation.animationCanceled", (event: any) => {
+        this.activeLoaderAnimations.delete(event.id);
+      });
+      await this.cdpClient.send("Animation.enable").catch(() => {});
+    }
 
     // PNG format captures lossless frames — eliminates JPEG DCT block artifacts
     // that accumulate through the multi-layer effects pipeline. Memory usage
@@ -455,6 +504,8 @@ export class ClipwiseRecorder {
       stepIndex: raw.stepIndex,
       keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
       isScrolling: raw.isScrolling || undefined,
+      isWaitingPhase: raw.isWaitingPhase || undefined,
+      displaySpeed: raw.displaySpeed,
     };
   }
 
@@ -613,6 +664,12 @@ export class ClipwiseRecorder {
         //   NOT visible in the signature.  Without a forced repaint the dedup
         //   logic treats every keystroke frame as a duplicate of the previous
         //   one and discards it — making typing appear to happen in an instant.
+        // Track the last click registration time so we can refresh it during
+        // long typing sequences.  Without periodic refresh, the single initial
+        // click expires after CLICK_EFFECT_DURATION_MS (500ms) and zoom releases
+        // mid-typing.  Refreshing every 400ms keeps the click zone alive
+        // throughout, and mergeClickZones() merges them into one continuous zone.
+        let lastClickRefresh = Date.now();
         let typeRepaintToggle = false;
         for (const char of action.text) {
           await this.page.keyboard.type(char);
@@ -624,7 +681,24 @@ export class ClipwiseRecorder {
             sessionId: currentSessionId,
           });
           await new Promise((resolve) => setTimeout(resolve, action.delay));
+
+          // Refresh click event before the previous one expires
+          const now = Date.now();
+          if (now - lastClickRefresh >= 400) {
+            this.clickTimeline.push({
+              position: { ...inputTarget },
+              timestamp: now,
+            });
+            lastClickRefresh = now;
+          }
         }
+
+        // Final click at typing end to ensure the zoom zone extends
+        // through the hold duration after the last character.
+        this.clickTimeline.push({
+          position: { ...inputTarget },
+          timestamp: Date.now(),
+        });
         break;
       }
 
@@ -739,6 +813,68 @@ export class ClipwiseRecorder {
         const pending = this.pendingResponsePromises.get(actionIndex);
         if (pending) {
           await pending;
+        }
+        break;
+      }
+
+      case "smartWait": {
+        // Mark frames captured during this wait as waiting phase
+        this.isWaitingPhase = true;
+        this.currentDisplaySpeed = action.displaySpeed;
+
+        try {
+          // Build the condition promise
+          let conditionPromise: Promise<unknown>;
+          switch (action.until) {
+            case "networkIdle":
+              conditionPromise = this.page.waitForLoadState("networkidle", { timeout: action.timeout });
+              break;
+            case "selector":
+              conditionPromise = action.selector
+                ? this.page.locator(action.selector).first().waitFor({ state: "visible", timeout: action.timeout })
+                : Promise.resolve();
+              break;
+            case "domStable":
+              conditionPromise = this.page.waitForFunction(
+                () => new Promise<boolean>((resolve) => {
+                  let timer: ReturnType<typeof setTimeout>;
+                  const observer = new MutationObserver(() => {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => { observer.disconnect(); resolve(true); }, 500);
+                  });
+                  observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+                  timer = setTimeout(() => { observer.disconnect(); resolve(true); }, 500);
+                }),
+                undefined,
+                { timeout: action.timeout },
+              );
+              break;
+            default:
+              conditionPromise = Promise.resolve();
+          }
+
+          // Run forced repaints IN PARALLEL with the condition wait.
+          // Without this, the dedup signature (top 2048 bytes of PNG) doesn't
+          // change when a spinner is in the center of the screen, causing ALL
+          // spinner frames to be discarded as duplicates.  The repaint loop
+          // toggles a 1px element at the top of the viewport, making each
+          // frame unique so CDP captures them for the fast-forward effect.
+          let waitDone = false;
+          const repaintLoop = (async () => {
+            let toggle = false;
+            while (!waitDone && this.isCapturing && this.page) {
+              await this.forceRepaint(toggle);
+              toggle = !toggle;
+              await new Promise((r) => setTimeout(r, REPAINT_INTERVAL_MS));
+            }
+          })();
+
+          await conditionPromise;
+          waitDone = true;
+          await repaintLoop;
+        } finally {
+          this.isWaitingPhase = false;
+          this.currentDisplaySpeed = undefined;
         }
         break;
       }
@@ -899,6 +1035,8 @@ export class ClipwiseRecorder {
         keystrokes: frameKeystrokes.length > 0 ? frameKeystrokes : undefined,
         stepIndex: raw.stepIndex, // use per-frame step index captured at event time
         isScrolling: raw.isScrolling || undefined,
+        isWaitingPhase: raw.isWaitingPhase || undefined,
+        displaySpeed: raw.displaySpeed,
       };
     });
   }

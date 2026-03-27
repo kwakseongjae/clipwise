@@ -169,6 +169,7 @@ steps:
 | `waitForURL` | `url`, `timeout?` | `timeout: 15000` | Wait for URL match |
 | `waitForFunction` | `expression`, `polling?`, `timeout?` | `polling: "raf"`, `timeout: 30000` | Wait for JS expression to be truthy |
 | `waitForResponse` | `url`, `status?`, `timeout?` | `timeout: 30000` | Wait for network response (URL substring match) |
+| `smartWait` | `until`, `selector?`, `timeout?`, `displaySpeed?` | `until: "networkIdle"`, `timeout: 30000`, `displaySpeed: 8` | Smart wait — records real wait, auto-speeds in output |
 
 **`waitUntil`** options: `"load"`, `"domcontentloaded"`, `"networkidle"` (default)
 **`state`** options: `"visible"` (default), `"attached"`, `"hidden"`
@@ -227,6 +228,7 @@ zoom:
                        # 1.15x  | 1.25x | 1.35x    | 1.5x   | 1.8x
   # scale: 1.25       # Override with a numeric value instead of intensity
   duration: 800        # Zoom animation ms
+  easing: spring       # spring (natural) | ease-in-out (default)
   autoZoom:
     followCursor: true   # Viewport pans to follow cursor position
     transitionDuration: 300
@@ -241,7 +243,7 @@ zoom:
 | `strong` | 1.5× | Clear focus, some context sacrificed |
 | `dramatic` | 1.8× | Maximum emphasis, sparse UIs only |
 
-**Smart camera**: Zoom is automatically suppressed during scroll actions to avoid disorienting motion. When `followCursor` is enabled, the focal point smoothly pans to follow cursor position (not just click targets).
+**Smart camera**: Zoom is automatically suppressed during scroll actions to avoid disorienting motion. When `followCursor` is enabled, the focal point smoothly pans to follow cursor position (not just click targets). **Zone-aware zoom** (v0.7.0) merges nearby clicks into continuous zoom zones — no more jarring zoom-out/zoom-in between adjacent interactions. **Spring easing** (`easing: spring`) produces natural, Screen Studio-like camera motion with faster initial response and smooth deceleration.
 
 ### Cursor
 
@@ -329,6 +331,32 @@ speedRamp:
   actionSpeed: 0.8      # Slow factor near clicks
 ```
 
+### Smart Speed <sup>v0.7.0</sup>
+
+Content-aware speed control. Automatically compresses loading/wait periods while keeping meaningful content at normal speed. Detects CSS loading spinners via CDP Animation domain — no configuration needed.
+
+```yaml
+effects:
+  smartSpeed:
+    enabled: true
+    waitSpeed: 4            # Speed multiplier for wait/loading periods
+    idleSpeed: 4            # Speed multiplier for idle frames
+    transitionDuration: 500 # Ease-in/out duration (ms) — loader is visible before fast-forward
+
+steps:
+  - name: "Submit form"
+    actions:
+      - action: click
+        selector: "#submit-btn"
+      - action: smartWait          # Records real API wait, auto-compresses in output
+        until: selector            # networkIdle | selector | domStable
+        selector: ".success-toast"
+        timeout: 30000
+        displaySpeed: 4            # 4x fast-forward (spinner visibly spins faster)
+```
+
+**How it works**: `smartWait` records the actual wait (API calls, loading states) at full quality, then smartSpeed compresses those frames in the output. Loading spinners are **auto-detected** via CDP — frames during active `@keyframes spin/rotate/pulse` animations are automatically marked for compression.
+
 ### Transitions
 
 Control how steps transition to each other.
@@ -388,18 +416,23 @@ audio:
 
 Measured on **Apple M1 Max (10 cores)** — Pulse Dashboard demo, 44s @ 30fps, 1280×800:
 
-| Stage | v0.3.0 | v0.4.0 | v0.5.0 | v0.6.0 |
-|-------|--------|--------|--------|--------|
-| Recording | 30.8 s | 31.1 s | 31.1 s | 31.1 s |
-| Compose + Encode | 97.2 s | 60.6 s | 60.6 s | 60.6 s |
-| **Total** | **127.9 s** | **91.7 s** | **91.7 s** | **91.7 s** |
-| Frames captured | 1,303 | 902 | 902 | 902 |
+| Stage | v0.3.0 | v0.4.0 | v0.5.0 | v0.6.0 | **v0.7.0** |
+|-------|--------|--------|--------|--------|--------|
+| Recording | 30.8 s | 31.1 s | 31.1 s | 31.1 s | 58.3 s¹ |
+| Compose + Encode | 97.2 s | 60.6 s | 60.6 s | 60.6 s | **39.6 s** |
+| **Total** | **127.9 s** | **91.7 s** | **91.7 s** | **91.7 s** | **97.8 s**¹ |
+| Frames captured | 1,303 | 902 | 902 | 902 | 1,388 |
+| **ms/frame** | **69** | **67** | **67** | **67** | **23** |
+
+¹ v0.7.0 recording is longer due to more scenario steps (23 vs 20) and zoom-sustaining click events during typing. Compose throughput improved **3×** (69 → 23 ms/frame) via Sharp pipeline batching.
 
 Key optimisations in v0.4.0: concurrent streaming pipeline, static frame deduplication (~33% skipped), per-worker StaticLayers cache, and raw RGBA buffer pipeline.
 
 v0.5.0 focuses on **recording quality**: smooth cursor, zoom intensity presets, multi-session keystroke HUD.
 
 v0.6.0 focuses on **convention alignment & expressiveness**: gentler defaults (light zoom, normal cursor speed), per-step effects override, new transitions (slide, blur), audio narration, and smart camera (scroll-aware zoom suppression + cursor-following focal point).
+
+v0.7.0 focuses on **quality leap**: spring physics zoom, zone-aware zoom continuity, focus point interpolation, `smartWait` + content-aware `smartSpeed`, auto loader detection (CDP Animation), HEVC 10-bit encoding (`-tune animation`), AV1 codec support, and Sharp pipeline batching (5→1 calls/frame).
 
 ## Output Compression
 
@@ -410,6 +443,7 @@ output:
   format: mp4
   fps: 30
   preset: social      # social | balanced | archive
+  codec: auto          # auto | h264 | hevc | av1
 ```
 
 | Preset | libx264 CRF | HEVC VideoToolbox q:v | Target use case |

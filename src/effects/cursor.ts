@@ -3,6 +3,133 @@ import type { EffectsConfig } from "../script/types.js";
 
 type CursorEffect = EffectsConfig["cursor"];
 
+// ─── Overlay Descriptors ────────────────────────────────────────────────────
+// Lightweight objects describing an SVG overlay and its position.
+// Used by composeFrame() to batch multiple overlays into a single Sharp call,
+// eliminating intermediate PNG encode/decode cycles.
+
+export interface OverlayDescriptor {
+  input: Buffer;
+  left: number;
+  top: number;
+}
+
+/**
+ * Build a cursor arrow overlay descriptor without applying it to a frame.
+ */
+export function buildCursorOverlay(
+  position: { x: number; y: number },
+  config: CursorEffect,
+  frameWidth: number,
+  frameHeight: number,
+  dpr = 1,
+): OverlayDescriptor | null {
+  if (!config.enabled) return null;
+
+  const size = Math.round(config.size * dpr);
+  const cursorSvg = buildCursorSvg(size, config.color);
+  const tipOffsetX = Math.round((4 / 24) * size);
+  const px = Math.round(position.x * dpr);
+  const py = Math.round(position.y * dpr);
+  const left = Math.max(0, Math.min(px - tipOffsetX, frameWidth - size));
+  const top  = Math.max(0, Math.min(py, frameHeight - size));
+
+  return { input: Buffer.from(cursorSvg), left, top };
+}
+
+/**
+ * Build a click ripple overlay descriptor without applying it to a frame.
+ */
+export function buildClickRippleOverlay(
+  position: { x: number; y: number },
+  config: CursorEffect,
+  progress: number,
+  frameWidth: number,
+  frameHeight: number,
+  dpr = 1,
+): OverlayDescriptor | null {
+  if (!config.enabled || !config.clickEffect) return null;
+
+  const radius = config.clickRadius * dpr;
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const rippleSvg = buildClickRippleSvg(radius, config.clickColor, clampedProgress);
+  const rippleSize = Math.ceil(radius * 2 + 4);
+  const px = Math.round(position.x * dpr);
+  const py = Math.round(position.y * dpr);
+  const left = Math.max(0, Math.min(px - Math.round(rippleSize / 2), frameWidth - rippleSize));
+  const top = Math.max(0, Math.min(py - Math.round(rippleSize / 2), frameHeight - rippleSize));
+
+  return { input: Buffer.from(rippleSvg), left, top };
+}
+
+/**
+ * Build a cursor highlight (Screen Studio glow) overlay descriptor.
+ */
+export function buildHighlightOverlay(
+  position: { x: number; y: number },
+  config: CursorEffect,
+  frameWidth: number,
+  frameHeight: number,
+  dpr = 1,
+): OverlayDescriptor | null {
+  if (!config.enabled || !config.highlight) return null;
+
+  const r = config.highlightRadius * dpr;
+  const size = Math.ceil(r * 2 + 4);
+  const cx = size / 2;
+  const cy = size / 2;
+
+  const highlightSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" shape-rendering="geometricPrecision">
+    <defs>
+      <radialGradient id="glow">
+        <stop offset="0%" stop-color="${config.highlightColor}" />
+        <stop offset="70%" stop-color="${config.highlightColor}" />
+        <stop offset="100%" stop-color="transparent" />
+      </radialGradient>
+    </defs>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#glow)" />
+  </svg>`;
+
+  const px = Math.round(position.x * dpr);
+  const py = Math.round(position.y * dpr);
+  const left = Math.max(0, Math.min(px - Math.round(cx), frameWidth - size));
+  const top = Math.max(0, Math.min(py - Math.round(cy), frameHeight - size));
+
+  return { input: Buffer.from(highlightSvg), left, top };
+}
+
+/**
+ * Build a cursor trail overlay descriptor.
+ */
+export function buildTrailOverlay(
+  positions: Array<{ x: number; y: number }>,
+  config: CursorEffect,
+  frameWidth: number,
+  frameHeight: number,
+  dpr = 1,
+): OverlayDescriptor | null {
+  if (!config.enabled || !config.trail || positions.length < 2) return null;
+
+  const segments: string[] = [];
+  for (let i = 1; i < positions.length; i++) {
+    const opacity = (i / positions.length) * 0.6;
+    const strokeWidth = (1 + (i / positions.length) * 2) * dpr;
+    const p1 = positions[i - 1];
+    const p2 = positions[i];
+    segments.push(
+      `<line x1="${p1.x * dpr}" y1="${p1.y * dpr}" x2="${p2.x * dpr}" y2="${p2.y * dpr}"
+            stroke="${config.trailColor}" stroke-width="${strokeWidth.toFixed(1)}"
+            stroke-linecap="round" opacity="${opacity.toFixed(3)}"/>`,
+    );
+  }
+
+  const trailSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision">
+    ${segments.join("\n    ")}
+  </svg>`;
+
+  return { input: Buffer.from(trailSvg), left: 0, top: 0 };
+}
+
 /**
  * Build an SVG string for a pointer cursor arrow.
  */

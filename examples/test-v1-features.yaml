@@ -1,0 +1,149 @@
+name: "v1 Feature Test — Loader Detection + Long Typing + API Wait"
+description: "줌 연속성, 로더 자동 감지, smartWait API 시뮬레이션, 긴 타이핑 줌 유지 검증"
+
+viewport:
+  width: 1280
+  height: 800
+
+effects:
+  zoom:
+    enabled: true
+    intensity: moderate
+    duration: 500
+    easing: spring
+    autoZoom:
+      followCursor: true
+  cursor:
+    enabled: true
+    size: 20
+    speed: normal
+    clickEffect: true
+    clickColor: "rgba(108, 92, 231, 0.35)"
+    trail: true
+    trailLength: 6
+    highlight: true
+  background:
+    type: gradient
+    value: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)"
+    padding: 48
+    borderRadius: 14
+    shadow: true
+  deviceFrame:
+    enabled: true
+    type: browser
+    darkMode: true
+  smartSpeed:
+    enabled: true
+    waitSpeed: 4             # 로더 4배속 — 스피너가 빠르게 도는 게 보임
+    idleSpeed: 4
+    transitionDuration: 500  # 시작/끝 0.5초 정상 속도 유지
+  keystroke:
+    enabled: true
+    showTyping: true
+    position: bottom-center
+
+output:
+  format: mp4
+  width: 1280
+  height: 800
+  fps: 30
+  preset: balanced
+
+steps:
+  - name: "Load dashboard"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: navigate
+        url: "demo-site/dashboard.html"
+        waitUntil: load
+
+  # ── Zone-aware zoom: 같은 영역 연속 클릭 → 줌 유지 + 패닝 ──
+  - name: "Click Monthly tab"
+    captureDelay: 80
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#tab-monthly"
+
+  - name: "Click Daily tab (same zone → smooth pan)"
+    captureDelay: 80
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#tab-daily"
+
+  # ── 긴 타이핑 줌 유지 테스트 ──
+  - name: "Long typing test"
+    captureDelay: 50
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#search-input"
+      - action: type
+        selector: "#search-input"
+        text: "quarterly revenue analysis report"
+        delay: 45
+
+  - name: "Scroll to projects"
+    captureDelay: 100
+    holdDuration: 500
+    transition: fade
+    actions:
+      - action: scroll
+        y: 420
+        smooth: true
+
+  # ── 모달 + 긴 타이핑 + API 콜 시뮬레이션 ──
+  - name: "Open modal"
+    captureDelay: 100
+    holdDuration: 500
+    actions:
+      - action: click
+        selector: "#btn-new-project"
+      - action: smartWait
+        until: selector
+        selector: "#project-name"
+        timeout: 5000
+        displaySpeed: 6
+
+  - name: "Type project name (long)"
+    captureDelay: 80
+    holdDuration: 500
+    actions:
+      - action: type
+        selector: "#project-name"
+        text: "Q1 Revenue Analytics Dashboard Redesign"
+        delay: 45
+
+  - name: "Type description (long)"
+    captureDelay: 80
+    holdDuration: 500
+    actions:
+      - action: type
+        selector: "#project-desc"
+        text: "Complete overhaul of the analytics pipeline and dashboard UI"
+        delay: 40
+
+  # ── API 콜 시뮬레이션: 5초 로딩 스피너 → 자동 감지 → 배속 ──
+  # ── API 콜 시뮬레이션: 20초 로딩 스피너 → 자동 감지 → 4배속 ──
+  - name: "Create project (20s API call)"
+    captureDelay: 100
+    holdDuration: 800
+    actions:
+      - action: click
+        selector: "#btn-create"
+      # 20초 API 대기: 스피너가 4배속으로 돌아가는 게 보여야 함
+      - action: smartWait
+        until: selector
+        selector: ".toast"
+        timeout: 30000
+        displaySpeed: 4
+
+  - name: "Final overview"
+    captureDelay: 100
+    holdDuration: 1000
+    actions:
+      - action: scroll
+        y: -800
+        smooth: true

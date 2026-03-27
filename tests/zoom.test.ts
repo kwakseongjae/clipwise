@@ -4,7 +4,11 @@ import {
   calculateAdaptiveZoom,
   buildZoomClickLookup,
   calculateAdaptiveZoomFromLookup,
+  calculateAdaptiveZoomFromZones,
   calculateAdaptiveZoomInWindow,
+  mergeClickZones,
+  springEasing,
+  applyZoomEasing,
 } from "../src/effects/zoom.js";
 
 describe("calculateZoomSequence", () => {
@@ -165,5 +169,95 @@ describe("calculateAdaptiveZoomInWindow", () => {
       const actual = calculateAdaptiveZoomInWindow(windowFrames, lo, i, maxScale, transitionFrames);
       expect(actual).toBeCloseTo(expected, 10);
     }
+  });
+});
+
+// ─── Spring Easing ──────────────────────────────────────────────────────────
+
+describe("springEasing", () => {
+  it("starts at 0 and ends near 1", () => {
+    expect(springEasing(0)).toBeCloseTo(0, 5);
+    expect(springEasing(1)).toBeCloseTo(1, 2);
+  });
+
+  it("is monotonically increasing (no overshoot)", () => {
+    let prev = 0;
+    for (let t = 0; t <= 1; t += 0.01) {
+      const val = springEasing(t);
+      expect(val).toBeGreaterThanOrEqual(prev - 1e-10);
+      prev = val;
+    }
+  });
+
+  it("has faster initial response than cubic", () => {
+    const springVal = springEasing(0.2);
+    const cubicVal = applyZoomEasing(0.2, "cubic");
+    expect(springVal).toBeGreaterThan(cubicVal);
+  });
+});
+
+// ─── Zone-Aware Zoom ────────────────────────────────────────────────────────
+
+describe("mergeClickZones", () => {
+  it("returns empty for no clicks", () => {
+    expect(mergeClickZones([], 10)).toEqual([]);
+  });
+
+  it("creates single zone for one click", () => {
+    expect(mergeClickZones([5], 10)).toEqual([{ start: 5, end: 5 }]);
+  });
+
+  it("merges close clicks into one zone", () => {
+    const zones = mergeClickZones([5, 8, 12], 5);
+    expect(zones).toHaveLength(1);
+    expect(zones[0]).toEqual({ start: 5, end: 12 });
+  });
+
+  it("splits distant clicks into separate zones", () => {
+    const zones = mergeClickZones([5, 8, 30], 5);
+    expect(zones).toHaveLength(2);
+    expect(zones[0]).toEqual({ start: 5, end: 8 });
+    expect(zones[1]).toEqual({ start: 30, end: 30 });
+  });
+
+  it("handles gap exactly equal to mergeGap", () => {
+    const zones = mergeClickZones([10, 15], 5);
+    expect(zones).toHaveLength(1);
+  });
+});
+
+describe("calculateAdaptiveZoomFromZones", () => {
+  it("returns 1 when no zones", () => {
+    expect(calculateAdaptiveZoomFromZones([], 5, 2.0, 10)).toBe(1);
+  });
+
+  it("returns maxScale inside a zone", () => {
+    const zones = [{ start: 5, end: 15 }];
+    expect(calculateAdaptiveZoomFromZones(zones, 10, 2.0, 10)).toBe(2.0);
+  });
+
+  it("returns 1 far outside any zone", () => {
+    const zones = [{ start: 5, end: 15 }];
+    expect(calculateAdaptiveZoomFromZones(zones, 100, 2.0, 10)).toBe(1);
+  });
+
+  it("eases in approaching a zone", () => {
+    const zones = [{ start: 10, end: 20 }];
+    const val = calculateAdaptiveZoomFromZones(zones, 5, 2.0, 10);
+    expect(val).toBeGreaterThan(1);
+    expect(val).toBeLessThan(2.0);
+  });
+
+  it("maintains zoom between merged clicks (no dip)", () => {
+    const zones = mergeClickZones([10, 18], 10);
+    const val = calculateAdaptiveZoomFromZones(zones, 14, 2.0, 10);
+    expect(val).toBe(2.0);
+  });
+
+  it("uses spring easing when specified", () => {
+    const zones = [{ start: 10, end: 10 }];
+    const springVal = calculateAdaptiveZoomFromZones(zones, 5, 2.0, 10, "spring");
+    const cubicVal = calculateAdaptiveZoomFromZones(zones, 5, 2.0, 10, "cubic");
+    expect(springVal).not.toBeCloseTo(cubicVal, 3);
   });
 });

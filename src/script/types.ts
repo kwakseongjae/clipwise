@@ -94,6 +94,26 @@ export const WaitForResponseActionSchema = z.object({
   timeout: z.number().min(0).default(30000),
 });
 
+/**
+ * Smart wait — records real wait time, then auto-speeds up in output.
+ *
+ * Unlike `wait` (which always produces dead time), `smartWait` records the
+ * actual wait (e.g., API call latency) and applies `displaySpeed` during
+ * composition to compress idle frames.  The transition from normal→fast→normal
+ * is eased to avoid jarring speed jumps.
+ */
+export const SmartWaitActionSchema = z.object({
+  action: z.literal("smartWait"),
+  /** Condition to wait for */
+  until: z.enum(["networkIdle", "selector", "domStable"]).default("networkIdle"),
+  /** CSS selector (required when until="selector") */
+  selector: SafeSelectorSchema.optional(),
+  /** Maximum wait in ms */
+  timeout: z.number().min(0).default(30000),
+  /** Speed multiplier for the wait period in the output video (default: 8×) */
+  displaySpeed: z.number().min(1).max(32).default(8),
+});
+
 export const StepActionSchema = z.discriminatedUnion("action", [
   NavigateActionSchema,
   ClickActionSchema,
@@ -107,6 +127,7 @@ export const StepActionSchema = z.discriminatedUnion("action", [
   WaitForURLActionSchema,
   WaitForFunctionActionSchema,
   WaitForResponseActionSchema,
+  SmartWaitActionSchema,
 ]);
 
 export type StepAction = z.infer<typeof StepActionSchema>;
@@ -156,7 +177,7 @@ export const ZoomEffectSchema = z.object({
   intensity: ZoomIntensitySchema.default("light"),
   duration: z.number().default(800),
   easing: z
-    .enum(["ease-in-out", "ease-in", "ease-out", "linear"])
+    .enum(["ease-in-out", "ease-in", "ease-out", "linear", "spring"])
     .default("ease-in-out"),
   autoZoom: AutoZoomConfigSchema.default({}),
 });
@@ -201,6 +222,25 @@ export const SpeedRampConfigSchema = z.object({
   transitionFrames: z.number().default(15),
 });
 
+/**
+ * Content-aware smart speed — auto-compresses wait/loading periods.
+ *
+ * Unlike speedRamp (which only detects clicks), smartSpeed uses semantic
+ * metadata from smartWait actions and per-frame change scoring to decide
+ * which frames to accelerate.  Compatible with streaming pipeline.
+ */
+export const SmartSpeedConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Speed multiplier for frames during smartWait (overridden by per-action displaySpeed) */
+  waitSpeed: z.number().min(1).max(32).default(8),
+  /** Speed multiplier for idle frames (no DOM/network changes) */
+  idleSpeed: z.number().min(1).max(16).default(4),
+  /** Duration (ms) to ease between speed changes (prevents jarring jumps) */
+  transitionDuration: z.number().default(300),
+  /** Minimum segment duration (ms) — don't speed up very short segments */
+  minSegmentDuration: z.number().default(500),
+});
+
 export const KeystrokeConfigSchema = z.object({
   enabled: z.boolean().default(false),
   /**
@@ -237,6 +277,7 @@ export const EffectsConfigSchema = z.object({
   background: BackgroundSchema.default({}),
   deviceFrame: DeviceFrameSchema.default({}),
   speedRamp: SpeedRampConfigSchema.default({}),
+  smartSpeed: SmartSpeedConfigSchema.default({}),
   keystroke: KeystrokeConfigSchema.default({}),
   watermark: WatermarkConfigSchema.default({}),
 });
@@ -257,6 +298,8 @@ export const OutputConfigSchema = z.object({
   // balanced — general-purpose, good quality/size trade-off (CRF 20)
   // archive  — high-fidelity storage, larger file (CRF 15)
   preset: z.enum(["social", "balanced", "archive"]).optional(),
+  /** Codec override: h264 (default), hevc (10-bit), av1 (smallest files, slow encode) */
+  codec: z.enum(["auto", "h264", "hevc", "av1"]).default("auto"),
   outputDir: z.string().default("./output"),
   filename: z.string().default("clipwise-recording"),
 });
@@ -276,6 +319,7 @@ export const StepEffectsOverrideSchema = z.object({
   background: BackgroundSchema.partial().optional(),
   deviceFrame: DeviceFrameSchema.partial().optional(),
   speedRamp: SpeedRampConfigSchema.partial().optional(),
+  smartSpeed: SmartSpeedConfigSchema.partial().optional(),
   keystroke: KeystrokeConfigSchema.partial().optional(),
   watermark: WatermarkConfigSchema.partial().optional(),
 }).optional();
@@ -367,6 +411,10 @@ export interface CapturedFrame {
   keystrokes?: KeystrokeEvent[];
   /** True when the frame was captured during a scroll action. */
   isScrolling?: boolean;
+  /** True when the frame was captured during a smartWait period. */
+  isWaitingPhase?: boolean;
+  /** Speed multiplier for this frame when in a smartWait phase. */
+  displaySpeed?: number;
 }
 
 export interface ComposedFrame {

@@ -17,9 +17,9 @@ import type { ComposedFrame, OutputConfig, AudioConfig } from "../script/types.j
 // VideoToolbox q:v: higher = better quality / larger file.
 // macOS native screen recording ≈ 4-6 Mbps H.264 ≈ 2-3 Mbps HEVC ≈ q:v 85+
 const ENCODING_PRESETS = {
-  social:   { crf: 22, vtQuality: 75 },
-  balanced: { crf: 18, vtQuality: 85 },
-  archive:  { crf: 13, vtQuality: 92 },
+  social:   { crf: 22, vtQuality: 75, x264Preset: "medium" as const },
+  balanced: { crf: 18, vtQuality: 85, x264Preset: "slow" as const },
+  archive:  { crf: 13, vtQuality: 92, x264Preset: "veryslow" as const },
 } as const;
 
 type PresetName = keyof typeof ENCODING_PRESETS;
@@ -44,27 +44,104 @@ function resolveEncodingParams(config: OutputConfig): EncodingParams {
 // ─── Hardware Encoder Detection ──────────────────────────
 
 // Priority: hevc_videotoolbox (macOS HEVC HW) > h264_videotoolbox (macOS H.264 HW) > libx264 (SW)
-type VideoEncoder = "hevc_videotoolbox" | "h264_videotoolbox" | "libx264";
+type VideoEncoder = "hevc_videotoolbox" | "h264_videotoolbox" | "libx264" | "libsvtav1";
 
-let encoderDetectionPromise: Promise<VideoEncoder> | null = null;
+interface AvailableEncoders {
+  hevcHw: boolean;
+  h264Hw: boolean;
+  av1: boolean;
+}
 
-function detectVideoEncoder(): Promise<VideoEncoder> {
-  if (!encoderDetectionPromise) {
-    encoderDetectionPromise = new Promise<VideoEncoder>((resolve) => {
+let encoderScanPromise: Promise<AvailableEncoders> | null = null;
+
+function scanAvailableEncoders(): Promise<AvailableEncoders> {
+  if (!encoderScanPromise) {
+    encoderScanPromise = new Promise<AvailableEncoders>((resolve) => {
       const proc = spawn("ffmpeg", ["-encoders"], {
         stdio: ["ignore", "pipe", "ignore"],
       });
       let out = "";
       proc.stdout.on("data", (d: Buffer) => (out += d.toString()));
       proc.on("close", () => {
-        if (out.includes("hevc_videotoolbox")) resolve("hevc_videotoolbox");
-        else if (out.includes("h264_videotoolbox")) resolve("h264_videotoolbox");
-        else resolve("libx264");
+        resolve({
+          hevcHw: out.includes("hevc_videotoolbox"),
+          h264Hw: out.includes("h264_videotoolbox"),
+          av1: out.includes("libsvtav1"),
+        });
       });
-      proc.on("error", () => resolve("libx264"));
+      proc.on("error", () => resolve({ hevcHw: false, h264Hw: false, av1: false }));
     });
   }
-  return encoderDetectionPromise;
+  return encoderScanPromise;
+}
+
+/**
+ * Select the best encoder based on codec preference and available encoders.
+ *
+ * - "auto" (default): hevc_videotoolbox → h264_videotoolbox → libx264
+ * - "h264": h264_videotoolbox → libx264
+ * - "hevc": hevc_videotoolbox → libx264
+ * - "av1": libsvtav1 → libx264 (fallback)
+ */
+async function detectVideoEncoder(codec: string = "auto"): Promise<VideoEncoder> {
+  const avail = await scanAvailableEncoders();
+
+  switch (codec) {
+    case "av1":
+      return avail.av1 ? "libsvtav1" : "libx264";
+    case "hevc":
+      return avail.hevcHw ? "hevc_videotoolbox" : "libx264";
+    case "h264":
+      return avail.h264Hw ? "h264_videotoolbox" : "libx264";
+    case "auto":
+    default:
+      if (avail.hevcHw) return "hevc_videotoolbox";
+      if (avail.h264Hw) return "h264_videotoolbox";
+      return "libx264";
+  }
+}
+
+/**
+ * Build FFmpeg video encoder arguments for the selected encoder + preset.
+ */
+function buildVideoArgs(encoder: VideoEncoder, params: EncodingParams): string[] {
+  switch (encoder) {
+    case "hevc_videotoolbox":
+      return [
+        "-c:v", "hevc_videotoolbox",
+        "-q:v", String(params.vtQuality),
+        "-pix_fmt", "p010le",
+        "-tag:v", "hvc1",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-colorspace", "bt709",
+      ];
+    case "h264_videotoolbox":
+      return [
+        "-c:v", "h264_videotoolbox",
+        "-q:v", String(params.vtQuality),
+        "-pix_fmt", "yuv420p",
+      ];
+    case "libsvtav1":
+      return [
+        "-c:v", "libsvtav1",
+        "-crf", String(params.crf + 12), // AV1 CRF scale differs: +12 ≈ equivalent quality
+        "-preset", "6",                  // 6 = good speed/quality balance
+        "-svtav1-params", "scm=2",       // Screen Content Mode: optimized for UI/text
+        "-pix_fmt", "yuv420p10le",
+      ];
+    case "libx264":
+    default:
+      return [
+        "-c:v", "libx264",
+        "-crf", String(params.crf),
+        "-preset", params.x264Preset,
+        "-tune", "animation",
+        "-profile:v", "high",
+        "-level", "4.1",
+        "-pix_fmt", "yuv420p",
+      ];
+  }
 }
 
 // ─── GIF Encoder ─────────────────────────────────────────
@@ -135,7 +212,7 @@ export async function encodeMp4(
   const outputPath = join(tmpdir(), `clipwise-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
 
   try {
-    const encoder = await detectVideoEncoder();
+    const encoder = await detectVideoEncoder(config.codec);
     const params = resolveEncodingParams(config);
 
     await pipeFramesToFfmpeg(frames, config, params, encoder, outputPath, audio);
@@ -156,29 +233,7 @@ async function pipeFramesToFfmpeg(
   outputPath: string,
   audio?: AudioConfig,
 ): Promise<void> {
-  const videoArgs =
-    encoder === "hevc_videotoolbox"
-      ? [
-          "-c:v", "hevc_videotoolbox",
-          "-q:v", String(params.vtQuality),
-          "-pix_fmt", "yuv420p",
-          "-tag:v", "hvc1",   // required for playback in QuickTime / Apple devices
-        ]
-      : encoder === "h264_videotoolbox"
-      ? [
-          "-c:v", "h264_videotoolbox",
-          "-q:v", String(params.vtQuality),
-          "-pix_fmt", "yuv420p",
-        ]
-      : [
-          "-c:v", "libx264",
-          "-crf", String(params.crf),
-          "-preset", "medium",
-          "-tune", "stillimage",
-          "-profile:v", "high",
-          "-level", "4.1",
-          "-pix_fmt", "yuv420p",
-        ];
+  const videoArgs = buildVideoArgs(encoder, params);
 
   // Audio input: use provided file or silent track
   const audioInputArgs = audio
@@ -289,7 +344,7 @@ export async function encodeMp4Stream(
   const outputPath = join(tmpdir(), `clipwise-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
 
   try {
-    const encoder = await detectVideoEncoder();
+    const encoder = await detectVideoEncoder(config.codec);
     const params = resolveEncodingParams(config);
     await pipeStreamToFfmpeg(frames, config, params, encoder, outputPath, audio);
     return await readFile(outputPath);
@@ -316,8 +371,11 @@ async function pipeStreamToFfmpeg(
       ? [
           "-c:v", "hevc_videotoolbox",
           "-q:v", String(params.vtQuality),
-          "-pix_fmt", "yuv420p",
+          "-pix_fmt", "p010le",
           "-tag:v", "hvc1",
+          "-color_primaries", "bt709",
+          "-color_trc", "bt709",
+          "-colorspace", "bt709",
         ]
       : encoder === "h264_videotoolbox"
       ? [
@@ -328,8 +386,8 @@ async function pipeStreamToFfmpeg(
       : [
           "-c:v", "libx264",
           "-crf", String(params.crf),
-          "-preset", "medium",
-          "-tune", "stillimage",
+          "-preset", params.x264Preset,
+          "-tune", "animation",
           "-profile:v", "high",
           "-level", "4.1",
           "-pix_fmt", "yuv420p",

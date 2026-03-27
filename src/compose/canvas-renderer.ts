@@ -15,8 +15,11 @@ import type { FrameContext } from "./compose-frame.js";
 import {
   buildZoomClickLookup,
   calculateAdaptiveZoomFromLookup,
+  calculateAdaptiveZoomFromZones,
   calculateAdaptiveZoomInWindow,
+  mergeClickZones,
   resolveZoomScale,
+  type ZoomEasing,
 } from "../effects/zoom.js";
 import { applyCrossfade, applyTransition } from "../effects/transition.js";
 
@@ -41,6 +44,7 @@ function mergeStepEffects(
     background: override.background ? { ...global.background, ...override.background } : global.background,
     deviceFrame: override.deviceFrame ? { ...global.deviceFrame, ...override.deviceFrame } : global.deviceFrame,
     speedRamp: override.speedRamp ? { ...global.speedRamp, ...override.speedRamp } : global.speedRamp,
+    smartSpeed: override.smartSpeed ? { ...global.smartSpeed, ...override.smartSpeed } : global.smartSpeed,
     keystroke: override.keystroke ? { ...global.keystroke, ...override.keystroke } : global.keystroke,
     watermark: override.watermark ? { ...global.watermark, ...override.watermark } : global.watermark,
   };
@@ -107,10 +111,13 @@ export class CanvasRenderer {
   async composeAll(frames: CapturedFrame[]): Promise<ComposedFrame[]> {
     if (frames.length === 0) return [];
 
-    // Pass 1: Apply speed ramping
-    let processFrames = frames;
+    // Pass 1: Apply speed ramping / smart speed
+    let processFrames: CapturedFrame[] = frames;
     if (this.effects.speedRamp.enabled) {
-      processFrames = this.applySpeedRamp(frames);
+      processFrames = this.applySpeedRamp(processFrames);
+    }
+    if (this.effects.smartSpeed.enabled) {
+      processFrames = this.applySmartSpeed(processFrames);
     }
 
     // Pass 2: Calculate per-frame contexts
@@ -231,8 +238,9 @@ export class CanvasRenderer {
       this.output.fps * (this.effects.zoom.duration / 1000),
     );
 
-    // Pre-build click lookup once — O(n) — so each frame uses O(log k) binary search
-    // instead of O(transitionFrames) linear scan.  Total: O(n + n·log k) vs O(n·transitionFrames).
+    // Pre-build click lookup once — O(n) — then merge into zones for continuity.
+    // Zone-aware zoom maintains scale between nearby clicks instead of
+    // zoom-out → zoom-in on every interaction.
     const clickLookup = this.effects.zoom.enabled
       ? buildZoomClickLookup(frames)
       : [];
@@ -242,17 +250,44 @@ export class CanvasRenderer {
       this.effects.zoom.intensity,
     );
 
+    // Merge close clicks into zones: clicks within 1.5× transition window
+    // are treated as a single continuous zoom region.
+    const mergeGap = Math.round(transitionFrames * 1.5);
+    const zoomZones = this.effects.zoom.enabled
+      ? mergeClickZones(clickLookup, mergeGap)
+      : [];
+
+    const zoomEasing: ZoomEasing = (this.effects.zoom.easing === "spring") ? "spring" : "cubic";
+
+    // Build per-click position lookup for focus point interpolation.
+    // Maps click frame index → click position (CSS viewport coords).
+    const clickPositions = new Map<number, { x: number; y: number }>();
+    if (this.effects.zoom.enabled) {
+      for (const ci of clickLookup) {
+        const pos = frames[ci].clickPosition;
+        if (pos) clickPositions.set(ci, pos);
+      }
+    }
+
     for (let i = 0; i < frames.length; i++) {
       const frame = frames[i];
 
       let zoomScale = 1;
       if (this.effects.zoom.enabled) {
-        zoomScale = calculateAdaptiveZoomFromLookup(
-          clickLookup,
-          i,
-          effectiveScale,
-          transitionFrames,
-        );
+        zoomScale = zoomZones.length > 0
+          ? calculateAdaptiveZoomFromZones(
+              zoomZones,
+              i,
+              effectiveScale,
+              transitionFrames,
+              zoomEasing,
+            )
+          : calculateAdaptiveZoomFromLookup(
+              clickLookup,
+              i,
+              effectiveScale,
+              transitionFrames,
+            );
         // Suppress zoom during scroll — zoom out smoothly to show more context
         if (frame.isScrolling && zoomScale > 1) {
           zoomScale = 1;
@@ -270,10 +305,74 @@ export class CanvasRenderer {
         }
       }
 
-      contexts.push({ zoomScale, clickProgress, cursorTrail: trail });
+      // Compute interpolated focus point for smooth panning within zones.
+      // When frame i is inside a zone with multiple clicks, lerp between
+      // the previous click position and the next click position.
+      let focusOverride: { x: number; y: number } | undefined;
+      if (zoomScale > 1 && zoomZones.length > 0 && clickLookup.length > 1) {
+        focusOverride = this.interpolateFocusInZone(
+          i, clickLookup, clickPositions, frames,
+        );
+      }
+
+      contexts.push({ zoomScale, clickProgress, cursorTrail: trail, focusOverride });
     }
 
     return contexts;
+  }
+
+  /**
+   * Interpolate the zoom focus point between adjacent clicks within a zone.
+   *
+   * Without this, the camera jumps instantly from one click position to the
+   * next when a merged zone contains multiple clicks.  This method produces
+   * a smooth pan by linearly interpolating between the previous and next
+   * click positions relative to the current frame index.
+   *
+   * Falls back to the nearest click position when the frame is before the
+   * first click or after the last click in the lookup.
+   */
+  private interpolateFocusInZone(
+    frameIndex: number,
+    clickLookup: number[],
+    clickPositions: Map<number, { x: number; y: number }>,
+    frames: CapturedFrame[],
+  ): { x: number; y: number } | undefined {
+    // Binary search for the nearest click indices around frameIndex
+    let lo = 0;
+    let hi = clickLookup.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (clickLookup[mid] < frameIndex) lo = mid + 1;
+      else hi = mid;
+    }
+
+    const prevIdx = lo > 0 ? clickLookup[lo - 1] : -1;
+    const nextIdx = lo < clickLookup.length ? clickLookup[lo] : -1;
+
+    const prevPos = prevIdx >= 0 ? clickPositions.get(prevIdx) : undefined;
+    const nextPos = nextIdx >= 0 ? clickPositions.get(nextIdx) : undefined;
+
+    // Exactly on a click frame → use that position
+    if (nextIdx === frameIndex && nextPos) return nextPos;
+
+    // Between two clicks → lerp
+    if (prevPos && nextPos && prevIdx < frameIndex && nextIdx > frameIndex) {
+      const span = nextIdx - prevIdx;
+      if (span <= 0) return prevPos;
+      const t = (frameIndex - prevIdx) / span;
+      return {
+        x: prevPos.x + (nextPos.x - prevPos.x) * t,
+        y: prevPos.y + (nextPos.y - prevPos.y) * t,
+      };
+    }
+
+    // Before first click or after last click → use nearest, or fall back to cursor
+    if (prevPos) return prevPos;
+    if (nextPos) return nextPos;
+
+    // Fallback: use frame's own cursor position (compose-frame.ts will handle)
+    return undefined;
   }
 
   /**
@@ -317,6 +416,83 @@ export class CanvasRenderer {
     return result;
   }
 
+  /**
+   * Apply smart speed: compress smartWait periods based on per-frame metadata.
+   *
+   * Unlike applySpeedRamp (which uses click proximity heuristics), smartSpeed
+   * reads the `isWaitingPhase` flag set by the recorder during smartWait actions.
+   * Frames in a waiting phase are downsampled by their `displaySpeed` multiplier.
+   *
+   * Streaming-compatible: each frame is independently decidable (no lookahead
+   * needed), so this can run inline during streaming composition.
+   */
+  private applySmartSpeed(frames: CapturedFrame[]): CapturedFrame[] {
+    const config = this.effects.smartSpeed;
+    if (!config.enabled) return frames;
+
+    // Transition margin: frames at the START and END of a waiting phase
+    // that are kept at normal speed so the loader is visible.
+    const transitionMargin = Math.round(
+      this.output.fps * (config.transitionDuration / 1000),
+    );
+
+    // Two-pass: first identify waiting segments, then apply speed with margins.
+    // Pass 1: find contiguous waiting segments [startIdx, endIdx]
+    const segments: Array<{ start: number; end: number; speed: number }> = [];
+    let segStart = -1;
+    let segSpeed = config.waitSpeed;
+    for (let i = 0; i < frames.length; i++) {
+      if (frames[i].isWaitingPhase) {
+        if (segStart < 0) {
+          segStart = i;
+          segSpeed = frames[i].displaySpeed ?? config.waitSpeed;
+        }
+      } else if (segStart >= 0) {
+        segments.push({ start: segStart, end: i - 1, speed: segSpeed });
+        segStart = -1;
+      }
+    }
+    if (segStart >= 0) segments.push({ start: segStart, end: frames.length - 1, speed: segSpeed });
+
+    // Build a per-frame skip rate map (1 = keep, >1 = keep every Nth)
+    const skipRates = new Array<number>(frames.length).fill(1);
+    for (const seg of segments) {
+      const segLen = seg.end - seg.start + 1;
+      const skipRate = Math.max(1, Math.round(seg.speed));
+      for (let i = seg.start; i <= seg.end; i++) {
+        const fromStart = i - seg.start;
+        const fromEnd = seg.end - i;
+        // Keep normal speed at margins (ease-in / ease-out)
+        if (fromStart < transitionMargin || fromEnd < transitionMargin) {
+          skipRates[i] = 1; // normal speed
+        } else if (segLen < transitionMargin * 3) {
+          // Segment too short for full margins — use reduced speed
+          skipRates[i] = Math.max(1, Math.round(skipRate / 2));
+        } else {
+          skipRates[i] = skipRate;
+        }
+      }
+    }
+
+    // Pass 2: apply skip rates
+    const result: CapturedFrame[] = [];
+    let skipCounter = 0;
+    for (let i = 0; i < frames.length; i++) {
+      const rate = skipRates[i];
+      if (rate <= 1) {
+        skipCounter = 0;
+        result.push({ ...frames[i], index: result.length });
+      } else {
+        skipCounter++;
+        if (skipCounter % rate === 1) {
+          result.push({ ...frames[i], index: result.length });
+        }
+      }
+    }
+
+    return result;
+  }
+
   // ─── Online streaming pipeline (Phase 3-B) ─────────────────────────────────
 
   /**
@@ -350,6 +526,12 @@ export class CanvasRenderer {
   async *composeStreamOnline(
     source: AsyncIterable<CapturedFrame>,
   ): AsyncGenerator<ComposedFrame> {
+    // Apply smartSpeed inline — skip waiting-phase frames based on displaySpeed.
+    // This is streaming-compatible because each frame is independently decidable.
+    const filteredSource = this.effects.smartSpeed.enabled
+      ? this.filterSmartSpeedInline(source)
+      : source;
+
     const hasFadeTransitions = this.steps.some((s) => s.transition !== "none");
 
     if (!hasFadeTransitions) {
@@ -357,7 +539,7 @@ export class CanvasRenderer {
       // Frames are composited online — no full-array pass required.
       const cpuCount = os.cpus().length;
       const workerCount = Math.min(cpuCount, 8);
-      yield* this.streamOnlineWithWorkers(source, workerCount);
+      yield* this.streamOnlineWithWorkers(filteredSource, workerCount);
       return;
     }
 
@@ -366,10 +548,52 @@ export class CanvasRenderer {
     // the compositor starts as soon as recording ends), then use standard
     // composeStream() which handles transitions correctly.
     const collected: CapturedFrame[] = [];
-    for await (const frame of source) {
+    for await (const frame of filteredSource) {
       collected.push(frame);
     }
     yield* this.composeStream(collected);
+  }
+
+  /**
+   * Inline async filter for smartSpeed in streaming pipelines.
+   *
+   * Applies ease-in at the start of a waiting phase: the first
+   * `transitionMargin` frames are kept at normal speed so the loader
+   * is visible, then frames are skipped at displaySpeed rate.
+   * When waiting ends, frames immediately return to normal speed.
+   */
+  private async *filterSmartSpeedInline(
+    source: AsyncIterable<CapturedFrame>,
+  ): AsyncGenerator<CapturedFrame> {
+    const config = this.effects.smartSpeed;
+    const transitionMargin = Math.round(
+      this.output.fps * (config.transitionDuration / 1000),
+    );
+    let waitFrameCounter = 0;
+    let skipCounter = 0;
+    let outputIndex = 0;
+
+    for await (const frame of source) {
+      if (frame.isWaitingPhase) {
+        waitFrameCounter++;
+
+        // Ease-in: keep first transitionMargin frames at normal speed
+        if (waitFrameCounter <= transitionMargin) {
+          yield { ...frame, index: outputIndex++ };
+        } else {
+          const speed = frame.displaySpeed ?? config.waitSpeed;
+          const skipRate = Math.max(1, Math.round(speed));
+          skipCounter++;
+          if (skipCounter % skipRate === 1) {
+            yield { ...frame, index: outputIndex++ };
+          }
+        }
+      } else {
+        waitFrameCounter = 0;
+        skipCounter = 0;
+        yield { ...frame, index: outputIndex++ };
+      }
+    }
   }
 
   /**
@@ -541,10 +765,13 @@ export class CanvasRenderer {
   async *composeStream(frames: CapturedFrame[]): AsyncGenerator<ComposedFrame> {
     if (frames.length === 0) return;
 
-    // Pass 1: Speed ramp (requires full set)
-    let processFrames = frames;
+    // Pass 1: Speed ramp / smart speed (requires full set)
+    let processFrames: CapturedFrame[] = frames;
     if (this.effects.speedRamp.enabled) {
-      processFrames = this.applySpeedRamp(frames);
+      processFrames = this.applySpeedRamp(processFrames);
+    }
+    if (this.effects.smartSpeed.enabled) {
+      processFrames = this.applySmartSpeed(processFrames);
     }
 
     // Pass 2: Context calculation (requires full set)

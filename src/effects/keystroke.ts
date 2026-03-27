@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import type { EffectsConfig, KeystrokeEvent } from "../script/types.js";
+import type { OverlayDescriptor } from "./cursor.js";
 
 type KeystrokeConfig = EffectsConfig["keystroke"];
 
@@ -154,4 +155,95 @@ export async function renderKeystrokeHud(
     .composite([{ input: Buffer.from(hudSvg), left: 0, top: 0 }])
     .png()
     .toBuffer();
+}
+
+/**
+ * Build a keystroke HUD overlay descriptor without applying it to a frame.
+ * Returns null when the HUD should not be shown (disabled, no keystrokes, faded out).
+ */
+export function buildKeystrokeOverlay(
+  keystrokes: KeystrokeEvent[],
+  frameTimestamp: number,
+  config: KeystrokeConfig,
+  frameWidth: number,
+  frameHeight: number,
+  dpr = 1,
+): OverlayDescriptor | null {
+  if (!config.enabled || keystrokes.length === 0) return null;
+  if (!config.showTyping) return null;
+
+  const lastKeystroke = keystrokes[keystrokes.length - 1];
+  const age = frameTimestamp - lastKeystroke.timestamp;
+  if (age >= config.fadeAfter) return null;
+
+  const fadeStart = config.fadeAfter * 0.6;
+  const globalOpacity =
+    age > fadeStart
+      ? Math.max(0, 1 - (age - fadeStart) / (config.fadeAfter - fadeStart))
+      : 1;
+  if (globalOpacity <= 0) return null;
+
+  const allSessions = buildSessions(keystrokes);
+  if (allSessions.length === 0) return null;
+  const sessions = allSessions.slice(-3);
+  const lineCount = sessions.length;
+
+  const fontSize    = config.fontSize * dpr;
+  const padding     = config.padding * dpr;
+  const hudPadH     = padding * 2;
+  const hudPadV     = padding * 1.4;
+  const lineGap     = Math.round(fontSize * 0.45);
+
+  const charWidth = fontSize * 0.615;
+  const maxHudWidth = frameWidth - 60 * dpr;
+  const maxCharsPerLine = Math.max(10, Math.floor((maxHudWidth - hudPadH * 2) / charWidth));
+
+  const lines = sessions.map((text) =>
+    text.length > maxCharsPerLine ? text.slice(-maxCharsPerLine) : text,
+  );
+
+  const maxLineLen = Math.max(...lines.map((l) => l.length));
+  const hudWidth   = Math.min(
+    Math.ceil(maxLineLen * charWidth) + hudPadH * 2,
+    maxHudWidth,
+  );
+  const hudHeight  =
+    Math.ceil(fontSize * lineCount + lineGap * (lineCount - 1) + hudPadV * 2);
+
+  const margin = 30 * dpr;
+  const hudY   = frameHeight - hudHeight - margin;
+  let hudX: number;
+  switch (config.position) {
+    case "bottom-left":  hudX = margin; break;
+    case "bottom-right": hudX = frameWidth - hudWidth - margin; break;
+    case "bottom-center":
+    default:             hudX = Math.round((frameWidth - hudWidth) / 2);
+  }
+
+  const LINE_OPACITY_FACTORS = [0.45, 0.70, 1.0];
+  const opacityFactors = LINE_OPACITY_FACTORS.slice(-lineCount);
+
+  const rx = (8 * dpr).toFixed(1);
+  const boxOp = (globalOpacity * 0.92).toFixed(3);
+
+  const textX    = hudX + hudPadH;
+  const baselineY = hudY + hudPadV + fontSize * 0.82;
+
+  const textElements = lines
+    .map((line, i) => {
+      const op    = (globalOpacity * opacityFactors[i]).toFixed(3);
+      const lineY = baselineY + i * (fontSize + lineGap);
+      return `<text x="${textX}" y="${lineY}"
+          font-family="monospace, Menlo, Consolas" font-size="${fontSize}"
+          fill="${config.textColor}" opacity="${op}">${escapeXml(line)}</text>`;
+    })
+    .join("\n    ");
+
+  const hudSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${frameWidth}" height="${frameHeight}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
+    <rect x="${hudX}" y="${hudY}" width="${hudWidth}" height="${hudHeight}"
+          rx="${rx}" ry="${rx}" fill="${config.backgroundColor}" opacity="${boxOp}" />
+    ${textElements}
+  </svg>`;
+
+  return { input: Buffer.from(hudSvg), left: 0, top: 0 };
 }

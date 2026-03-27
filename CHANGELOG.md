@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-03-28
+
+### Added
+- **Spring physics zoom** — `easing: spring` produces natural, Screen Studio-like camera motion with faster initial response and smooth deceleration
+- **Zone-aware zoom continuity** — nearby clicks are merged into continuous zoom zones; no more jarring zoom-out/zoom-in between adjacent interactions
+- **Focus point interpolation** — smooth panning between click targets within a zoom zone instead of instant jumps
+- **Zoom sustain during typing** — zoom maintains throughout entire `type` action duration (periodic click refresh every 400ms)
+- **`smartWait` action** — records real wait time (API calls, loading states), then auto-compresses in output; supports `networkIdle`, `selector`, and `domStable` conditions
+- **`smartSpeed` effect** — content-aware speed control with ease-in/out transitions; compresses loading periods while keeping content at normal speed
+- **Auto loader detection** — CDP `Animation.animationStarted` passively detects CSS spinners (`@keyframes spin/rotate/pulse/bounce`); auto-marks frames for smartSpeed compression
+- **Dedup bypass during loading** — frame deduplication disabled during waiting/loading phases so spinner frames are preserved for fast-forward effect
+- **AV1 codec support** — `output.codec: "av1"` with SVT-AV1 `scm=2` (Screen Content Mode) for 40-60% smaller files
+- **Codec selection** — `output.codec: auto | h264 | hevc | av1`
+- **Overlay descriptor pattern** — cursor/keystroke effects export `build*Overlay()` functions for batched Sharp composition
+
+### Changed
+- **Sharp pipeline batching** — 5 individual Sharp calls per frame → 1 batched `.composite([...])` call; **3× faster composition** (69 → 23 ms/frame)
+- **Encoding quality** — `-tune stillimage` → `-tune animation` for sharper screen content; HEVC 10-bit (`yuv420p10le`) eliminates gradient banding; preset-aware x264 speed (`social: medium`, `balanced: slow`, `archive: veryslow`)
+- **HEVC color metadata** — proper bt709 color primaries/transfer/colorspace tags for accurate playback
+
+---
+
 ## [0.6.1] - 2026-03-09
 
 ### Fixed

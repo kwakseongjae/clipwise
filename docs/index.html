@@ -108,7 +108,7 @@
     <div class="feature-card">
       <div class="feature-icon">⚡</div>
       <div class="feature-title">Fast Pipeline</div>
-      <div class="feature-desc">Concurrent streaming pipeline + frame deduplication. <strong>−28% total time</strong> vs v0.3 on Apple M1 Max — 92s for a 44s demo at 1280×800. Smooth cursor movement with automatic CSS transition suppression.</div>
+      <div class="feature-desc">Batched Sharp pipeline (<strong>3× faster composition</strong>, 23ms/frame). Spring physics zoom, zone-aware continuity, auto loader detection, <code>smartWait</code> + <code>smartSpeed</code> for API call compression. HEVC 10-bit + AV1 codec support.</div>
     </div>
   </div>
 </section>
@@ -438,7 +438,7 @@ steps:
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise Full Schema Reference</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.6.0)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.0)
 # Scriptable cinematic screen recorder — YAML in, MP4 out
 # Install: npm install -D clipwise
 # Record:  npx clipwise record scenario.yaml -f mp4

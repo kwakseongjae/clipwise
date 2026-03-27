@@ -296,3 +296,124 @@ export function lerpZoom(
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
+
+// ─── Spring Physics Easing ─────────────────────────────────────────────────
+
+export type ZoomEasing = "cubic" | "spring";
+
+/**
+ * Critically-damped spring easing — smoother than cubic for zoom transitions.
+ *
+ * Unlike cubic bezier which has a symmetric S-curve, spring easing has a
+ * faster initial response and a more natural deceleration.  This produces
+ * the "Screen Studio feel" where zooms snap to their target fluidly.
+ *
+ * The function solves x(t) = 1 - (1 + ωt) · e^(-ωt) for a critically-damped
+ * harmonic oscillator (no overshoot, no bounce).
+ *
+ * @param t - Progress in [0, 1]
+ */
+export function springEasing(t: number): number {
+  const omega = 6.5;   // Higher = faster settling, less smooth
+  // Normalize so f(0)=0 and f(1)=1 exactly
+  const raw = 1 - (1 + omega * t) * Math.exp(-omega * t);
+  const endVal = 1 - (1 + omega) * Math.exp(-omega);  // raw(1) ≈ 0.9887
+  return Math.max(0, Math.min(1, raw / endVal));
+}
+
+/**
+ * Apply the selected easing function.
+ */
+export function applyZoomEasing(t: number, easing: ZoomEasing = "cubic"): number {
+  return easing === "spring" ? springEasing(t) : easeInOutCubic(t);
+}
+
+// ─── Zone-Aware Zoom (Continuity) ──────────────────────────────────────────
+
+export interface ZoomZone {
+  /** First click frame index in the zone */
+  start: number;
+  /** Last click frame index in the zone */
+  end: number;
+}
+
+/**
+ * Merge nearby clicks into continuous "zoom zones".
+ *
+ * When two clicks are fewer than `mergeGap` frames apart, they belong to the
+ * same zone.  Frames INSIDE a zone stay at full zoom (with smooth pan between
+ * focus points), frames OUTSIDE ease in/out with transition curves.
+ *
+ * This eliminates the jarring zoom-out → zoom-in pattern that occurs when
+ * multiple interactions happen in the same UI region.
+ *
+ * @param clickLookup  Sorted click frame indices from buildZoomClickLookup()
+ * @param mergeGap     Maximum frame gap to merge (default: transitionFrames × 1.5)
+ */
+export function mergeClickZones(
+  clickLookup: readonly number[],
+  mergeGap: number,
+): ZoomZone[] {
+  if (clickLookup.length === 0) return [];
+
+  const zones: ZoomZone[] = [];
+  let start = clickLookup[0];
+  let end = clickLookup[0];
+
+  for (let i = 1; i < clickLookup.length; i++) {
+    if (clickLookup[i] - end <= mergeGap) {
+      end = clickLookup[i];
+    } else {
+      zones.push({ start, end });
+      start = clickLookup[i];
+      end = clickLookup[i];
+    }
+  }
+  zones.push({ start, end });
+  return zones;
+}
+
+/**
+ * Calculate adaptive zoom scale using merged click zones + spring easing.
+ *
+ * - Inside a zone → full maxScale (smooth hold)
+ * - Transition in/out → spring-eased interpolation
+ * - Outside all zones → 1.0 (no zoom)
+ *
+ * This is the recommended API for Phase 2 and later — replaces
+ * calculateAdaptiveZoomFromLookup() when zone-aware zoom is enabled.
+ *
+ * O(log z) per call via binary search on zones.
+ */
+export function calculateAdaptiveZoomFromZones(
+  zones: readonly ZoomZone[],
+  currentIndex: number,
+  maxScale: number,
+  transitionFrames: number,
+  easing: ZoomEasing = "spring",
+): number {
+  if (maxScale <= 1 || zones.length === 0) return 1;
+
+  // Binary search for the nearest zone
+  let lo = 0;
+  let hi = zones.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (zones[mid].end < currentIndex) lo = mid + 1;
+    else hi = mid;
+  }
+
+  // Check if inside a zone
+  if (lo < zones.length && currentIndex >= zones[lo].start && currentIndex <= zones[lo].end) {
+    return maxScale;
+  }
+
+  // Distance to nearest zone boundary
+  const distBefore = lo > 0 ? currentIndex - zones[lo - 1].end : Infinity;
+  const distAfter = lo < zones.length ? zones[lo].start - currentIndex : Infinity;
+  const minDistance = Math.min(distBefore, distAfter);
+
+  if (minDistance > transitionFrames) return 1;
+  const t = 1 - minDistance / transitionFrames;
+  return 1 + (maxScale - 1) * applyZoomEasing(t, easing);
+}

@@ -13,13 +13,17 @@ export {
   calculateAdaptiveZoom,
   buildZoomClickLookup,
   calculateAdaptiveZoomFromLookup,
+  calculateAdaptiveZoomFromZones,
   calculateAdaptiveZoomInWindow,
   calculatePanOffset,
   lerpZoom,
+  mergeClickZones,
   resolveZoomScale,
+  springEasing,
+  applyZoomEasing,
   ZOOM_INTENSITY_SCALES,
 } from "./effects/zoom.js";
-export type { ZoomIntensity } from "./effects/zoom.js";
+export type { ZoomIntensity, ZoomEasing, ZoomZone } from "./effects/zoom.js";
 export { renderCursorTrail, renderCursorHighlight } from "./effects/cursor.js";
 export { renderKeystrokeHud } from "./effects/keystroke.js";
 export { applyCrossfade, applySlide, applyBlur, applyTransition } from "./effects/transition.js";
