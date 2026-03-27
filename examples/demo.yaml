@@ -44,6 +44,10 @@ effects:
     backgroundColor: "rgba(0, 0, 0, 0.8)"
     textColor: "#e0e0e0"
     fadeAfter: 1500
+  smartSpeed:
+    enabled: true
+    waitSpeed: 4
+    transitionDuration: 500
   watermark:
     enabled: true
     text: "Clipwise"
@@ -57,7 +61,7 @@ output:
   width: 1280
   height: 800
   fps: 30
-  preset: archive
+  preset: balanced
 
 steps:
   - name: "Load dashboard"
@@ -193,6 +197,11 @@ steps:
     actions:
       - action: click
         selector: "#btn-create"
+      - action: smartWait
+        until: selector
+        selector: ".toast"
+        timeout: 30000
+        displaySpeed: 4
 
   - name: "Scroll back to top"
     captureDelay: 80

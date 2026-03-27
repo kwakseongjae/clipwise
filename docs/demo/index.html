@@ -393,7 +393,7 @@
     const loader=document.getElementById('modal-loader');
     loader.classList.add('active');
     // Simulate API call with configurable delay (default 5s, override via data-api-delay)
-    const delay=parseInt(document.getElementById('btn-create').dataset.apiDelay||'20000',10);
+    const delay=parseInt(document.getElementById('btn-create').dataset.apiDelay||'3000',10);
     setTimeout(()=>{
       loader.classList.remove('active');
       document.getElementById('modal-overlay').classList.remove('open');

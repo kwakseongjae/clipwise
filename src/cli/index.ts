@@ -10,6 +10,7 @@ import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-en
 import { StreamingSession, ConcurrentSession } from "../compose/streaming-session.js";
 import type { PipelineProgress } from "../compose/streaming-session.js";
 import { writeFile, mkdir, access, copyFile, readFile } from "fs/promises";
+import { existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { pathToFileURL, fileURLToPath } from "url";
 import { homedir } from "os";
@@ -345,85 +346,39 @@ program
     const spinner = ora();
 
     try {
-      const demoUrl = options.url ?? "https://kwakseongjae.github.io/clipwise/demo/";
+      const { loadScenario } = await import("../script/parser.js");
 
-      const device = options.device as string;
-      const isMobile = device === "iphone" || device === "android";
-      const isTablet = device === "ipad";
-      const vpWidth = isMobile ? 390 : isTablet ? 1024 : 1280;
-      const vpHeight = isMobile ? 844 : isTablet ? 768 : 800;
-      const outWidth = isMobile ? 540 : 1280;
-      const outHeight = isMobile ? 1080 : isTablet ? 960 : 800;
-
-      // Build inline scenario
-      const { parseScenario } = await import("../script/parser.js");
-      const yaml = await import("yaml");
-
-      const steps = [
-        { name: "Load dashboard", captureDelay: 100, holdDuration: 1000,
-          actions: [
-            { action: "navigate", url: demoUrl, waitUntil: "load" },
-            { action: "waitForSelector", selector: "#stat-users", state: "visible", timeout: 15000 },
-          ] },
-        { name: "Hover Users stat", captureDelay: 50, holdDuration: 700,
-          actions: [{ action: "hover", selector: "#stat-users" }] },
-        { name: "Hover Revenue", captureDelay: 50, holdDuration: 700,
-          actions: [{ action: "hover", selector: "#stat-revenue" }] },
-        { name: "Switch chart", captureDelay: 50, holdDuration: 800,
-          actions: [{ action: "click", selector: "#tab-monthly" }] },
-        { name: "Search", captureDelay: 50, holdDuration: 800,
-          actions: [
-            { action: "click", selector: "#search-input" },
-            { action: "type", selector: "#search-input", text: "conversion", delay: 18 },
-          ] },
-        ...(!isMobile ? [{ name: "Scroll to projects", captureDelay: 100, holdDuration: 600,
-          actions: [{ action: "scroll", y: 420, smooth: true }] }] :
-          [{ name: "Scroll to chart", captureDelay: 100, holdDuration: 600,
-          actions: [{ action: "scroll", y: 250, smooth: true }] }]),
-        { name: "Hover row", captureDelay: 50, holdDuration: 600,
-          actions: [{ action: "hover", selector: "#row-1" }] },
-        { name: "Open modal", captureDelay: 100, holdDuration: 800,
-          actions: [{ action: "click", selector: "#btn-new-project" }] },
-        { name: "Type name", captureDelay: 50, holdDuration: 600,
-          actions: [
-            { action: "click", selector: "#project-name" },
-            { action: "type", selector: "#project-name", text: "Clipwise Demo", delay: 20 },
-          ] },
-        { name: "Type desc", captureDelay: 50, holdDuration: 600,
-          actions: [
-            { action: "click", selector: "#project-desc" },
-            { action: "type", selector: "#project-desc", text: "Automated screen recording", delay: 16 },
-          ] },
-        { name: "Create", captureDelay: 100, holdDuration: 1000,
-          actions: [{ action: "click", selector: "#btn-create" }] },
+      // Resolve the bundled demo.yaml — works from dist/ or src/
+      const demoYamlCandidates = [
+        resolve(fileURLToPath(import.meta.url), "../../..", "examples", "demo.yaml"),    // from dist/cli/
+        resolve(fileURLToPath(import.meta.url), "../..", "examples", "demo.yaml"),        // from src/cli/
       ];
+      let demoYamlPath = "";
+      for (const candidate of demoYamlCandidates) {
+        if (existsSync(candidate)) { demoYamlPath = candidate; break; }
+      }
+      if (!demoYamlPath) {
+        throw new Error("Cannot find examples/demo.yaml. Run from the project root.");
+      }
 
-      const scenarioObj = {
-        name: `Clipwise Demo (${device})`,
-        viewport: { width: vpWidth, height: vpHeight },
-        effects: {
-          zoom: { enabled: true, scale: 1.8, duration: 500,
-            autoZoom: { followCursor: true, maxScale: 2.0 } },
-          cursor: { enabled: true, size: isMobile ? 16 : 20, clickEffect: true,
-            highlight: true, trail: !isMobile, trailLength: 6 },
-          background: { type: "gradient",
-            value: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-            padding: isMobile ? 60 : 48, borderRadius: 14, shadow: true },
-          deviceFrame: { enabled: true, type: device, darkMode: true },
-          keystroke: { enabled: true, position: "bottom-center",
-            fontSize: isMobile ? 14 : 16 },
-          watermark: { enabled: true, text: "Clipwise", position: "bottom-right",
-            opacity: 0.35, fontSize: 13 },
-        },
-        output: {
-          format: options.format, width: outWidth, height: outHeight,
-          fps: 30, preset: "social" as const,
-          outputDir: options.output, filename: `clipwise-demo-${device}`,
-        },
-        steps,
-      };
+      const scenario = await loadScenario(demoYamlPath);
 
-      const scenario = parseScenario(yaml.stringify(scenarioObj));
+      // Override output settings from CLI options
+      scenario.output.format = options.format as "mp4" | "gif";
+      scenario.output.outputDir = options.output;
+      scenario.output.filename = `clipwise-demo-${options.device}`;
+
+      // Override navigate URL: use --url flag, or default to the GitHub Pages
+      // hosted demo site (demo.yaml uses a relative path that only works with
+      // `clipwise record` which resolves URLs relative to the yaml file).
+      const demoUrl = options.url ?? "https://kwakseongjae.github.io/clipwise/demo/";
+      if (scenario.steps.length > 0) {
+        const navAction = scenario.steps[0].actions.find((a: { action: string }) => a.action === "navigate");
+        if (navAction && "url" in navAction) {
+          (navAction as { url: string }).url = demoUrl;
+        }
+      }
+
       spinner.succeed(`Demo scenario ready: ${chalk.bold(scenario.name)}`);
 
       // Check browser
@@ -449,7 +404,7 @@ program
       await mkdir(options.output, { recursive: true });
       const demoRenderer = new CanvasRenderer(scenario.effects, scenario.output, scenario.steps);
       const ext = scenario.output.format === "gif" ? "gif" : "mp4";
-      const outputPath = join(options.output, `clipwise-demo-${device}.${ext}`);
+      const outputPath = join(options.output, `clipwise-demo-${options.device}.${ext}`);
 
       const isConcurrentEligible = ext === "mp4" && demoRenderer.canStreamOnline();
 
