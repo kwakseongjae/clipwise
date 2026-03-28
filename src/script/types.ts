@@ -66,18 +66,26 @@ export const WaitForSelectorActionSchema = z.object({
   selector: SafeSelectorSchema,
   state: z.enum(["visible", "attached", "hidden"]).default("visible"),
   timeout: z.number().min(0).default(15000),
+  /** 대기 중 프레임 연속 캡처 (로딩 애니메이션 보존). */
+  captureWhileWaiting: z.boolean().default(false),
+  /** captureWhileWaiting 사용 시 출력 영상 속도 배율 (1-32). */
+  displaySpeed: z.number().min(1).max(32).default(8),
 });
 
 export const WaitForNavigationActionSchema = z.object({
   action: z.literal("waitForNavigation"),
   waitUntil: z.enum(["load", "domcontentloaded", "networkidle"]).default("networkidle"),
   timeout: z.number().min(0).default(15000),
+  captureWhileWaiting: z.boolean().default(false),
+  displaySpeed: z.number().min(1).max(32).default(8),
 });
 
 export const WaitForURLActionSchema = z.object({
   action: z.literal("waitForURL"),
   url: z.string().min(1),
   timeout: z.number().min(0).default(15000),
+  captureWhileWaiting: z.boolean().default(false),
+  displaySpeed: z.number().min(1).max(32).default(8),
 });
 
 export const WaitForFunctionActionSchema = z.object({
@@ -85,6 +93,8 @@ export const WaitForFunctionActionSchema = z.object({
   expression: z.string().min(1),
   polling: z.union([z.literal("raf"), z.number().min(0)]).default("raf"),
   timeout: z.number().min(0).default(30000),
+  captureWhileWaiting: z.boolean().default(false),
+  displaySpeed: z.number().min(1).max(32).default(8),
 });
 
 export const WaitForResponseActionSchema = z.object({
@@ -92,6 +102,8 @@ export const WaitForResponseActionSchema = z.object({
   url: z.string().min(1),
   status: z.number().min(100).max(599).optional(),
   timeout: z.number().min(0).default(30000),
+  captureWhileWaiting: z.boolean().default(false),
+  displaySpeed: z.number().min(1).max(32).default(8),
 });
 
 /**

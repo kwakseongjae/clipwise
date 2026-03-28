@@ -577,6 +577,37 @@ export class ClipwiseRecorder {
   }
 
   /**
+   * 조건 대기 중 프레임을 연속 캡처하는 헬퍼.
+   * smartWait과 동일한 패턴: isWaitingPhase 플래그 + forceRepaint 루프를 조건 promise와 병렬 실행.
+   */
+  private async waitForConditionWithCapture(
+    conditionPromise: Promise<unknown>,
+    displaySpeed: number,
+  ): Promise<void> {
+    this.isWaitingPhase = true;
+    this.currentDisplaySpeed = displaySpeed;
+
+    try {
+      let waitDone = false;
+      const repaintLoop = (async () => {
+        let toggle = false;
+        while (!waitDone && this.isCapturing && this.page) {
+          await this.forceRepaint(toggle);
+          toggle = !toggle;
+          await new Promise((r) => setTimeout(r, REPAINT_INTERVAL_MS));
+        }
+      })();
+
+      await conditionPromise;
+      waitDone = true;
+      await repaintLoop;
+    } finally {
+      this.isWaitingPhase = false;
+      this.currentDisplaySpeed = undefined;
+    }
+  }
+
+  /**
    * Pre-register waitForResponse listeners at the start of each step.
    * This ensures the listener is active before any preceding action
    * (e.g. click) triggers the request, preventing race conditions
@@ -818,95 +849,92 @@ export class ClipwiseRecorder {
 
       case "waitForSelector": {
         const locator = this.page.locator(action.selector).first();
-        await locator.waitFor({ state: action.state, timeout: action.timeout });
+        const selectorPromise = locator.waitFor({ state: action.state, timeout: action.timeout });
+        if (action.captureWhileWaiting) {
+          await this.waitForConditionWithCapture(selectorPromise, action.displaySpeed);
+        } else {
+          await selectorPromise;
+        }
         break;
       }
 
       case "waitForNavigation": {
-        await this.page.waitForLoadState(action.waitUntil, { timeout: action.timeout });
+        const navPromise = this.page.waitForLoadState(action.waitUntil, { timeout: action.timeout });
+        if (action.captureWhileWaiting) {
+          await this.waitForConditionWithCapture(navPromise, action.displaySpeed);
+        } else {
+          await navPromise;
+        }
         break;
       }
 
       case "waitForURL": {
-        await this.page.waitForURL(action.url, { timeout: action.timeout });
+        const urlPromise = this.page.waitForURL(action.url, { timeout: action.timeout });
+        if (action.captureWhileWaiting) {
+          await this.waitForConditionWithCapture(urlPromise, action.displaySpeed);
+        } else {
+          await urlPromise;
+        }
         break;
       }
 
       case "waitForFunction": {
-        await this.page.waitForFunction(action.expression, undefined, {
+        const fnPromise = this.page.waitForFunction(action.expression, undefined, {
           polling: action.polling,
           timeout: action.timeout,
         });
+        if (action.captureWhileWaiting) {
+          await this.waitForConditionWithCapture(fnPromise, action.displaySpeed);
+        } else {
+          await fnPromise;
+        }
         break;
       }
 
       case "waitForResponse": {
         const pending = this.pendingResponsePromises.get(actionIndex);
         if (pending) {
-          await pending;
+          if (action.captureWhileWaiting) {
+            await this.waitForConditionWithCapture(pending, action.displaySpeed);
+          } else {
+            await pending;
+          }
         }
         break;
       }
 
       case "smartWait": {
-        // Mark frames captured during this wait as waiting phase
-        this.isWaitingPhase = true;
-        this.currentDisplaySpeed = action.displaySpeed;
-
-        try {
-          // Build the condition promise
-          let conditionPromise: Promise<unknown>;
-          switch (action.until) {
-            case "networkIdle":
-              conditionPromise = this.page.waitForLoadState("networkidle", { timeout: action.timeout });
-              break;
-            case "selector":
-              conditionPromise = action.selector
-                ? this.page.locator(action.selector).first().waitFor({ state: "visible", timeout: action.timeout })
-                : Promise.resolve();
-              break;
-            case "domStable":
-              conditionPromise = this.page.waitForFunction(
-                () => new Promise<boolean>((resolve) => {
-                  let timer: ReturnType<typeof setTimeout>;
-                  const observer = new MutationObserver(() => {
-                    clearTimeout(timer);
-                    timer = setTimeout(() => { observer.disconnect(); resolve(true); }, 500);
-                  });
-                  observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+        // Build the condition promise
+        let conditionPromise: Promise<unknown>;
+        switch (action.until) {
+          case "networkIdle":
+            conditionPromise = this.page.waitForLoadState("networkidle", { timeout: action.timeout });
+            break;
+          case "selector":
+            conditionPromise = action.selector
+              ? this.page.locator(action.selector).first().waitFor({ state: "visible", timeout: action.timeout })
+              : Promise.resolve();
+            break;
+          case "domStable":
+            conditionPromise = this.page.waitForFunction(
+              () => new Promise<boolean>((resolve) => {
+                let timer: ReturnType<typeof setTimeout>;
+                const observer = new MutationObserver(() => {
+                  clearTimeout(timer);
                   timer = setTimeout(() => { observer.disconnect(); resolve(true); }, 500);
-                }),
-                undefined,
-                { timeout: action.timeout },
-              );
-              break;
-            default:
-              conditionPromise = Promise.resolve();
-          }
-
-          // Run forced repaints IN PARALLEL with the condition wait.
-          // Without this, the dedup signature (top 2048 bytes of PNG) doesn't
-          // change when a spinner is in the center of the screen, causing ALL
-          // spinner frames to be discarded as duplicates.  The repaint loop
-          // toggles a 1px element at the top of the viewport, making each
-          // frame unique so CDP captures them for the fast-forward effect.
-          let waitDone = false;
-          const repaintLoop = (async () => {
-            let toggle = false;
-            while (!waitDone && this.isCapturing && this.page) {
-              await this.forceRepaint(toggle);
-              toggle = !toggle;
-              await new Promise((r) => setTimeout(r, REPAINT_INTERVAL_MS));
-            }
-          })();
-
-          await conditionPromise;
-          waitDone = true;
-          await repaintLoop;
-        } finally {
-          this.isWaitingPhase = false;
-          this.currentDisplaySpeed = undefined;
+                });
+                observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+                timer = setTimeout(() => { observer.disconnect(); resolve(true); }, 500);
+              }),
+              undefined,
+              { timeout: action.timeout },
+            );
+            break;
+          default:
+            conditionPromise = Promise.resolve();
         }
+
+        await this.waitForConditionWithCapture(conditionPromise, action.displaySpeed);
         break;
       }
     }
