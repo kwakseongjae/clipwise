@@ -693,6 +693,25 @@ export class ClipwiseRecorder {
           }
         }
 
+        // React/Vue/Angular controlled input 호환성:
+        // Playwright의 keyboard.type()은 native DOM 이벤트만 발생시키므로
+        // React의 synthetic event system이 onChange를 감지하지 못할 수 있음.
+        // native value setter로 값을 재설정하고 input/change 이벤트를 dispatch.
+        await this.page.evaluate((sel) => {
+          const el = document.querySelector(sel);
+          if (!el) return;
+          const proto =
+            el instanceof HTMLTextAreaElement
+              ? HTMLTextAreaElement.prototype
+              : HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+          if (setter) {
+            setter.call(el, (el as HTMLInputElement).value);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }, action.selector);
+
         // Final click at typing end to ensure the zoom zone extends
         // through the hold duration after the last character.
         this.clickTimeline.push({
