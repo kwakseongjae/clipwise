@@ -434,11 +434,11 @@ steps:
       전체 스키마 클립보드에 복사
     </button>
   </div>
-  <p class="ai-ready-desc">이 블록에는 AI가 필요한 모든 정보가 담겨 있습니다: 12종 액션 타입, 파라미터, 기본값, 이펙트 설정, 출력 옵션, 사용 규칙.</p>
+  <p class="ai-ready-desc">이 블록에는 AI가 필요한 모든 정보가 담겨 있습니다: 13종 액션 타입, 파라미터, 기본값, 이펙트 설정, 출력 옵션, 사용 규칙.</p>
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise 전체 스키마 레퍼런스</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.0)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.2)
 # 스크립터블 시네마틱 스크린 레코더 — YAML 작성, MP4 출력
 # 설치: npm install -D clipwise
 # 녹화: npx clipwise record scenario.yaml -f mp4
@@ -455,8 +455,21 @@ output:
   format: mp4                    # mp4 | gif | png-sequence
   fps: 30                        # 1-60 (기본: 30)
   preset: balanced               # social | balanced | archive (기본: balanced)
+  codec: auto                    # auto | h264 | hevc | av1 (기본: auto)
   width: 1280                    # 기본: 1280
   height: 800                    # 기본: 800
+
+# ─── 인증 (선택) ─────────────────────────────────────
+auth:
+  storageState: ./auth.json      # Playwright storageState 파일 경로
+  cookies:                       # 또는 인라인 쿠키
+    - name: session_id
+      value: abc123
+      domain: .example.com
+      path: /                    # 기본: /
+      httpOnly: false            # 기본: false
+      secure: false              # 기본: false
+      sameSite: Lax              # Strict | Lax | None (기본: Lax)
 
 # ─── 오디오 (MP4 전용) ───────────────────────────────
 audio:
@@ -509,29 +522,46 @@ steps:
         name: "결과"             # 선택
         fullPage: false          # 기본: false
 
-      # --- 비동기 대기 액션 (5종) ---
+      # --- 비동기 대기 액션 (5종 + smartWait) ---
       - action: waitForSelector
         selector: ".result"
         state: visible           # visible (기본) | attached | hidden
         timeout: 15000           # 기본: 15000
+        captureWhileWaiting: false  # true = 대기 중 프레임 캡처 (기본: false)
+        displaySpeed: 8          # 캡처된 대기 프레임 속도 배율 (1-32)
 
       - action: waitForNavigation
         waitUntil: networkidle   # load | domcontentloaded | networkidle (기본)
         timeout: 15000           # 기본: 15000
+        captureWhileWaiting: false
+        displaySpeed: 8
 
       - action: waitForURL
         url: "https://example.com/dashboard"
         timeout: 15000           # 기본: 15000
+        captureWhileWaiting: false
+        displaySpeed: 8
 
       - action: waitForFunction
         expression: "document.querySelector('.done') !== null"
         polling: raf             # raf (기본) 또는 밀리초 숫자 (예: 500)
         timeout: 30000           # 기본: 30000
+        captureWhileWaiting: false
+        displaySpeed: 8
 
       - action: waitForResponse
         url: "/api/chat"         # URL 부분 문자열 매칭
         status: 200              # 선택. HTTP 상태코드 필터 (100-599)
         timeout: 30000           # 기본: 30000
+        captureWhileWaiting: false
+        displaySpeed: 8
+
+      # --- 스마트 대기 (녹화 + 자동 압축) ---
+      - action: smartWait
+        until: networkIdle       # networkIdle | selector | domStable
+        selector: ".result"      # until=selector일 때 필수
+        timeout: 30000           # 기본: 30000
+        displaySpeed: 8          # 속도 배율 (1-32, 기본: 8)
 
 # ─── 이펙트 ───────────────────────────────────────────
 effects:
@@ -540,6 +570,7 @@ effects:
     intensity: light             # subtle(1.15x)|light(1.25x)|moderate(1.35x)|strong(1.5x)|dramatic(1.8x)
     # scale: 1.25               # 숫자 오버라이드 (1-5); intensity 설정 시 무시
     duration: 800                # ms (기본: 800)
+    easing: ease-in-out          # ease-in-out | ease-in | ease-out | linear | spring
     autoZoom:
       followCursor: true         # 커서 위치를 따라 뷰포트 패닝
       transitionDuration: 300    # ms (기본: 300)
@@ -576,6 +607,12 @@ effects:
     enabled: false               # 기본: false
     idleSpeed: 2.0               # 기본: 2.0
     actionSpeed: 0.8             # 기본: 0.8
+  smartSpeed:
+    enabled: false               # 기본: false
+    waitSpeed: 8                 # smartWait 프레임 속도 (1-32, 기본: 8)
+    idleSpeed: 4                 # 유휴 프레임 속도 (1-16, 기본: 4)
+    transitionDuration: 300      # 속도 전환 ease 시간 (ms)
+    minSegmentDuration: 500      # 이보다 짧은 구간은 가속하지 않음 (ms)
   watermark:
     enabled: false               # 기본: false
     text: ""
@@ -594,7 +631,12 @@ effects:
 # - 스텝별 이펙트: 글로벌 이펙트를 스텝 단위로 오버라이드 가능
 # - 스마트 카메라: 스크롤 중 줌 억제; followCursor로 커서 추적
 # - 트랜지션: fade/blur는 시네마틱 컷, slide-left/up은 순차 흐름에 적합
-# - 오디오: MP4 포맷에서만 작동; 파일 경로가 유효해야 함</code></pre>
+# - 오디오: MP4 포맷에서만 작동; 파일 경로가 유효해야 함
+# - 인증: 로그인 필요 페이지는 storageState 사용 (playwright codegen으로 생성)
+# - captureWhileWaiting: 비동기 대기 중 로딩 애니메이션 캡처 시 true 설정
+# - 스프링 줌: easing: spring으로 Screen Studio 스타일 자연스러운 카메라 모션
+# - 코덱: av1 = 최소 파일 크기 (느린 인코딩); hevc = 10비트 컬러; auto = h264
+# - type 액션: React/Vue 호환을 위해 input/change 이벤트 자동 dispatch</code></pre>
   </div>
 </section>
 

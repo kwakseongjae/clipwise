@@ -434,11 +434,11 @@ steps:
       Copy entire schema to clipboard
     </button>
   </div>
-  <p class="ai-ready-desc">This block contains everything an AI needs: all 12 action types with parameters, defaults, effects config, output options, and usage rules.</p>
+  <p class="ai-ready-desc">This block contains everything an AI needs: all 13 action types with parameters, defaults, effects config, output options, and usage rules.</p>
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise Full Schema Reference</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.0)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.2)
 # Scriptable cinematic screen recorder — YAML in, MP4 out
 # Install: npm install -D clipwise
 # Record:  npx clipwise record scenario.yaml -f mp4
@@ -455,8 +455,21 @@ output:
   format: mp4                    # mp4 | gif | png-sequence
   fps: 30                        # 1-60 (default: 30)
   preset: balanced               # social | balanced | archive (default: balanced)
+  codec: auto                    # auto | h264 | hevc | av1 (default: auto)
   width: 1280                    # default: 1280
   height: 800                    # default: 800
+
+# ─── Authentication (optional) ───────────────────────
+auth:
+  storageState: ./auth.json      # Playwright storageState file path
+  cookies:                       # or inline cookies
+    - name: session_id
+      value: abc123
+      domain: .example.com
+      path: /                    # default: /
+      httpOnly: false            # default: false
+      secure: false              # default: false
+      sameSite: Lax              # Strict | Lax | None (default: Lax)
 
 # ─── Audio (MP4 only) ────────────────────────────────
 audio:
@@ -509,29 +522,46 @@ steps:
         name: "result"           # optional label
         fullPage: false          # default: false
 
-      # --- Async Wait Actions (5) ---
+      # --- Async Wait Actions (5 + smartWait) ---
       - action: waitForSelector
         selector: ".result"
         state: visible           # visible (default) | attached | hidden
         timeout: 15000           # default: 15000
+        captureWhileWaiting: false  # true = capture frames during wait (default: false)
+        displaySpeed: 8          # speed multiplier for captured wait frames (1-32)
 
       - action: waitForNavigation
         waitUntil: networkidle   # load | domcontentloaded | networkidle (default)
         timeout: 15000           # default: 15000
+        captureWhileWaiting: false
+        displaySpeed: 8
 
       - action: waitForURL
         url: "https://example.com/dashboard"
         timeout: 15000           # default: 15000
+        captureWhileWaiting: false
+        displaySpeed: 8
 
       - action: waitForFunction
         expression: "document.querySelector('.done') !== null"
         polling: raf             # raf (default) or ms number (e.g. 500)
         timeout: 30000           # default: 30000
+        captureWhileWaiting: false
+        displaySpeed: 8
 
       - action: waitForResponse
         url: "/api/chat"         # URL substring match
         status: 200              # optional HTTP status filter (100-599)
         timeout: 30000           # default: 30000
+        captureWhileWaiting: false
+        displaySpeed: 8
+
+      # --- Smart Wait (records + auto-compresses) ---
+      - action: smartWait
+        until: networkIdle       # networkIdle | selector | domStable
+        selector: ".result"      # required when until=selector
+        timeout: 30000           # default: 30000
+        displaySpeed: 8          # speed multiplier (1-32, default: 8)
 
 # ─── Effects ──────────────────────────────────────────
 effects:
@@ -540,6 +570,7 @@ effects:
     intensity: light             # subtle(1.15x)|light(1.25x)|moderate(1.35x)|strong(1.5x)|dramatic(1.8x)
     # scale: 1.25               # numeric override (1-5); ignored when intensity is set
     duration: 800                # ms (default: 800)
+    easing: ease-in-out          # ease-in-out | ease-in | ease-out | linear | spring
     autoZoom:
       followCursor: true         # viewport pans to follow cursor position
       transitionDuration: 300    # ms (default: 300)
@@ -576,6 +607,12 @@ effects:
     enabled: false               # default: false
     idleSpeed: 2.0               # default: 2.0
     actionSpeed: 0.8             # default: 0.8
+  smartSpeed:
+    enabled: false               # default: false
+    waitSpeed: 8                 # speed for smartWait frames (1-32, default: 8)
+    idleSpeed: 4                 # speed for idle frames (1-16, default: 4)
+    transitionDuration: 300      # ease duration between speed changes (ms)
+    minSegmentDuration: 500      # don't speed up segments shorter than this (ms)
   watermark:
     enabled: false               # default: false
     text: ""
@@ -594,7 +631,12 @@ effects:
 # - Per-step effects: override any effect per step; unset props inherit global
 # - Smart camera: zoom suppressed during scroll; followCursor pans to cursor
 # - Transitions: fade/blur for cinematic cuts; slide-left/up for sequences
-# - Audio: only works with MP4 format; file must exist at specified path</code></pre>
+# - Audio: only works with MP4 format; file must exist at specified path
+# - Auth: use storageState for login-required pages (generate with playwright codegen)
+# - captureWhileWaiting: set true on async waits to record loading animations
+# - Spring zoom: easing: spring for natural Screen Studio-like camera motion
+# - Codec: av1 = smallest files (slow encode); hevc = 10-bit color; auto = h264
+# - type action: auto-dispatches input/change events for React/Vue compatibility</code></pre>
   </div>
 </section>
 

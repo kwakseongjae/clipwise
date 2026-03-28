@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-03-28
+
+### Added
+- **Authentication support** — `auth.storageState` (Playwright session file) and `auth.cookies` (inline cookie definitions) for recording login-required pages
+- **`captureWhileWaiting`** — new option on all async wait actions (`waitForSelector`, `waitForNavigation`, `waitForURL`, `waitForFunction`, `waitForResponse`) to continuously capture frames during wait periods, with `displaySpeed` for auto-compression
+- **`waitForConditionWithCapture()` helper** — shared repaint loop extracted from `smartWait`, eliminating code duplication
+
+### Fixed
+- **Keystroke HUD CJK text overflow** — Korean/Chinese/Japanese text now auto-wraps based on display width (CJK chars measured at 1.7× width); previously truncated or overflowed the HUD box
+- **React controlled input compatibility** — `type` action now dispatches native `input`/`change` events after typing, ensuring React/Vue/Angular state updates
+
+### Changed
+- **Claude Code skill** synced with v0.7.0 features — added `smartWait`, `smartSpeed`, `easing: spring`, `output.codec`, auto loader detection, zoom sustain rules
+- **Static pages** (EN/KO) — AI schema updated to v0.7.2 with auth, captureWhileWaiting, smartWait, smartSpeed, codec, easing fields
+
+---
+
 ## [0.7.1] - 2026-03-28
 
 ### Changed

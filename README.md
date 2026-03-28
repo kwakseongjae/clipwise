@@ -154,7 +154,7 @@ steps:
 |--------|-----------|---------|-------------|
 | `navigate` | `url`, `waitUntil?` | `waitUntil: "networkidle"` | Navigate to URL |
 | `click` | `selector`, `delay?`, `timeout?` | | Click an element |
-| `type` | `selector`, `text`, `delay?`, `timeout?` | `delay: 50` | Type text (char-by-char) |
+| `type` | `selector`, `text`, `delay?`, `timeout?` | `delay: 50` | Type text (char-by-char, React/Vue compatible) |
 | `hover` | `selector`, `timeout?` | | Hover over element |
 | `scroll` | `y?`, `x?`, `selector?`, `smooth?`, `timeout?` | `y: 0`, `x: 0`, `smooth: true` | Scroll by offset |
 | `wait` | `duration` | | Wait (ms) |
@@ -164,12 +164,14 @@ steps:
 
 | Action | Parameters | Default | Description |
 |--------|-----------|---------|-------------|
-| `waitForSelector` | `selector`, `state?`, `timeout?` | `state: "visible"`, `timeout: 15000` | Wait for element state |
-| `waitForNavigation` | `waitUntil?`, `timeout?` | `waitUntil: "networkidle"`, `timeout: 15000` | Wait for page load |
-| `waitForURL` | `url`, `timeout?` | `timeout: 15000` | Wait for URL match |
-| `waitForFunction` | `expression`, `polling?`, `timeout?` | `polling: "raf"`, `timeout: 30000` | Wait for JS expression to be truthy |
-| `waitForResponse` | `url`, `status?`, `timeout?` | `timeout: 30000` | Wait for network response (URL substring match) |
+| `waitForSelector` | `selector`, `state?`, `timeout?`, `captureWhileWaiting?`, `displaySpeed?` | `state: "visible"`, `timeout: 15000` | Wait for element state |
+| `waitForNavigation` | `waitUntil?`, `timeout?`, `captureWhileWaiting?`, `displaySpeed?` | `waitUntil: "networkidle"`, `timeout: 15000` | Wait for page load |
+| `waitForURL` | `url`, `timeout?`, `captureWhileWaiting?`, `displaySpeed?` | `timeout: 15000` | Wait for URL match |
+| `waitForFunction` | `expression`, `polling?`, `timeout?`, `captureWhileWaiting?`, `displaySpeed?` | `polling: "raf"`, `timeout: 30000` | Wait for JS expression to be truthy |
+| `waitForResponse` | `url`, `status?`, `timeout?`, `captureWhileWaiting?`, `displaySpeed?` | `timeout: 30000` | Wait for network response (URL substring match) |
 | `smartWait` | `until`, `selector?`, `timeout?`, `displaySpeed?` | `until: "networkIdle"`, `timeout: 30000`, `displaySpeed: 8` | Smart wait — records real wait, auto-speeds in output |
+
+**`captureWhileWaiting`**: When `true`, continuously captures frames during the wait (like `smartWait`). Useful for recording loading animations, progress bars, streaming responses. Pairs with `displaySpeed` (1-32, default: 8) to auto-compress wait frames in the output.
 
 **`waitUntil`** options: `"load"`, `"domcontentloaded"`, `"networkidle"` (default)
 **`state`** options: `"visible"` (default), `"attached"`, `"hidden"`
@@ -212,6 +214,29 @@ For slower, cinematic demos:
 - `captureDelay: 200-400` ms
 - `holdDuration: 1500-2500` ms
 - `type.delay: 40-60` ms per character
+
+### Authentication
+
+Record pages behind login by restoring a browser session. Supports Playwright's `storageState` file (recommended) or inline cookies.
+
+```yaml
+# Option 1: Playwright storageState file (cookies + localStorage)
+auth:
+  storageState: ./auth-state.json
+
+# Option 2: Inline cookies
+auth:
+  cookies:
+    - name: session_id
+      value: abc123
+      domain: .example.com
+```
+
+Generate a `storageState` file by logging in interactively:
+
+```bash
+npx playwright codegen --save-storage=auth-state.json https://my-app.com
+```
 
 ## Effects
 
@@ -297,7 +322,7 @@ deviceFrame:
 
 Displays a HUD at the bottom of the screen showing what was typed. By default, only modifier+key shortcuts are shown (industry standard — same as Screen Studio, KeyCastr, ScreenFlow). Set `showTyping: true` to also show regular typed text.
 
-When typing across multiple input fields, each field gets its own line in the HUD (up to 3 recent sessions, oldest dimmed at top, newest bright at bottom).
+When typing across multiple input fields, each field gets its own line in the HUD (up to 3 recent sessions, oldest dimmed at top, newest bright at bottom). CJK text (Korean, Chinese, Japanese) is automatically wrapped to fit the screen width.
 
 ```yaml
 keystroke:
