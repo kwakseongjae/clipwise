@@ -40,6 +40,7 @@ export type {
   StepAction,
   StepEffectsOverride,
   TransitionType,
+  AuthConfig,
   AudioConfig,
   EffectsConfig,
   OutputConfig,

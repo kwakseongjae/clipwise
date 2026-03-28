@@ -147,9 +147,21 @@ export class ClipwiseRecorder {
     this.loaderDetectionEnabled = scenario.effects.smartSpeed?.enabled ?? false;
 
     this.browser = await chromium.launch({ headless: true });
-    this.context = await this.browser.newContext({
+
+    // storageState가 있으면 Playwright에 직접 전달 (쿠키+localStorage 복원)
+    const contextOptions: Record<string, unknown> = {
       viewport: this.viewport,
-    });
+    };
+    if (scenario.auth?.storageState) {
+      contextOptions.storageState = scenario.auth.storageState;
+    }
+    this.context = await this.browser.newContext(contextOptions);
+
+    // 인라인 쿠키가 있으면 추가 (storageState 이후에 적용)
+    if (scenario.auth?.cookies?.length) {
+      await this.context.addCookies(scenario.auth.cookies);
+    }
+
     this.page = await this.context.newPage();
 
     // Reset state

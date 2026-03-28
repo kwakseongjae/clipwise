@@ -364,6 +364,35 @@ export const AudioConfigSchema = z.object({
 
 export type AudioConfig = z.infer<typeof AudioConfigSchema>;
 
+/**
+ * Authentication configuration — restores a browser session for recording
+ * pages behind login.  Supports Playwright's storageState file (recommended)
+ * or inline cookie definitions.
+ *
+ * Generate a storageState file:
+ *   npx playwright codegen --save-storage=auth.json https://my-app.com
+ */
+export const AuthConfigSchema = z.object({
+  /** Path to a Playwright storageState JSON file (cookies + localStorage). */
+  storageState: z.string().optional(),
+  /** Inline cookie definitions (applied after storageState if both specified). */
+  cookies: z
+    .array(
+      z.object({
+        name: z.string(),
+        value: z.string(),
+        domain: z.string(),
+        path: z.string().default("/"),
+        httpOnly: z.boolean().default(false),
+        secure: z.boolean().default(false),
+        sameSite: z.enum(["Strict", "Lax", "None"]).default("Lax"),
+      }),
+    )
+    .optional(),
+});
+
+export type AuthConfig = z.infer<typeof AuthConfigSchema>;
+
 export const ScenarioSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -373,6 +402,8 @@ export const ScenarioSchema = z.object({
       height: z.number().default(800),
     })
     .default({}),
+  /** Optional authentication — restores browser session for logged-in pages. */
+  auth: AuthConfigSchema.optional(),
   effects: EffectsConfigSchema.default({}),
   output: OutputConfigSchema.default({}),
   /** Optional audio narration — muxed into MP4 output. */
