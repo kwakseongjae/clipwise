@@ -52,6 +52,7 @@ output:
   height: 800             # Output height
   fps: 30                 # 1-60
   preset: balanced        # social | balanced | archive
+  codec: auto             # auto | h264 | hevc | av1
   outputDir: "./output"
   filename: "my-recording"
 
@@ -71,7 +72,7 @@ steps: []                 # Array of steps (min 1, first must have navigate)
   actions: []                 # Array of actions
 ```
 
-### Actions (12 types)
+### Actions (13 types)
 
 #### Basic Actions
 
@@ -169,6 +170,16 @@ steps: []                 # Array of steps (min 1, first must have navigate)
   timeout: 30000
 ```
 
+13. **smartWait** — Record real wait time, then auto-compress in output
+```yaml
+- action: smartWait
+  until: networkIdle           # networkIdle | selector | domStable
+  selector: ".results"         # Required when until=selector
+  timeout: 30000               # Max wait ms (default: 30000)
+  displaySpeed: 8              # Speed multiplier for output (1-32, default: 8)
+```
+> Unlike fixed `wait`, `smartWait` captures frames during the wait period (with forced repaints to bypass dedup), then compresses them at `displaySpeed` in the final video. Use this for API calls, loading states, streaming responses.
+
 ### Effects Configuration
 
 #### Zoom — Adaptive zoom follows cursor on clicks (smart camera: auto-suppressed during scroll)
@@ -178,6 +189,7 @@ zoom:
   intensity: light            # subtle(1.15x) | light(1.25x) | moderate(1.35x) | strong(1.5x) | dramatic(1.8x)
   # scale: 1.25              # Or use numeric value (overridden by intensity)
   duration: 800               # Zoom animation ms
+  easing: ease-in-out         # ease-in-out | ease-in | ease-out | linear | spring
   autoZoom:
     followCursor: true        # Viewport pans to follow cursor position
     transitionDuration: 300
@@ -261,6 +273,17 @@ speedRamp:
   transitionFrames: 15
 ```
 
+#### Smart Speed — Content-aware speed control (auto-compresses wait/loading periods)
+```yaml
+smartSpeed:
+  enabled: true
+  waitSpeed: 8                # Speed multiplier for smartWait frames (1-32, default: 8)
+  idleSpeed: 4                # Speed multiplier for idle frames (1-16, default: 4)
+  transitionDuration: 300     # Ease duration between speed changes (ms)
+  minSegmentDuration: 500     # Don't speed up segments shorter than this (ms)
+```
+> Unlike `speedRamp` (click-based), `smartSpeed` uses semantic metadata from `smartWait` actions and per-frame change scoring. Pairs naturally with `smartWait` for loading/API-call compression.
+
 #### Audio Narration — Attach audio to MP4 output
 ```yaml
 audio:
@@ -315,6 +338,11 @@ steps:
 9. **Smart camera**: zoom is automatically suppressed during scroll actions; `followCursor` pans to cursor position
 10. **Transitions**: use `fade` or `blur` for cinematic cuts between major sections; `slide-left`/`slide-up` for sequential flows
 11. **Audio**: audio file must exist at the specified path; only works with MP4 output format
+12. **Spring zoom**: use `easing: spring` for Screen Studio-like natural camera motion with fast initial response and smooth deceleration; nearby clicks are auto-merged into continuous zoom zones
+13. **Zoom sustain during typing**: zoom automatically maintains throughout `type` actions — no need to add extra click events
+14. **Auto loader detection**: CSS spinners (`@keyframes spin/rotate/pulse/bounce`) are passively detected via CDP and auto-marked for smartSpeed compression
+15. **Codec choice**: `av1` gives 40-60% smaller files but slower encode; `hevc` provides 10-bit color (no gradient banding); `auto` picks h264 for compatibility
+16. **smartWait over wait**: prefer `smartWait` over fixed `wait` for API calls and loading states — it captures real frames and auto-compresses them
 
 ## Timing Presets
 
