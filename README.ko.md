@@ -25,6 +25,20 @@ npx clipwise@latest record .clipwise/scenarios/demo.yaml
 **Zero footprint**: Clipwise가 남기는 모든 것(시나리오, 픽스처, 인증 상태, 출력물)은
 `.clipwise/` 디렉토리 하나에 담깁니다. `rm -rf .clipwise` 한 줄로 모든 흔적이 사라집니다.
 
+### 처음 5분 가이드
+
+1. `npx clipwise@latest init` — 바로 쓸 수 있는 시나리오 2개와 함께 `.clipwise/` 생성
+2. `npx clipwise@latest record .clipwise/scenarios/keynote.yaml` — **수정 없이** 키노트
+   런치 영상이 렌더됩니다 (호스팅 데모 대시보드를 녹화)
+3. `.clipwise/output/keynote.mp4` 열기 — 이것이 기본으로 제공되는 퀄리티 기준입니다
+4. `keynote.yaml` 수정: `url:`과 셀렉터를 **내 앱**으로 교체, 캡션 문구 조정
+5. `brand.yaml` 수정: accent 컬러·폰트 프리셋·캐치프레이즈 — 영상 전체가 따라옵니다
+
+자연어가 편하시면 `npx clipwise install-skill` 후 Claude Code에서 `/clipwise`로
+요청하세요 — 키노트 레시피가 내장된 스킬이 YAML을 대신 작성합니다. 런치 영상이
+아니라 단순 화면 녹화가 필요하면 `scenarios/demo.yaml`과 아래
+[YAML 시나리오 형식](#yaml-시나리오-형식)에서 시작하세요.
+
 ## 요구사항
 
 - **Node.js** >= 18

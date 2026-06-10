@@ -1,5 +1,12 @@
 # Clipwise AI Scenario Guide
 
+> **⚠️ 2026-06 업데이트**: 이 문서보다 더 좋은 방법이 생겼습니다.
+> `npx clipwise install-skill` 로 Claude Code 스킬을 설치하면 키노트 런치 영상
+> (scenes 타임라인)까지 포함한 최신 레시피로 AI가 시나리오를 대신 작성합니다.
+> 아래 프롬프트 템플릿은 classic steps 시나리오 기준의 레거시 문서입니다.
+
+
+
 AI(ChatGPT, Claude 등)와 함께 Clipwise 시나리오를 작성하는 가이드입니다.
 
 ## Quick Start — AI에게 이것만 복붙하세요

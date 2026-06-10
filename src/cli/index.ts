@@ -22,7 +22,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.9.0");
+  .version("0.9.1");
 
 program
   .command("record")
@@ -352,6 +352,100 @@ steps:
         selector: "#my-button"
 `;
 
+    // Keynote 스타터 — 호스팅 데모 대시보드 대상이라 수정 없이 바로 실행된다.
+    // 사용자는 url과 셀렉터만 자기 앱으로 교체하면 된다.
+    const keynoteTemplate = `# Keynote-style launch video — runs AS-IS against the hosted demo.
+# Try it first:  clipwise record .clipwise/scenarios/keynote.yaml
+# Then replace the url + selectors with your own app.
+
+name: "My Launch Video"
+viewport: { width: 1280, height: 800, deviceScaleFactor: 2 }   # 2 = retina quality
+
+effects:
+  cursor: { enabled: true, clickEffect: true, highlight: false, trail: false }
+
+output:
+  format: mp4
+  fps: 30
+  preset: balanced
+  filename: keynote
+
+scenes:
+  # footage take — recorded once; vignettes below quote it by step
+  - type: screen
+    id: demo
+    steps:
+      - name: "Open"
+        captureDelay: 120
+        holdDuration: 1400
+        actions:
+          - action: navigate
+            url: "https://kwakseongjae.github.io/clipwise/demo/"   # ← your app URL
+            waitUntil: networkidle
+      - name: "Stats"
+        captureDelay: 50
+        holdDuration: 700
+        actions:
+          - { action: hover, selector: "#stat-users" }             # ← your selectors
+      - name: "Search"
+        captureDelay: 50
+        holdDuration: 500
+        actions:
+          - { action: type, selector: "#search-input", text: "growth report", delay: 28 }
+      - name: "Switch tab"
+        captureDelay: 50
+        holdDuration: 1100
+        actions:
+          - { action: click, selector: "#tab-daily" }
+      - name: "Table"
+        captureDelay: 80
+        holdDuration: 1300
+        actions:
+          - action: scroll
+            y: 420
+            smooth: true
+
+  # ── timeline ──
+  - type: motion
+    template: kinetic-type
+    duration: 2200
+    props: { lines: "Ship *demos*,||not edits.", size: 86 }
+
+  - type: vignette
+    footage: demo
+    duration: 4200
+    layout: hero
+    num: "01"
+    label: "Cinematic camera"
+    caption: "Recorded from a real app — *zero code changes*"
+    push: { from: 1.02, to: 1.1 }
+    start: { step: 0, offset: 0.15 }
+    fx:
+      - { kind: circle, selector: "#stat-users", delay: 2700 }
+
+  - type: vignette
+    footage: demo
+    duration: 4000
+    layout: crop
+    num: "02"
+    label: "Close-up"
+    caption: "Selector-measured crop — *no pixel guessing*"
+    crop: { selector: "#chart-area", pad: 14 }
+    push: { from: 1.04, to: 1 }
+    start: { step: 3 }
+    rate: 1.1
+
+  - type: motion
+    template: kinetic-type
+    duration: 1900
+    props: { lines: "Your code,||*untouched.*", size: 80, fx: marker }
+
+  - type: motion
+    template: kinetic-type
+    duration: 2600
+    props: { lines: "*My Product*", size: 90, sub: "npx clipwise@latest init" }
+`;
+
     const gitignore = `# Clipwise local artifacts — safe to ignore
 auth/
 output/
@@ -395,23 +489,26 @@ catchphrases:
     await mkdir(join(baseDir, "fixtures"), { recursive: true });
     await mkdir(join(baseDir, "auth"), { recursive: true });
     await writeFile(join(baseDir, "scenarios", "demo.yaml"), template, "utf-8");
+    await writeFile(join(baseDir, "scenarios", "keynote.yaml"), keynoteTemplate, "utf-8");
     await writeFile(join(baseDir, "brand.yaml"), brandTemplate, "utf-8");
     await writeFile(join(baseDir, ".gitignore"), gitignore, "utf-8");
 
     console.log(chalk.green("Created .clipwise/\n"));
     console.log("  .clipwise/");
-    console.log("    scenarios/demo.yaml   — your first scenario (edit the URL)");
-    console.log("    brand.yaml            — tone & manner + catchphrases (Brand Kit)");
-    console.log("    prepare/              — CSS/JS injected only while recording");
-    console.log("    fixtures/             — mocked API responses (JSON)");
-    console.log("    auth/                 — storageState files (gitignored)");
-    console.log("    .gitignore            — keeps auth/, output/, cache/ out of git");
-    console.log("\nNext steps:");
-    console.log(`  1. Edit ${chalk.bold(".clipwise/scenarios/demo.yaml")} — change the URL to your site`);
-    console.log(`  2. Run ${chalk.bold("clipwise record .clipwise/scenarios/demo.yaml")}`);
-    console.log(`  3. Find your output in ${chalk.bold(".clipwise/output/")}`);
-    console.log(`\nRemove every trace anytime: ${chalk.bold("rm -rf .clipwise")}`);
-    console.log(`Or try the built-in demo: ${chalk.bold("clipwise demo")}\n`);
+    console.log("    scenarios/keynote.yaml — keynote launch video (runs as-is!)");
+    console.log("    scenarios/demo.yaml    — simple screen recording (edit the URL)");
+    console.log("    brand.yaml             — tone & font presets + catchphrases");
+    console.log("    prepare/               — CSS/JS injected only while recording");
+    console.log("    fixtures/              — mocked API responses (JSON)");
+    console.log("    auth/                  — storageState files (gitignored)");
+    console.log(`\n${chalk.bold("Try it right now")} (no edits needed — records the hosted demo):`);
+    console.log(`  ${chalk.bold("clipwise record .clipwise/scenarios/keynote.yaml")}`);
+    console.log("\nThen make it yours:");
+    console.log(`  1. Edit ${chalk.bold("keynote.yaml")} — swap the url + selectors for your app`);
+    console.log(`  2. Edit ${chalk.bold("brand.yaml")} — your accent color & catchphrases`);
+    console.log(`  3. Or let AI write scenarios: ${chalk.bold("clipwise install-skill")} → ask ${chalk.bold("/clipwise")} in Claude Code`);
+    console.log(`\nOutput lands in ${chalk.bold(".clipwise/output/")} · remove every trace: ${chalk.bold("rm -rf .clipwise")}`);
+    console.log(`Docs: ${chalk.bold("https://kwakseongjae.github.io/clipwise/")}\n`);
   });
 
 program

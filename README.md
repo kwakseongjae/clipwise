@@ -25,6 +25,20 @@ npx clipwise@latest record .clipwise/scenarios/demo.yaml
 **Zero footprint**: everything Clipwise touches lives in one `.clipwise/` directory —
 scenarios, fixtures, auth state, output. Remove every trace with `rm -rf .clipwise`.
 
+### Your first 5 minutes
+
+1. `npx clipwise@latest init` — scaffolds `.clipwise/` with two ready scenarios
+2. `npx clipwise@latest record .clipwise/scenarios/keynote.yaml` — renders a full
+   keynote-style launch video **with zero edits** (it records the hosted demo dashboard)
+3. Open `.clipwise/output/keynote.mp4` — this is the quality bar you get out of the box
+4. Edit `keynote.yaml`: swap the `url:` and selectors for **your** app, tweak the captions
+5. Edit `brand.yaml`: your accent color, font preset, catchphrases — the whole video follows
+
+Prefer natural language? `npx clipwise install-skill`, then ask `/clipwise` in
+Claude Code — it writes these YAMLs for you (the skill ships with the full
+keynote recipe). For a plain screen recording instead of a launch video, start
+from `scenarios/demo.yaml` and the [YAML Scenario Format](#yaml-scenario-format) below.
+
 ## Requirements
 
 - **Node.js** >= 18

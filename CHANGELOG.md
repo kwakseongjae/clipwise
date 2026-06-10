@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-06-11
+
+온보딩 — "설치 후 헤매지 않게".
+
+### Added
+- **즉시 실행 keynote 스타터** — `init`이 `scenarios/keynote.yaml` 생성: 호스팅 데모
+  대시보드 대상이라 **수정 0으로** 키노트 런치 영상이 렌더됨 (url/셀렉터만 교체하면 내 앱)
+- README(EN/KO) "처음 5분 가이드" — init → 즉시 렌더 → 내 앱 교체 → brand 경로
+- docs 사이트(EN/KO): Quickstart를 npx 스캐폴딩으로 교체, AI 스키마에 scenes 블록 추가
+
+### Changed
+- `init` 안내 출력 전면 개편 — "지금 바로 실행" 커맨드, 스킬 경로, 문서 링크 포함
+- PROMPTS.md에 레거시 안내 배너 (스킬 경로 권장)
+
+---
+
 ## [0.9.0] - 2026-06-11
 
 Scene System — Keynote 연출 문법(고정 무대 + 푸티지 레이어 합성)을 엔진에 편입.

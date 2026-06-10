@@ -123,11 +123,12 @@
     <div class="step-item">
       <div class="step-num">1</div>
       <div class="step-content">
-        <div class="step-title">설치</div>
-        <div class="step-desc">dev 의존성으로 추가하거나 <code>npx</code>로 설치 없이 사용할 수 있습니다.</div>
+        <div class="step-title">스캐폴딩</div>
+        <div class="step-desc">설치 불필요 — 명령 한 번이면 <strong>수정 없이 바로 실행되는</strong> 키노트 시나리오가 든 <code>.clipwise/</code>가 생성됩니다. 폴더만 지우면 흔적도 사라집니다.</div>
         <div class="code-block">
           <div class="code-header">bash</div>
-          <pre><code>npm install -D clipwise</code></pre>
+          <pre><code>npx clipwise@latest init
+npx clipwise@latest record .clipwise/scenarios/keynote.yaml</code></pre>
         </div>
       </div>
     </div>
@@ -492,6 +493,39 @@ prepare:
   inject:                        # 임의 CSS/JS (이 YAML 기준 상대 경로)
     css: ../prepare/demo.css
     js: ../prepare/demo.js
+
+
+# ─── Scenes (v0.9) — keynote-style launch videos ─────
+# Timeline = motion/vignette scenes; screen scenes are footage
+# sources quoted by vignettes. Requires output.format mp4.
+scenes:
+  - type: screen                 # footage take (recorded once)
+    id: demo
+    steps: []                    # same steps schema as above
+  - type: motion                 # kinetic typography (built-ins:
+    template: kinetic-type       #  kinetic-type | intro-title | feature-callout)
+    duration: 2200               # ms
+    props:
+      lines: "Ship *demos*,||not edits."  # || line break, *word* serif accent
+      size: 86
+      # fx: marker               # underline (default) | marker | off
+      # sub: "npx my-app init"   # outro command pill
+  - type: vignette               # footage as a layer — declarative camera
+    footage: demo
+    duration: 4200
+    layout: crop                 # hero | crop | split
+    num: "02"
+    label: "Smart Speed"
+    caption: "Loading compressed, *results crisp*"
+    crop: { selector: ".panel", pad: 14, maxH: 250 }   # selector-measured
+    push: { from: 1.05, to: 1 }  # push-in camera
+    start: { step: 3, offset: 0 }# quote from step boundary (or seconds)
+    rate: 1.15                   # footage playback speed
+    fx:                          # line-draw annotations
+      - { kind: circle, selector: "#revenue", delay: 2500 }
+      - { kind: arrow, selector: ".panel", delay: 2900 }
+# Quality recipe: viewport.deviceScaleFactor: 2 (retina), prepare block,
+# .clipwise/brand.yaml (tone/accent/font); thread+annotations auto-apply.
 
 # ─── 오디오 (MP4 전용) ───────────────────────────────
 audio:
