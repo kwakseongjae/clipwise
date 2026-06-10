@@ -38,7 +38,9 @@ jobs:
       # Trusted Publishing — npmjs.com 패키지 설정 > Trusted Publisher에
       # (GitHub Actions: kwakseongjae/clipwise · publish.yml) 1회 등록 필요. 토큰 불필요.
       - name: Publish
-        run: npm publish --provenance --access public
+        run: |
+          npm -v
+          npm publish --provenance --access public --loglevel http
 
       - name: Create GitHub Release
         run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes
