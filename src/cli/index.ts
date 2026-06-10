@@ -9,7 +9,7 @@ import { CanvasRenderer } from "../compose/canvas-renderer.js";
 import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-encoder.js";
 import { StreamingSession, ConcurrentSession } from "../compose/streaming-session.js";
 import type { PipelineProgress } from "../compose/streaming-session.js";
-import { writeFile, mkdir, access, copyFile, readFile } from "fs/promises";
+import { writeFile, mkdir, access, copyFile, readFile, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { pathToFileURL, fileURLToPath } from "url";
@@ -22,13 +22,13 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.6.0");
+  .version("0.9.0");
 
 program
   .command("record")
   .description("Record a demo from a YAML scenario file")
   .argument("<scenario>", "Path to YAML scenario file")
-  .option("-o, --output <dir>", "Output directory", "./output")
+  .option("-o, --output <dir>", "Output directory (default: scenario outputDir or .clipwise/output)")
   .option(
     "-f, --format <format>",
     "Output format (gif|mp4|png-sequence)",
@@ -55,8 +55,12 @@ program
         }
       }
 
-      // Override output settings from CLI options
-      scenario.output.outputDir = options.output;
+      // Override output settings from CLI options.
+      // -o가 없으면 시나리오의 outputDir(기본 .clipwise/output)을 존중한다.
+      if (options.output) {
+        scenario.output.outputDir = options.output;
+      }
+      const outDir = scenario.output.outputDir;
       if (options.format) {
         scenario.output.format = options.format;
       }
@@ -100,11 +104,29 @@ program
         }
       }
 
+      // Scene System (v0.9 preview): scenes 타임라인이 있으면 전용 런너로 렌더
+      if (scenario.scenes?.length) {
+        const { renderScenesTimeline } = await import("../scenes/runner.js");
+        const outDir2 = scenario.output.outputDir;
+        await mkdir(outDir2, { recursive: true });
+        spinner.start(`Rendering ${scenario.scenes.length}-scene timeline...`);
+        const buf = await renderScenesTimeline(scenario, scenarioDir, ({ scene, total, label }) => {
+          spinner.text = scene === 0
+            ? `Recording footage — ${label}...`
+            : `Rendering scene ${scene}/${total} — ${label}...`;
+        });
+        const outputPath = join(outDir2, `${scenario.output.filename}.mp4`);
+        await writeFile(outputPath, buf);
+        spinner.succeed(`Timeline saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
+        console.log(chalk.green("\nDone! 🎬"));
+        return;
+      }
+
       // 4+5+6. Record & encode
       // Phase 3-B adaptive strategy: when effects don't need the full frame array
       // (canStreamOnline) and format is MP4, use ConcurrentSession to overlap
       // recording with composition — total time ≈ max(recording, compose) not sum.
-      await mkdir(options.output, { recursive: true });
+      await mkdir(outDir, { recursive: true });
       const recorder = new ClipwiseRecorder();
       const renderer = new CanvasRenderer(
         scenario.effects,
@@ -128,7 +150,7 @@ program
         });
         spinner.start(`Recording & composing ${scenario.steps.length} steps concurrently...`);
         const { buffer: mp4Buffer, session } = await pipeline.run();
-        const outputPath = join(options.output, `${scenario.output.filename}.mp4`);
+        const outputPath = join(outDir, `${scenario.output.filename}.mp4`);
         await writeFile(outputPath, mp4Buffer);
         const sizeMB = (mp4Buffer.length / (1024 * 1024)).toFixed(2);
         spinner.succeed(
@@ -154,9 +176,9 @@ program
           }
           spinner.start("Saving PNG sequence...");
           const paths = await savePngSequence(composedFrames, scenario.output);
-          spinner.succeed(`Saved ${paths.length} frames to ${chalk.bold(options.output)}`);
+          spinner.succeed(`Saved ${paths.length} frames to ${chalk.bold(outDir)}`);
         } else if (scenario.output.format === "mp4") {
-          const outputPath = join(options.output, `${scenario.output.filename}.mp4`);
+          const outputPath = join(outDir, `${scenario.output.filename}.mp4`);
           let mp4Buffer: Buffer;
           if (options.effects === false) {
             spinner.start(`Encoding ${session.frames.length} raw frames...`);
@@ -193,7 +215,7 @@ program
           }
           spinner.start("Encoding GIF...");
           const gifBuffer = await encodeGif(composedFrames, scenario.output);
-          const outputPath = join(options.output, `${scenario.output.filename}.gif`);
+          const outputPath = join(outDir, `${scenario.output.filename}.gif`);
           await writeFile(outputPath, gifBuffer);
           const sizeMB = (gifBuffer.length / (1024 * 1024)).toFixed(2);
           spinner.succeed(`GIF saved to ${chalk.bold(outputPath)} (${sizeMB} MB)`);
@@ -259,17 +281,17 @@ program
 
 program
   .command("init")
-  .description("Create a template clipwise.yaml in the current directory")
+  .description("Scaffold a .clipwise/ directory (zero-footprint: delete it to remove every trace)")
   .action(async () => {
-    const targetPath = resolve("clipwise.yaml");
+    const baseDir = resolve(".clipwise");
 
     try {
-      await access(targetPath);
-      console.log(chalk.yellow("Warning: clipwise.yaml already exists in this directory."));
-      console.log(chalk.yellow("Remove it first if you want to generate a fresh template.\n"));
+      await access(baseDir);
+      console.log(chalk.yellow("Warning: .clipwise/ already exists in this directory."));
+      console.log(chalk.yellow("Remove it first if you want a fresh scaffold.\n"));
       process.exit(1);
     } catch {
-      // File doesn't exist, proceed
+      // Directory doesn't exist, proceed
     }
 
     const template = `name: "My Demo"
@@ -291,6 +313,22 @@ effects:
     padding: 48
     borderRadius: 14
     shadow: true
+
+# Recording-time injection — tweak the page without touching your code.
+# All assets referenced here resolve relative to this file.
+# prepare:
+#   hide:
+#     - "#cookie-banner"
+#   freezeTime: "2026-06-10T09:00:00Z"
+#   seedRandom: 42
+#   storage:
+#     localStorage:
+#       onboarding_done: "true"
+#   mock:
+#     - url: "/api/stats"
+#       fixture: ../fixtures/stats.json
+#   inject:
+#     css: ../prepare/demo.css
 
 output:
   format: mp4
@@ -314,20 +352,72 @@ steps:
         selector: "#my-button"
 `;
 
-    await writeFile(targetPath, template, "utf-8");
+    const gitignore = `# Clipwise local artifacts — safe to ignore
+auth/
+output/
+cache/
+`;
 
-    console.log(chalk.green("Created clipwise.yaml\n"));
-    console.log("Next steps:");
-    console.log(`  1. Edit ${chalk.bold("clipwise.yaml")} — change the URL to your site`);
-    console.log(`  2. Run ${chalk.bold("clipwise record clipwise.yaml -f mp4")} to record`);
-    console.log(`  3. Find your output in ${chalk.bold("./output/")}`);
-    console.log(`\nOr try the built-in demo: ${chalk.bold("clipwise demo")}\n`);
+    // Brand Kit — 영상의 톤앤매너와 캐치프레이즈를 한 곳에서 관리
+    const brandTemplate = `# Brand Kit — tone & manner and copy for your videos.
+# Motion templates (title/chapter cards) read this config.
+
+product: "My Product"
+
+# Tone preset: midnight | daylight | neon
+#   midnight — deep black + soft glow (keynote tone, default)
+#   daylight — light editorial (docs/blog tone)
+#   neon     — deep purple + gradient typography (launch-hype tone)
+tone: midnight
+
+accent: "#6366f1"
+
+# Font preset: editorial | grotesk | system
+#   editorial — Inter + Instrument Serif italic emphasis (default)
+#   grotesk   — Space Grotesk display (tech-launch mood)
+#   system    — system fonts (no network needed)
+font: editorial
+
+# Line-draw emphasis — animated underlines/circles/arrows/markers
+annotations: true
+
+# Frequently used catchphrases / one-liners
+tagline: "One line that sells your product"
+catchphrases:
+  intro: "Introducing My Feature"
+  introSub: "What it does, in one sentence"
+  outro: "My Product"
+  outroSub: "npx my-product init"
+`;
+
+    await mkdir(join(baseDir, "scenarios"), { recursive: true });
+    await mkdir(join(baseDir, "prepare"), { recursive: true });
+    await mkdir(join(baseDir, "fixtures"), { recursive: true });
+    await mkdir(join(baseDir, "auth"), { recursive: true });
+    await writeFile(join(baseDir, "scenarios", "demo.yaml"), template, "utf-8");
+    await writeFile(join(baseDir, "brand.yaml"), brandTemplate, "utf-8");
+    await writeFile(join(baseDir, ".gitignore"), gitignore, "utf-8");
+
+    console.log(chalk.green("Created .clipwise/\n"));
+    console.log("  .clipwise/");
+    console.log("    scenarios/demo.yaml   — your first scenario (edit the URL)");
+    console.log("    brand.yaml            — tone & manner + catchphrases (Brand Kit)");
+    console.log("    prepare/              — CSS/JS injected only while recording");
+    console.log("    fixtures/             — mocked API responses (JSON)");
+    console.log("    auth/                 — storageState files (gitignored)");
+    console.log("    .gitignore            — keeps auth/, output/, cache/ out of git");
+    console.log("\nNext steps:");
+    console.log(`  1. Edit ${chalk.bold(".clipwise/scenarios/demo.yaml")} — change the URL to your site`);
+    console.log(`  2. Run ${chalk.bold("clipwise record .clipwise/scenarios/demo.yaml")}`);
+    console.log(`  3. Find your output in ${chalk.bold(".clipwise/output/")}`);
+    console.log(`\nRemove every trace anytime: ${chalk.bold("rm -rf .clipwise")}`);
+    console.log(`Or try the built-in demo: ${chalk.bold("clipwise demo")}\n`);
   });
 
 program
   .command("demo")
   .description("Record a demo video of the Clipwise showcase dashboard")
-  .option("-o, --output <dir>", "Output directory", "./output")
+  .option("-o, --output <dir>", "Output directory", ".clipwise/output")
   .option(
     "-f, --format <format>",
     "Output format (gif|mp4)",
@@ -462,8 +552,33 @@ program
 program
   .command("install-skill")
   .description("Install the Clipwise skill for Claude Code")
-  .action(async () => {
+  .option("--remove", "Remove an installed skill instead (symmetric cleanup)")
+  .action(async (options) => {
     try {
+      // --remove: 설치된 스킬 파일 제거 — .clipwise/ 밖에 남는 유일한
+      // 흔적(.claude/skills/clipwise.md)의 대칭적 정리 경로
+      if (options.remove) {
+        const candidates = [
+          join(resolve(".claude", "skills"), "clipwise.md"),
+          join(homedir(), ".claude", "skills", "clipwise.md"),
+        ];
+        let removed = 0;
+        for (const candidate of candidates) {
+          try {
+            await access(candidate);
+            await rm(candidate);
+            console.log(chalk.green(`Removed ${chalk.bold(candidate)}`));
+            removed++;
+          } catch {
+            // Not installed at this location
+          }
+        }
+        if (removed === 0) {
+          console.log(chalk.yellow("No installed Clipwise skill found."));
+        }
+        return;
+      }
+
       // Locate the skill source file bundled with clipwise
       const __dirname = dirname(fileURLToPath(import.meta.url));
       const skillSource = resolve(__dirname, "..", "..", "skills", "clipwise.md");

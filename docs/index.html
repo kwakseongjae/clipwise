@@ -438,10 +438,10 @@ steps:
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise Full Schema Reference</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.2)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.9.0)
 # Scriptable cinematic screen recorder — YAML in, MP4 out
-# Install: npm install -D clipwise
-# Record:  npx clipwise record scenario.yaml -f mp4
+# Run (no install needed): npx clipwise@latest record scenario.yaml -f mp4
+# Scaffold:                npx clipwise@latest init   (creates .clipwise/ — delete it to remove every trace)
 
 # ─── Top-Level Structure ──────────────────────────────
 name: "Scenario Name"            # required
@@ -470,6 +470,28 @@ auth:
       httpOnly: false            # default: false
       secure: false              # default: false
       sameSite: Lax              # Strict | Lax | None (default: Lax)
+
+# ─── Prepare (optional) — recording-time injection ───
+# Tweak the page for the demo WITHOUT touching app code.
+# Applied only to the recording browser (source/build/DB untouched).
+prepare:
+  hide:                          # CSS selectors hidden during recording
+    - "#cookie-banner"
+    - "[data-nextjs-toast]"
+  freezeTime: "2026-06-10T09:00:00Z"  # freeze Date/Date.now (ISO 8601)
+  seedRandom: 42                 # deterministic Math.random
+  storage:                       # seeded before app boots
+    localStorage:
+      onboarding_done: "true"
+  mock:                          # network mocking — demo data without DB seeding
+    - url: "/api/dashboard/stats"     # URL substring match
+      fixture: ../fixtures/stats.json # JSON file (relative to this YAML)
+      # body: { inline: "data" }      # or inline body
+      status: 200                # default: 200
+      contentType: application/json   # default
+  inject:                        # arbitrary CSS/JS (paths relative to this YAML)
+    css: ../prepare/demo.css
+    js: ../prepare/demo.js
 
 # ─── Audio (MP4 only) ────────────────────────────────
 audio:
@@ -597,6 +619,7 @@ effects:
     enabled: false               # default: false
     type: browser                # browser | iphone | ipad | android | none
     darkMode: false              # default: false
+    url: "app.example.com"       # address-bar display URL (default: localhost)
   keystroke:
     enabled: false               # default: false
     showTyping: false            # show typed text (default: false — shortcuts only)

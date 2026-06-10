@@ -14,6 +14,40 @@ export function validateScenario(scenario: Scenario): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  // Scene System (v0.9 preview) 검증
+  if (scenario.scenes?.length) {
+    const screenIds = new Set(
+      scenario.scenes.filter((s) => s.type === "screen").map((s) => (s as { id: string }).id),
+    );
+    const timeline = scenario.scenes.filter((s) => s.type !== "screen");
+    if (timeline.length === 0) {
+      errors.push("scenes: at least one motion or vignette scene is required (screen scenes are footage sources only)");
+    }
+    if (scenario.output.format !== "mp4") {
+      errors.push(`scenes timeline requires output.format mp4 (got "${scenario.output.format}")`);
+    }
+    for (const scene of scenario.scenes) {
+      if (scene.type === "screen") {
+        const hasNavigate = scene.steps[0]?.actions.some((a) => a.action === "navigate");
+        if (!hasNavigate) {
+          errors.push(`scenes: screen "${scene.id}" must start with a navigate action`);
+        }
+      } else if (scene.type === "vignette") {
+        if (!screenIds.has(scene.footage)) {
+          errors.push(`scenes: vignette references unknown footage "${scene.footage}"`);
+        }
+        for (const fx of scene.fx) {
+          if (!fx.selector && !fx.coords) {
+            errors.push(`scenes: vignette fx (${fx.kind}) needs "selector" or "coords"`);
+          }
+        }
+        if (scene.crop && !scene.crop.selector && scene.crop.w === undefined) {
+          warnings.push('scenes: vignette crop without selector/coords falls back to full frame');
+        }
+      }
+    }
+  }
+
   // Check that the first step contains a navigate action
   if (scenario.steps.length > 0) {
     const firstStep = scenario.steps[0];
@@ -70,6 +104,37 @@ export function validateScenario(scenario: Scenario): ValidationResult {
     errors.push(
       `Output height ${output.height} is out of range (must be 100-3840)`,
     );
+  }
+
+  // Validate prepare block (recording-time injection)
+  if (scenario.prepare) {
+    const prepare = scenario.prepare;
+
+    if (prepare.freezeTime && Number.isNaN(Date.parse(prepare.freezeTime))) {
+      errors.push(
+        `prepare.freezeTime "${prepare.freezeTime}" is not a valid date (use ISO 8601, e.g. "2026-06-10T09:00:00Z")`,
+      );
+    }
+
+    for (let i = 0; i < prepare.mock.length; i++) {
+      const mock = prepare.mock[i];
+      if (!mock.fixture && mock.body === undefined) {
+        errors.push(
+          `prepare.mock #${i + 1} ("${mock.url}"): either "fixture" or "body" is required`,
+        );
+      }
+      if (mock.fixture && mock.body !== undefined) {
+        warnings.push(
+          `prepare.mock #${i + 1} ("${mock.url}"): both "fixture" and "body" set — fixture takes precedence`,
+        );
+      }
+    }
+
+    for (const selector of prepare.hide) {
+      if (selector.trim() === "") {
+        errors.push("prepare.hide: selector must not be empty");
+      }
+    }
   }
 
   // Warnings for common issues

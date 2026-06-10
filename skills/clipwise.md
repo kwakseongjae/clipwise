@@ -46,6 +46,20 @@ effects:                  # All optional, sensible defaults
   watermark: ...
   speedRamp: ...
 
+prepare:                  # Optional — recording-time injection (app code untouched)
+  hide: ["#cookie-banner"]              # CSS selectors hidden during recording
+  freezeTime: "2026-06-10T09:00:00Z"    # freeze Date/Date.now (ISO 8601)
+  seedRandom: 42                        # deterministic Math.random
+  storage:                              # seeded before app boots
+    localStorage: { onboarding_done: "true" }
+  mock:                                 # network mocking — demo data without DB seeding
+    - url: "/api/stats"                 # URL substring match
+      fixture: ../fixtures/stats.json   # JSON file (relative to the YAML), or:
+      # body: { inline: data }          # inline body (fixture takes precedence)
+  inject:                               # arbitrary CSS/JS files (relative to the YAML)
+    css: ../prepare/demo.css
+    js: ../prepare/demo.js
+
 output:
   format: mp4             # mp4 | gif | png-sequence
   width: 1280             # Output width
@@ -53,7 +67,7 @@ output:
   fps: 30                 # 1-60
   preset: balanced        # social | balanced | archive
   codec: auto             # auto | h264 | hevc | av1
-  outputDir: "./output"
+  outputDir: ".clipwise/output"   # default
   filename: "my-recording"
 
 steps: []                 # Array of steps (min 1, first must have navigate)
@@ -231,6 +245,7 @@ deviceFrame:
   enabled: true
   type: browser               # browser | iphone | ipad | android | none
   darkMode: true
+  url: "app.example.com"   # address-bar display URL (default: localhost)
 ```
 
 | Type | Description |
@@ -325,6 +340,62 @@ steps:
 | balanced | General purpose, portfolio | ~4-6 MB |
 | archive | High-fidelity storage | larger |
 
+## Scenes — Keynote-Style Launch Videos (v0.9)
+
+When the user wants a **launch/intro video** (not just a screen recording), use a
+`scenes:` timeline. One `clipwise record` renders: kinetic typography → footage
+vignettes (crop/push-in/split + line annotations) → outro, connected by an ink
+thread that travels across cuts.
+
+```yaml
+viewport: { width: 1280, height: 800, deviceScaleFactor: 2 }   # 2 = retina quality
+
+scenes:
+  # footage take — recorded once, never shown directly; vignettes quote it
+  - type: screen
+    id: demo
+    steps: [...]                       # normal steps (first must navigate)
+
+  # kinetic typography card (built-ins: kinetic-type, intro-title, feature-callout)
+  - type: motion
+    template: kinetic-type
+    duration: 2200
+    props:
+      lines: "Ship *demos*,||not edits."   # || = line break, *word* = serif-italic accent
+      size: 86
+      # fx: marker                         # underline (default) | marker | off
+      # sub: "npx my-app init"             # outro command pill
+
+  # footage as a layer — declarative camera
+  - type: vignette
+    footage: demo
+    duration: 4200
+    layout: crop                       # hero (full window) | crop (close-up) | split (code × footage)
+    num: "02"
+    label: "Smart Speed"
+    caption: "Loading compressed, *results crisp*"
+    crop: { selector: ".panel", pad: 14, maxH: 250 }   # selector-measured, never guess pixels
+    push: { from: 1.05, to: 1 }        # push-in/out camera
+    start: { step: 3, offset: 0 }      # quote footage from a step boundary (or seconds)
+    rate: 1.15                         # playback speed of the quoted footage
+    fx:                                # line-draw annotations on the footage
+      - { kind: circle, selector: "#revenue", delay: 2500 }
+      - { kind: arrow, selector: ".panel", delay: 2900 }
+    # code: ["prepare:", "  hide: [...]"]   # split layout left code card
+```
+
+### High-quality keynote recipe (follow ALL of these)
+
+1. **`viewport.deviceScaleFactor: 2`** — without it the footage looks blurry in close-ups
+2. **`prepare:`** — hide cookie banners/dev overlays, `freezeTime`, `seedRandom`, `mock` APIs
+3. **`.clipwise/brand.yaml`** — tone/accent/font (`editorial` = Inter + Fraunces) + catchphrases; annotations & thread auto-apply
+4. **Structure** (≈23s): kinetic hook (2.2s) → hero push-in vignette (4.2s) → close-up vignette
+   with circle fx (3.6s) → result vignette (4.2s) → kinetic interstitial (1.9s) →
+   split YAML × footage (4.4s) → outro with `sub:` command pill (2.8s)
+5. **Footage effects**: in scenes mode set only `cursor:` (highlight: false) — zoom/frame/background
+   are handled by the vignette compositor, not the recorder
+6. Keep one screen take (~12-15s) and let vignettes quote segments via `start: { step: N }`
+
 ## Critical Rules
 
 1. **First step MUST contain a `navigate` action** — the browser needs a page to start
@@ -343,6 +414,8 @@ steps:
 14. **Auto loader detection**: CSS spinners (`@keyframes spin/rotate/pulse/bounce`) are passively detected via CDP and auto-marked for smartSpeed compression
 15. **Codec choice**: `av1` gives 40-60% smaller files but slower encode; `hevc` provides 10-bit color (no gradient banding); `auto` picks h264 for compatibility
 16. **smartWait over wait**: prefer `smartWait` over fixed `wait` for API calls and loading states — it captures real frames and auto-compresses them
+17. **Never suggest modifying the user's app code for a demo** — use `prepare:` instead: `hide:` for cookie banners/dev overlays, `mock:` for demo data (no DB seeding), `freezeTime:`/`seedRandom:` for deterministic dates and charts, `storage:` to skip onboarding. Keep prepare assets (fixtures, CSS) inside `.clipwise/`
+18. **Zero footprint**: scenarios live in `.clipwise/scenarios/`, fixtures in `.clipwise/fixtures/`, output defaults to `.clipwise/output/`. Scaffold with `npx clipwise init`; everything is removed with `rm -rf .clipwise`
 
 ## Timing Presets
 
@@ -359,15 +432,15 @@ steps:
 ## CLI Commands
 
 ```bash
-# Record from YAML scenario
-npx clipwise record <scenario.yaml> -f mp4 -o ./output
+# Record from YAML scenario (output defaults to .clipwise/output)
+npx clipwise record <scenario.yaml> -f mp4
 
 # Instant demo with built-in dashboard
 npx clipwise demo
 npx clipwise demo --device iphone
 npx clipwise demo --url https://my-app.com
 
-# Create template YAML
+# Scaffold .clipwise/ (scenarios, fixtures, prepare assets, auth)
 npx clipwise init
 
 # Validate scenario without recording
@@ -377,10 +450,12 @@ npx clipwise validate <scenario.yaml>
 ## Workflow
 
 1. Ask the user for: target URL, what actions to demo, and preferred style (snappy/cinematic)
-2. Generate a complete `clipwise.yaml` scenario
-3. Run `npx clipwise validate clipwise.yaml` to check for errors
-4. If valid, run `npx clipwise record clipwise.yaml -f mp4 -o ./output`
-5. If the user has specific selectors, use them. Otherwise suggest inspecting the page first
+2. If `.clipwise/` doesn't exist, run `npx clipwise init` first
+3. Generate a complete scenario at `.clipwise/scenarios/<name>.yaml`
+4. Run `npx clipwise validate .clipwise/scenarios/<name>.yaml` to check for errors
+5. If valid, run `npx clipwise record .clipwise/scenarios/<name>.yaml -f mp4`
+6. If the user has specific selectors, use them. Otherwise suggest inspecting the page first
+7. If the page shows cookie banners, dev overlays, live dates, or random data — add a `prepare:` block instead of asking the user to change their app
 
 ## Selector Discovery
 

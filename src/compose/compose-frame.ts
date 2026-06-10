@@ -78,6 +78,7 @@ export async function buildStaticLayers(
       viewportWidth,
       effects.deviceFrame.darkMode,
       dpr,
+      effects.deviceFrame.url,
     );
   }
 

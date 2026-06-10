@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<!--
+  Production Scorecard 인터랙티브 벤치 페이지 — "Pulse" 가상 SaaS 대시보드
+
+  Clipwise의 기능 표면을 한 페이지에서 전부 자극한다:
+  - 타이핑 (keystroke HUD, type 액션)
+  - 버튼 클릭 → 스피너 → API fetch (click, waitForSelector, prepare.mock, 로더 감지)
+  - 날짜 표시 (prepare.freezeTime 검증: #today)
+  - 랜덤 차트 (prepare.seedRandom 검증: .bar span × 6)
+  - 쿠키 배너 (prepare.hide 검증: #cookie-banner)
+  - localStorage 환영 배지 (prepare.storage 검증: #welcome)
+  - 스크롤/호버/행 선택 (scroll·hover·click 액션, smart camera)
+
+  ⚠ scripts/production-score.ts가 의존하는 셀렉터 계약 — 변경 금지:
+    #cookie-banner #today #welcome #query #generate #report[data-loaded] #revenue .bar span(6개)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pulse — Revenue Intelligence</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0b0d13; --panel: #12151d; --panel2: #161a24; --line: #232836;
+    --text: #e7e9ee; --dim: #8b91a1; --faint: #5b6171;
+    --accent: #6366f1; --accent2: #818cf8; --green: #34d399; --red: #f87171; --amber: #fbbf24;
+  }
+  /* 오버레이 스크롤바의 페이드아웃 애니메이션은 녹화 결정론을 깨는 비결정
+     요소 (스코어카드 D 카테고리가 검출) — 데모 미감상으로도 숨기는 게 낫다 */
+  html { scrollbar-width: none; }
+  ::-webkit-scrollbar { display: none; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); display: flex; min-height: 148vh;
+  }
+  svg { display: block; }
+
+  /* ── Sidebar ─────────────────────────────────── */
+  aside {
+    position: fixed; top: 0; bottom: 0; left: 0; width: 224px;
+    background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; padding: 20px 14px; z-index: 10;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px; }
+  .logo-mark { width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, #818cf8, #6366f1);
+    display: flex; align-items: center; justify-content: center; }
+  .logo-mark svg { width: 16px; height: 16px; }
+  .logo b { font-size: 17px; letter-spacing: -0.01em; }
+  nav a { display: flex; align-items: center; gap: 11px; padding: 9px 10px;
+    border-radius: 9px; color: var(--dim); font-size: 13.5px; text-decoration: none;
+    margin-bottom: 2px; cursor: pointer; }
+  nav a svg { width: 16px; height: 16px; stroke: currentColor; fill: none;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav a.active { background: rgba(99,102,241,0.14); color: #c7d2fe; }
+  nav a:hover:not(.active) { background: var(--panel2); color: var(--text); }
+  .spacer { flex: 1; }
+  .usage { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 14px; margin-bottom: 14px; }
+  .usage .u-top { display: flex; justify-content: space-between; font-size: 12px;
+    color: var(--dim); margin-bottom: 8px; }
+  .usage .u-top b { color: var(--text); }
+  .meter { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 72%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+  .me { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+  .me .av { width: 30px; height: 30px; border-radius: 50%; font-size: 12px; font-weight: 700;
+    background: linear-gradient(135deg, #fb7185, #e11d48); display: flex;
+    align-items: center; justify-content: center; }
+  .me .who { font-size: 12.5px; line-height: 1.3; }
+  .me .who span { display: block; color: var(--faint); font-size: 11px; }
+
+  /* ── Main ────────────────────────────────────── */
+  main { margin-left: 224px; flex: 1; padding: 26px 32px 80px; }
+  .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+  h1 { font-size: 21px; letter-spacing: -0.01em; }
+  #welcome { display: none; background: rgba(52,211,153,0.12); color: var(--green);
+    border: 1px solid rgba(52,211,153,0.25); font-size: 12px; font-weight: 600;
+    padding: 4px 11px; border-radius: 99px; }
+  #welcome.on { display: inline-block; }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .chip { display: flex; align-items: center; gap: 7px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 9px; padding: 8px 13px;
+    font-size: 12.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .chip svg { width: 14px; height: 14px; stroke: var(--faint); fill: none; stroke-width: 1.8; }
+
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px 14px; transition: transform .15s ease, border-color .15s ease; }
+  .kpi:hover { transform: translateY(-2px); border-color: #3b4258; }
+  .kpi .k-label { font-size: 12px; color: var(--dim); margin-bottom: 7px; }
+  .kpi .k-row { display: flex; align-items: baseline; gap: 9px; margin-bottom: 9px; }
+  .kpi .k-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; }
+  .delta { font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; }
+  .delta.up { color: var(--green); background: rgba(52,211,153,0.1); }
+  .delta.down { color: var(--red); background: rgba(248,113,113,0.1); }
+  .spark { width: 100%; height: 26px; }
+
+  /* Chart + AI panel row */
+  .row2 { display: grid; grid-template-columns: 1fr 380px; gap: 14px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .card .sub { font-size: 12px; color: var(--faint); margin-bottom: 14px; }
+  .legend { display: flex; gap: 16px; font-size: 11.5px; color: var(--dim); margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+  /* AI panel */
+  .ai-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .ai-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: #c7d2fe;
+    background: rgba(99,102,241,0.16); border: 1px solid rgba(129,140,248,0.3);
+    padding: 2px 7px; border-radius: 5px; }
+  .ask { display: flex; gap: 8px; margin: 12px 0 14px; }
+  #query { flex: 1; padding: 10px 13px; font-size: 13px; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--panel2); color: var(--text);
+    outline: none; caret-color: var(--accent2); }
+  #query::placeholder { color: var(--faint); }
+  #query:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+  #generate { padding: 10px 16px; font-size: 13px; font-weight: 600; border: none;
+    border-radius: 9px; background: var(--accent); color: #fff; cursor: pointer;
+    transition: background .15s; white-space: nowrap; }
+  #generate:hover { background: #4f52e0; }
+  #report { min-height: 252px; }
+  #spinner { display: none; text-align: center; padding-top: 70px; }
+  #spinner.on { display: block; }
+  #spinner .ring { width: 30px; height: 30px; margin: 0 auto 14px;
+    border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #spinner p { font-size: 12px; color: var(--faint); }
+  #result { display: none; }
+  #result.on { display: block; }
+  #result .r-label { font-size: 11.5px; color: var(--dim); }
+  #revenue { font-size: 30px; font-weight: 700; letter-spacing: -0.02em;
+    color: var(--green); margin: 3px 0 14px; font-variant-numeric: tabular-nums; }
+  .chart { display: flex; gap: 9px; align-items: flex-end; height: 86px; margin-bottom: 14px; }
+  .bar { flex: 1; background: linear-gradient(180deg, var(--accent2), var(--accent));
+    border-radius: 4px 4px 2px 2px; position: relative; min-height: 6px; }
+  .bar span { position: absolute; top: -17px; width: 100%; text-align: center;
+    font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .insights li { list-style: none; font-size: 12.5px; color: var(--dim);
+    padding: 6px 0 6px 20px; position: relative; border-top: 1px solid var(--line); }
+  .insights li::before { content: ""; position: absolute; left: 4px; top: 12px;
+    width: 6px; height: 6px; border-radius: 2px; background: var(--accent2); }
+
+  /* Transactions table */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--faint); padding: 8px 12px;
+    border-bottom: 1px solid var(--line); }
+  td { padding: 11px 12px; font-size: 13px; border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; }
+  tbody tr { cursor: pointer; transition: background .12s; }
+  tbody tr:hover { background: var(--panel2); }
+  tbody tr.selected { background: rgba(99,102,241,0.1);
+    box-shadow: inset 3px 0 0 var(--accent); }
+  .cust { display: flex; align-items: center; gap: 10px; }
+  .cust i { width: 26px; height: 26px; border-radius: 8px; font-style: normal;
+    font-size: 11px; font-weight: 700; display: flex; align-items: center;
+    justify-content: center; }
+  .pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; }
+  .pill.paid { color: var(--green); background: rgba(52,211,153,0.1); }
+  .pill.pending { color: var(--amber); background: rgba(251,191,36,0.1); }
+  .pill.failed { color: var(--red); background: rgba(248,113,113,0.1); }
+  td.amt { text-align: right; font-weight: 600; }
+  th.amt { text-align: right; }
+
+  /* Cookie banner */
+  #cookie-banner { position: fixed; left: 244px; bottom: 20px; right: 32px; z-index: 50;
+    background: #1c1f2a; border: 1px solid #2e3344; border-radius: 14px;
+    padding: 16px 20px; display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+  #cookie-banner p { font-size: 13px; color: var(--dim); flex: 1; }
+  #cookie-banner button { padding: 8px 16px; font-size: 12.5px; font-weight: 600;
+    border-radius: 8px; border: 1px solid var(--line); background: transparent;
+    color: var(--dim); cursor: pointer; }
+  #cookie-banner button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+  <aside>
+    <div class="logo">
+      <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M3 13 L8 13 L10 7 L14 18 L16 13 L21 13"/></svg></div>
+      <b>Pulse</b>
+    </div>
+    <nav>
+      <a class="active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</a>
+      <a><svg viewBox="0 0 24 24"><path d="M3 17 L9 11 L13 15 L21 7"/><path d="M15 7 h6 v6"/></svg>Reports</a>
+      <a><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20 c0-3.5 2.5-5.5 6-5.5 s6 2 6 5.5"/><path d="M16 4.5 a3.5 3.5 0 0 1 0 7"/><path d="M17.5 14.8 c2.2 0.7 3.5 2.4 3.5 5.2"/></svg>Customers</a>
+      <a><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10 h18"/></svg>Billing</a>
+      <a><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19 12 a7 7 0 0 0-.2-1.6 l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2.8-1.6 L13.4 2.5 h-2.8 L10.3 4.9 a7 7 0 0 0-2.8 1.6 l-2.3-1-2 3.4 2 1.5 A7 7 0 0 0 5 12 c0 .5.1 1.1.2 1.6 l-2 1.5 2 3.4 2.3-1 a7 7 0 0 0 2.8 1.6 l.3 2.4 h2.8 l.3-2.4 a7 7 0 0 0 2.8-1.6 l2.3 1 2-3.4-2-1.5 c.1-.5.2-1 .2-1.6 z"/></svg>Settings</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="usage">
+      <div class="u-top"><span>Seats used</span><b>18 / 25</b></div>
+      <div class="meter"><i></i></div>
+    </div>
+    <div class="me">
+      <div class="av">SK</div>
+      <div class="who">Seongjae Kwak<span>Growth Lead</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <h1>Overview</h1>
+      <span id="welcome">Welcome back 👋</span>
+      <div class="right">
+        <div class="chip"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21 l-4.5-4.5"/></svg>Search…</div>
+        <div class="chip"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10 h18 M8 3 v4 M16 3 v4"/></svg><span id="today">-</span></div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="row2">
+      <div class="card">
+        <h2>Revenue trend</h2>
+        <div class="sub">Monthly recurring revenue · last 12 months</div>
+        <div class="legend"><span><i style="background:#6366f1"></i>MRR</span><span><i style="background:#34d399"></i>Forecast</span></div>
+        <svg id="trend" viewBox="0 0 560 200" preserveAspectRatio="none" style="width:100%;height:208px"></svg>
+      </div>
+      <div class="card">
+        <div class="ai-head"><h2>Ask Pulse</h2><span class="ai-badge">AI</span></div>
+        <div class="sub">Natural-language revenue analysis</div>
+        <div class="ask">
+          <input id="query" type="text" placeholder="e.g. Compare Q3 vs forecast" autocomplete="off" />
+          <button id="generate">Analyze</button>
+        </div>
+        <div id="report">
+          <div id="spinner"><div class="ring"></div><p>Analyzing 4,128 events…</p></div>
+          <div id="result">
+            <div class="r-label">Projected Q3 revenue</div>
+            <div id="revenue">-</div>
+            <div class="chart" id="chart"></div>
+            <ul class="insights" id="insights"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recent transactions</h2>
+      <div class="sub">Live feed · click a row to inspect</div>
+      <table>
+        <thead><tr><th>Customer</th><th>Plan</th><th>Status</th><th>Date</th><th class="amt">Amount</th></tr></thead>
+        <tbody id="txns"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <div id="cookie-banner">
+    <p>🍪 We use cookies to improve your experience — prepare.hide가 동작하면 이 배너는 녹화에 보이지 않습니다.</p>
+    <button>Decline</button><button class="primary">Accept all</button>
+  </div>
+
+  <script>
+    // ── freezeTime 검증 대상: ISO 날짜 (scorer 계약: YYYY-MM-DD) ──
+    document.getElementById("today").textContent = new Date().toISOString().slice(0, 10);
+
+    // ── prepare.storage 검증 대상 ──
+    if (localStorage.getItem("onboarding_done") === "yes") {
+      document.getElementById("welcome").classList.add("on");
+    }
+
+    // ── KPI 카드 (정적 데이터 + 스파크라인) ──
+    const KPIS = [
+      { label: "Monthly recurring revenue", val: "$84,231", delta: "+12.4%", up: true,  pts: [4,6,5,8,7,10,9,12,11,14,13,16] },
+      { label: "Active users",              val: "2,847",   delta: "+3.1%",  up: true,  pts: [8,9,9,10,11,10,12,12,13,13,14,15] },
+      { label: "Conversion rate",           val: "4.7%",    delta: "−0.8%",  up: false, pts: [14,13,14,12,13,11,12,10,11,9,10,9] },
+      { label: "Net revenue retention",     val: "118%",    delta: "+2.2%",  up: true,  pts: [7,8,9,8,10,11,10,12,13,12,14,15] },
+    ];
+    document.getElementById("kpis").innerHTML = KPIS.map((k) => {
+      const max = Math.max(...k.pts), w = 100 / (k.pts.length - 1);
+      const path = k.pts.map((p, i) => `${i === 0 ? "M" : "L"}${(i * w).toFixed(1)},${(24 - (p / max) * 22).toFixed(1)}`).join(" ");
+      const color = k.up ? "#34d399" : "#f87171";
+      return `<div class="kpi">
+        <div class="k-label">${k.label}</div>
+        <div class="k-row"><span class="k-val">${k.val}</span><span class="delta ${k.up ? "up" : "down"}">${k.delta}</span></div>
+        <svg class="spark" viewBox="0 0 100 26" preserveAspectRatio="none">
+          <path d="${path}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/>
+        </svg></div>`;
+    }).join("");
+
+    // ── 메인 트렌드 차트 (정적·결정론 데이터) ──
+    (() => {
+      const mrr = [38,41,40,45,48,52,51,58,62,68,74,84];
+      const fc  = [37,40,42,44,47,50,54,57,61,66,71,78];
+      const X = (i) => 8 + i * (544 / 11), Y = (v) => 192 - (v - 30) * (170 / 60);
+      const line = (pts) => pts.map((v, i) => `${i === 0 ? "M" : "L"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+      const area = line(mrr) + ` L${X(11)},192 L${X(0)},192 Z`;
+      const grid = [40, 55, 70, 85].map((v) => `<line x1="8" x2="552" y1="${Y(v)}" y2="${Y(v)}" stroke="#232836" stroke-width="1" stroke-dasharray="3 4"/>`).join("");
+      const months = ["Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun"];
+      const labels = months.map((m, i) => `<text x="${X(i)}" y="199" text-anchor="middle" font-size="8.5" fill="#5b6171">${m}</text>`).join("");
+      document.getElementById("trend").innerHTML = `
+        <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#6366f1" stop-opacity="0.32"/>
+          <stop offset="1" stop-color="#6366f1" stop-opacity="0.02"/>
+        </linearGradient></defs>
+        ${grid}
+        <path d="${area}" fill="url(#area)"/>
+        <path d="${line(fc)}" fill="none" stroke="#34d399" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.7"/>
+        <path d="${line(mrr)}" fill="none" stroke="#6366f1" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="${X(11)}" cy="${Y(84)}" r="3.5" fill="#6366f1" stroke="#0b0d13" stroke-width="2"/>
+        ${labels}`;
+    })();
+
+    // ── 거래 테이블 (정적 데이터, 행 클릭 → 선택 하이라이트) ──
+    const TXNS = [
+      ["Acme Corp","AC","#7c5cf1","Scale · annual","paid","Jun 10, 2026","$12,400"],
+      ["Northwind Labs","NL","#0ea5e9","Growth · monthly","paid","Jun 10, 2026","$2,890"],
+      ["Hooli GmbH","HG","#f59e0b","Scale · annual","pending","Jun 09, 2026","$9,720"],
+      ["Stark Industries","SI","#ef4444","Enterprise","paid","Jun 09, 2026","$48,000"],
+      ["Globex","GX","#10b981","Growth · monthly","paid","Jun 08, 2026","$2,890"],
+      ["Initech","IT","#8b5cf6","Starter · monthly","failed","Jun 08, 2026","$490"],
+      ["Wayne Analytics","WA","#3b82f6","Scale · annual","paid","Jun 07, 2026","$11,160"],
+      ["Umbrella Health","UH","#ec4899","Growth · monthly","pending","Jun 07, 2026","$3,140"],
+    ];
+    const statusLabel = { paid: "Paid", pending: "Pending", failed: "Failed" };
+    document.getElementById("txns").innerHTML = TXNS.map((t) => `<tr>
+      <td><div class="cust"><i style="background:${t[2]}22;color:${t[2]}">${t[1]}</i>${t[0]}</div></td>
+      <td style="color:var(--dim)">${t[3]}</td>
+      <td><span class="pill ${t[4]}">${statusLabel[t[4]]}</span></td>
+      <td style="color:var(--dim)">${t[5]}</td>
+      <td class="amt">${t[6]}</td></tr>`).join("");
+    document.getElementById("txns").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr");
+      if (!tr) return;
+      document.querySelectorAll("#txns tr").forEach((r) => r.classList.remove("selected"));
+      tr.classList.add("selected");
+    });
+
+    // ── AI 리포트: 클릭 → 스피너 700ms → mock fetch → 결과 ──
+    document.getElementById("generate").addEventListener("click", () => {
+      const spinner = document.getElementById("spinner");
+      const result = document.getElementById("result");
+      spinner.classList.add("on");
+      result.classList.remove("on");
+      setTimeout(() => {
+        fetch("/api/stats")
+          .then((r) => r.json())
+          .then((d) => {
+            document.getElementById("revenue").textContent = d.revenue;
+            // seedRandom 검증 대상 — 시드되면 매 로드 동일 (계약: .bar span × 6)
+            const chart = document.getElementById("chart");
+            chart.innerHTML = "";
+            for (let i = 0; i < 6; i++) {
+              const v = Math.round(Math.random() * 100);
+              const bar = document.createElement("div");
+              bar.className = "bar";
+              bar.style.height = Math.max(8, v) + "%";
+              bar.innerHTML = "<span>" + v + "</span>";
+              chart.appendChild(bar);
+            }
+            const insights = d.insights ?? [
+              "Q3 tracking 7.7% above forecast, driven by annual-plan upgrades",
+              "Enterprise segment grew 2.1× faster than self-serve this quarter",
+              "Churn risk concentrated in Starter monthly — 3 accounts flagged",
+            ];
+            document.getElementById("insights").innerHTML =
+              insights.map((s) => `<li>${s}</li>`).join("");
+            spinner.classList.remove("on");
+            result.classList.add("on");
+            document.getElementById("report").dataset.loaded = "true";
+          });
+      }, 700);
+    });
+  </script>
+</body>
+</html>

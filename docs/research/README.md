@@ -11,6 +11,7 @@ _성능 최적화, 벤치마크, 프로파일링 관련_
 _설계 패턴, 리팩터링, 파이프라인 구조 관련_
 
 - [동시 녹화 + 스트리밍 이펙트 파이프라인](streaming-pipeline.md) — 3단계 최적화 전략 분석 (2026-02-26)
+- [Introduce 파이프라인 — 코드베이스 → 소개 영상 자동화](design-introduce-pipeline.md) — Scene System + Director 3-레이어 방향성 설계 (2026-06-10)
 
 ## 기능 (Features)
 

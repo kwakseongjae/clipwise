@@ -5,13 +5,11 @@ type DeviceFrame = EffectsConfig["deviceFrame"];
 
 // ─── Browser Chrome Constants ────────────────────────────
 
-export const TITLE_BAR_HEIGHT = 40;
-const TRAFFIC_LIGHT_Y = 14;
-const TRAFFIC_LIGHT_RADIUS = 6;
-const TRAFFIC_LIGHTS_START_X = 16;
-const TRAFFIC_LIGHT_GAP = 22;
-const ADDRESS_BAR_HEIGHT = 24;
-const ADDRESS_BAR_MARGIN = 70;
+export const TITLE_BAR_HEIGHT = 48;
+const TRAFFIC_LIGHT_RADIUS = 6.5;
+const TRAFFIC_LIGHTS_START_X = 22;
+const TRAFFIC_LIGHT_GAP = 20;
+const URL_PILL_HEIGHT = 30;
 
 // ─── Mobile Device Bezel Constants ───────────────────────
 
@@ -33,52 +31,105 @@ const ANDROID_CAMERA_RADIUS = 6;
 // ─── Browser Chrome SVG ──────────────────────────────────
 
 /**
- * Build an SVG for the browser chrome title bar.
+ * Build an SVG for the browser chrome title bar — macOS Chrome 스타일.
+ * traffic lights · 내비게이션 아이콘(뒤로/앞으로/새로고침) · 패드락 URL 필 ·
+ * 우측 메뉴/아바타까지 포함한 현실적인 단일 바.
  * All pixel constants are multiplied by dpr for HiDPI rendering.
  */
 function buildBrowserChromeSvg(
   width: number,
   darkMode: boolean,
   dpr = 1,
+  url = "localhost",
 ): string {
-  const bg = darkMode ? "#2d2d2d" : "#e8e8e8";
-  const addressBg = darkMode ? "#1a1a1a" : "#ffffff";
-  const addressBorder = darkMode ? "#444444" : "#d0d0d0";
-  const textColor = darkMode ? "#999999" : "#666666";
+  const c = darkMode
+    ? {
+        bgTop: "#3c3c3e", bgBottom: "#343436", border: "#232325",
+        pillBg: "#28282a", pillBorder: "#48484b",
+        text: "#d8d8da", icon: "#a8a8ac", iconDim: "#5f5f63",
+      }
+    : {
+        bgTop: "#f8f7f6", bgBottom: "#eeedeb", border: "#d8d6d3",
+        pillBg: "#ffffff", pillBorder: "#dedcd9",
+        text: "#3a3a3c", icon: "#6f6f72", iconDim: "#bdbdc0",
+      };
 
-  const tbarH = TITLE_BAR_HEIGHT * dpr;
-  const tlY = TRAFFIC_LIGHT_Y * dpr;
+  const h = TITLE_BAR_HEIGHT * dpr;
+  const midY = h / 2;
   const tlR = TRAFFIC_LIGHT_RADIUS * dpr;
   const tlStartX = TRAFFIC_LIGHTS_START_X * dpr;
   const tlGap = TRAFFIC_LIGHT_GAP * dpr;
-  const aBarH = ADDRESS_BAR_HEIGHT * dpr;
-  const aBarMargin = ADDRESS_BAR_MARGIN * dpr;
-  const fontSize = 12 * dpr;
+  const s = dpr; // stroke/아이콘 스케일 단위
 
+  // Traffic lights — 미세한 외곽선으로 입체감
   const trafficLights = [
-    { cx: tlStartX, fill: "#ff5f57" },
-    { cx: tlStartX + tlGap, fill: "#febc2e" },
-    { cx: tlStartX + tlGap * 2, fill: "#28c840" },
+    { cx: tlStartX, fill: "#ff5f57", stroke: "#e0443e" },
+    { cx: tlStartX + tlGap, fill: "#febc2e", stroke: "#d89e24" },
+    { cx: tlStartX + tlGap * 2, fill: "#28c840", stroke: "#1ea133" },
   ]
-    .map(
-      (light) =>
-        `<circle cx="${light.cx}" cy="${tlY}" r="${tlR}" fill="${light.fill}"/>`,
-    )
+    .map((l) => `<circle cx="${l.cx}" cy="${midY}" r="${tlR}" fill="${l.fill}" stroke="${l.stroke}" stroke-width="${0.5 * s}"/>`)
     .join("\n    ");
 
-  const addressBarWidth = width - aBarMargin * 2;
-  const addressBarX = aBarMargin;
-  const addressBarY = (tbarH - aBarH) / 2;
+  // 내비게이션 아이콘: 뒤로(활성) / 앞으로(비활성) / 새로고침
+  const navX = tlStartX + tlGap * 2 + 34 * s;
+  const back = `<path d="M ${navX + 4 * s} ${midY - 6 * s} l ${-6 * s} ${6 * s} l ${6 * s} ${6 * s}"
+      fill="none" stroke="${c.icon}" stroke-width="${1.8 * s}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const fwdX = navX + 28 * s;
+  const forward = `<path d="M ${fwdX - 4 * s} ${midY - 6 * s} l ${6 * s} ${6 * s} l ${-6 * s} ${6 * s}"
+      fill="none" stroke="${c.iconDim}" stroke-width="${1.8 * s}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const relX = fwdX + 28 * s;
+  const reload = `<path d="M ${relX + 6 * s} ${midY - 3.5 * s} a ${6 * s} ${6 * s} 0 1 0 ${1.2 * s} ${5.5 * s}"
+      fill="none" stroke="${c.icon}" stroke-width="${1.7 * s}" stroke-linecap="round"/>
+    <path d="M ${relX + 6.4 * s} ${midY - 7.5 * s} l ${0.4 * s} ${4.6 * s} l ${-4.6 * s} ${-0.4 * s} z" fill="${c.icon}"/>`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${tbarH}">
-    <rect width="${width}" height="${tbarH}" fill="${bg}"/>
+  // URL 필 — 패드락 + 도메인 (가운데 정렬)
+  const fontSize = 12.5 * dpr;
+  const pillH = URL_PILL_HEIGHT * dpr;
+  const pillW = Math.max(200 * s, Math.min(width * 0.42, 520 * s));
+  const pillX = (width - pillW) / 2;
+  const pillY = midY - pillH / 2;
+  const textW = url.length * fontSize * 0.56;
+  const lockX = width / 2 - textW / 2 - 16 * s;
+  const lockY = midY - 5 * s;
+  const padlock = `
+    <rect x="${lockX}" y="${lockY + 4 * s}" width="${9 * s}" height="${7 * s}" rx="${1.5 * s}" fill="${c.icon}"/>
+    <path d="M ${lockX + 2 * s} ${lockY + 4 * s} v ${-2 * s} a ${2.5 * s} ${2.5 * s} 0 0 1 ${5 * s} 0 v ${2 * s}"
+      fill="none" stroke="${c.icon}" stroke-width="${1.4 * s}"/>`;
+
+  // 우측: 점 메뉴 + 아바타
+  const dotsX = width - 26 * s;
+  const dots = [-4.5, 0, 4.5]
+    .map((dy) => `<circle cx="${dotsX}" cy="${midY + dy * s}" r="${1.6 * s}" fill="${c.icon}"/>`)
+    .join("");
+  const avatar = `
+    <circle cx="${width - 56 * s}" cy="${midY}" r="${11 * s}" fill="url(#cwAvatar)"/>
+    <text x="${width - 56 * s}" y="${midY + 4 * s}" text-anchor="middle"
+      font-family="system-ui, -apple-system, sans-serif" font-size="${10.5 * dpr}" font-weight="600" fill="#ffffff">S</text>`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}">
+    <defs>
+      <linearGradient id="cwChromeBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${c.bgTop}"/>
+        <stop offset="1" stop-color="${c.bgBottom}"/>
+      </linearGradient>
+      <linearGradient id="cwAvatar" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#818cf8"/>
+        <stop offset="1" stop-color="#6366f1"/>
+      </linearGradient>
+    </defs>
+    <rect width="${width}" height="${h}" fill="url(#cwChromeBg)"/>
+    <rect y="${h - s}" width="${width}" height="${s}" fill="${c.border}"/>
     ${trafficLights}
-    <rect x="${addressBarX}" y="${addressBarY}" width="${addressBarWidth}" height="${aBarH}"
-          rx="${6 * dpr}" ry="${6 * dpr}" fill="${addressBg}" stroke="${addressBorder}" stroke-width="${dpr}"/>
-    <text x="${width / 2}" y="${tlY + 4 * dpr}" text-anchor="middle"
-          font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" fill="${textColor}">
-      localhost
-    </text>
+    ${back}
+    ${forward}
+    ${reload}
+    <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}"
+          rx="${pillH / 2}" ry="${pillH / 2}" fill="${c.pillBg}" stroke="${c.pillBorder}" stroke-width="${s}"/>
+    ${padlock}
+    <text x="${width / 2 + 7 * s}" y="${midY + fontSize * 0.35}" text-anchor="middle"
+          font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" fill="${c.text}">${url}</text>
+    ${dots}
+    ${avatar}
   </svg>`;
 }
 
@@ -335,9 +386,10 @@ export async function buildBrowserChromeBuffer(
   viewportWidth: number,
   darkMode: boolean,
   dpr = 1,
+  url = "localhost",
 ): Promise<Buffer> {
   const tbarH = TITLE_BAR_HEIGHT * dpr;
-  const chromeSvg = buildBrowserChromeSvg(viewportWidth, darkMode, dpr);
+  const chromeSvg = buildBrowserChromeSvg(viewportWidth, darkMode, dpr, url);
   return sharp(Buffer.from(chromeSvg))
     .resize(viewportWidth, tbarH)
     .png()
@@ -365,7 +417,7 @@ export async function applyDeviceFrame(
     case "browser": {
       const tbarH = TITLE_BAR_HEIGHT * dpr;
       const totalHeight = frameHeight + tbarH;
-      const chromeSvg = buildBrowserChromeSvg(frameWidth, config.darkMode, dpr);
+      const chromeSvg = buildBrowserChromeSvg(frameWidth, config.darkMode, dpr, config.url);
       const chromeBuffer = Buffer.from(chromeSvg);
 
       const canvas = await sharp({

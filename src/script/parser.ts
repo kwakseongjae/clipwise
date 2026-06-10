@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 import { readFile } from "fs/promises";
+import { dirname, isAbsolute, resolve } from "path";
 import { ScenarioSchema, Scenario } from "./types.js";
 import { ZodError } from "zod";
 
@@ -34,6 +35,32 @@ export function parseScenario(yamlContent: string): Scenario {
 }
 
 /**
+ * prepare 블록의 상대 경로(fixture, inject.css/js)를 시나리오 파일 위치
+ * 기준 절대 경로로 변환한다.  `.clipwise/scenarios/` 어디에 시나리오를 두든
+ * cwd와 무관하게 동작하도록 보장하는 Zero-Footprint 계약의 일부.
+ */
+export function resolvePreparePaths(scenario: Scenario, scenarioDir: string): void {
+  const prepare = scenario.prepare;
+  if (!prepare) return;
+
+  const abs = (p: string) => (isAbsolute(p) ? p : resolve(scenarioDir, p));
+
+  for (const mock of prepare.mock) {
+    if (mock.fixture) mock.fixture = abs(mock.fixture);
+  }
+  if (prepare.inject?.css) {
+    prepare.inject.css = Array.isArray(prepare.inject.css)
+      ? prepare.inject.css.map(abs)
+      : abs(prepare.inject.css);
+  }
+  if (prepare.inject?.js) {
+    prepare.inject.js = Array.isArray(prepare.inject.js)
+      ? prepare.inject.js.map(abs)
+      : abs(prepare.inject.js);
+  }
+}
+
+/**
  * Load and parse a scenario from a YAML file path.
  */
 export async function loadScenario(filePath: string): Promise<Scenario> {
@@ -46,5 +73,7 @@ export async function loadScenario(filePath: string): Promise<Scenario> {
     throw new Error(`Failed to read scenario file "${filePath}": ${message}`);
   }
 
-  return parseScenario(content);
+  const scenario = parseScenario(content);
+  resolvePreparePaths(scenario, dirname(resolve(filePath)));
+  return scenario;
 }

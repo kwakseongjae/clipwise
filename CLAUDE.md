@@ -10,11 +10,20 @@ Clipwise — Playwright + CDP 기반 스크립터블 시네마틱 스크린 레�
 npm run build          # tsup (ESM + DTS)
 npm run typecheck      # tsc --noEmit
 npm test               # vitest run
-npx tsx scripts/benchmark.ts   # 벤치마크 (dist/ 빌드 필요)
+npx tsx scripts/benchmark.ts          # 성능 벤치마크 (dist/ 빌드 필요)
+npx tsx scripts/production-score.ts   # 프로덕션 스코어카드 (게이트+기능+결정론+성능+품질+CLI 채점)
 ```
 
 - Worker 스레드(`frame-worker.js`)가 `dist/`를 참조하므로 벤치마크 전 반드시 `npm run build`
 - `BENCH_LABEL="label" npx tsx scripts/benchmark.ts` — 결과 자동 누적 → `docs/benchmark-results.md`
+
+### Production Scorecard (릴리스 전 필수)
+
+`npx tsx scripts/production-score.ts` — 인터랙티브 벤치 시나리오를 실제 파이프라인으로
+녹화·채점해 **프로덕션 수준 판정**(Production-Ready / RC / Beta / Alpha)을 내린다.
+결과는 `docs/production-scorecard.md`에 누적. `SCORE_LABEL="설명"` 으로 라벨 지정.
+게이트(typecheck/test/build/audit)는 스크립트가 자체 실행하므로 별도 빌드 불필요.
+릴리스 체크리스트의 3·4번(build/test/audit 확인)을 이 한 명령으로 대체할 수 있다.
 
 ## Release Process
 

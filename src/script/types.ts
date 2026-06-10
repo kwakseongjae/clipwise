@@ -225,6 +225,8 @@ export const DeviceFrameSchema = z.object({
   enabled: z.boolean().default(false),
   type: z.enum(["browser", "macbook", "iphone", "ipad", "android", "none"]).default("browser"),
   darkMode: z.boolean().default(false),
+  /** browser 타입의 주소창에 표시할 URL (실제 녹화 URL과 무관한 표시용). */
+  url: z.string().default("localhost"),
 });
 
 export const SpeedRampConfigSchema = z.object({
@@ -312,7 +314,8 @@ export const OutputConfigSchema = z.object({
   preset: z.enum(["social", "balanced", "archive"]).optional(),
   /** Codec override: h264 (default), hevc (10-bit), av1 (smallest files, slow encode) */
   codec: z.enum(["auto", "h264", "hevc", "av1"]).default("auto"),
-  outputDir: z.string().default("./output"),
+  // Zero-Footprint 계약 (v0.8): 모든 산출물은 .clipwise/ 아래로.
+  outputDir: z.string().default(".clipwise/output"),
   filename: z.string().default("clipwise-recording"),
 });
 
@@ -405,6 +408,140 @@ export const AuthConfigSchema = z.object({
 
 export type AuthConfig = z.infer<typeof AuthConfigSchema>;
 
+/**
+ * Mock route — 녹화 브라우저의 네트워크 응답을 픽스처로 대체한다.
+ * URL은 부분 문자열 매칭 (waitForResponse와 동일한 의미론).
+ */
+export const MockRouteSchema = z.object({
+  /** 매칭할 URL 부분 문자열 (예: "/api/dashboard/stats"). */
+  url: z.string().min(1),
+  /** 응답 본문 JSON 파일 경로 (시나리오 파일 기준 상대 경로). */
+  fixture: z.string().optional(),
+  /** 인라인 응답 본문 — fixture 대신 YAML에 직접 작성. */
+  body: z.unknown().optional(),
+  status: z.number().int().min(100).max(599).default(200),
+  contentType: z.string().default("application/json"),
+});
+
+export type MockRoute = z.infer<typeof MockRouteSchema>;
+
+/**
+ * Prepare — 녹화 브라우저에만 적용되는 런타임 주입 설정.
+ *
+ * 사용자가 데모를 위해 앱 코드를 수정하게 되는 압력(dev 오버레이 숨김,
+ * 데모 데이터 시드, 날짜/랜덤 고정 등)을 전부 주입으로 대체한다.
+ * 소스·빌드·배포는 무접촉이며, 주입은 녹화 세션의 브라우저 컨텍스트에만
+ * 적용된다.
+ */
+export const PrepareConfigSchema = z.object({
+  /** 녹화에서 숨길 요소의 CSS 셀렉터 (쿠키 배너, dev 오버레이 등). */
+  hide: z.array(z.string().min(1)).default([]),
+  /** Date/Date.now를 이 시각으로 고정 (ISO 8601, 예: "2026-06-10T09:00:00Z"). */
+  freezeTime: z.string().optional(),
+  /** Math.random을 이 시드의 결정론적 PRNG로 대체. */
+  seedRandom: z.number().int().optional(),
+  /** 페이지 로드 전 시드할 웹 스토리지 항목. */
+  storage: z
+    .object({
+      localStorage: z.record(z.string()).default({}),
+      sessionStorage: z.record(z.string()).default({}),
+    })
+    .optional(),
+  /** 네트워크 응답 목(mock) — 사용자 DB를 시드하지 않고 데모 데이터 제공. */
+  mock: z.array(MockRouteSchema).default([]),
+  /** 임의 CSS/JS 파일 주입 (시나리오 파일 기준 상대 경로). */
+  inject: z
+    .object({
+      css: z.union([z.string(), z.array(z.string())]).optional(),
+      js: z.union([z.string(), z.array(z.string())]).optional(),
+    })
+    .optional(),
+});
+
+export type PrepareConfig = z.infer<typeof PrepareConfigSchema>;
+
+// ─── Scene System (v0.9 preview) ─────────────────────────
+// 타임라인 = motion/vignette 신의 순서. screen 신은 푸티지 소스(테이크)로,
+// 타임라인에 직접 등장하지 않고 vignette가 구간·영역·배속으로 인용한다.
+
+/** motion 신 — HTML 템플릿(내장 이름 또는 경로)을 deterministic seek 캡처. */
+export const MotionSceneSchema = z.object({
+  type: z.literal("motion"),
+  /** 내장 템플릿(intro-title|feature-callout|kinetic-type|vignette) 또는 .html 경로. */
+  template: z.string().min(1),
+  /** 신 길이 (ms). */
+  duration: z.number().min(200).max(60000),
+  /** 템플릿에 query param으로 주입할 props. */
+  props: z.record(z.union([z.string(), z.number(), z.boolean()])).default({}),
+});
+
+/** screen 신 — 실녹화 테이크. 커서 이펙트만 입힌 클린 푸티지가 된다. */
+export const ScreenSceneSchema = z.object({
+  type: z.literal("screen"),
+  /** vignette가 참조할 푸티지 ID. */
+  id: z.string().min(1),
+  steps: z.array(StepSchema).min(1),
+});
+
+/** 선 드로잉 주석 — 좌표는 셀렉터 실측(권장) 또는 푸티지 원본 px. */
+export const SceneFxSchema = z.object({
+  kind: z.enum(["circle", "arrow"]),
+  /** 대상 요소 셀렉터 — bounding box를 실측해 좌표로 사용. */
+  selector: z.string().optional(),
+  /** 명시 좌표 — circle: [x,y,w,h], arrow: [x1,y1,x2,y2]. */
+  coords: z.array(z.number()).length(4).optional(),
+  /** 신 내 드로잉 시작 시각 (ms). */
+  delay: z.number().min(0).default(0),
+});
+
+/** vignette 신 — screen 푸티지를 카드 레이어로 합성 (크롭·푸시인·분할·배속). */
+export const VignetteSceneSchema = z.object({
+  type: z.literal("vignette"),
+  /** 인용할 screen 신의 id. */
+  footage: z.string().min(1),
+  duration: z.number().min(500).max(60000),
+  layout: z.enum(["hero", "crop", "split"]).default("hero"),
+  num: z.string().optional(),
+  label: z.string().optional(),
+  caption: z.string().optional(),
+  /** split 레이아웃의 코드 카드 라인들. */
+  code: z.array(z.string()).optional(),
+  /** 크롭 영역 — selector 실측(+pad) 또는 명시 좌표. 생략 시 전체 화면. */
+  crop: z
+    .object({
+      selector: z.string().optional(),
+      pad: z.number().default(14),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().optional(),
+      h: z.number().optional(),
+      /** 크롭 높이 상한 (px, 원본 기준) — 와이드 스트립 연출용. */
+      maxH: z.number().optional(),
+    })
+    .optional(),
+  /** 푸시인 카메라 (스케일 from→to). */
+  push: z.object({ from: z.number().default(1), to: z.number().default(1) }).optional(),
+  /** 푸티지 인용 시작점 — 초(number) 또는 step 경계 anchor. */
+  start: z
+    .union([z.number(), z.object({ step: z.number().int().min(0), offset: z.number().default(0) })])
+    .default(0),
+  /** 푸티지 재생 배속. */
+  rate: z.number().min(0.1).max(8).default(1),
+  fx: z.array(SceneFxSchema).default([]),
+});
+
+export const SceneSchema = z.discriminatedUnion("type", [
+  MotionSceneSchema,
+  ScreenSceneSchema,
+  VignetteSceneSchema,
+]);
+
+export type MotionScene = z.infer<typeof MotionSceneSchema>;
+export type ScreenScene = z.infer<typeof ScreenSceneSchema>;
+export type VignetteScene = z.infer<typeof VignetteSceneSchema>;
+export type SceneFx = z.infer<typeof SceneFxSchema>;
+export type Scene = z.infer<typeof SceneSchema>;
+
 export const ScenarioSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -412,15 +549,30 @@ export const ScenarioSchema = z.object({
     .object({
       width: z.number().default(1280),
       height: z.number().default(800),
+      /** HiDPI 캡처 배율 — 2면 물리 픽셀 2배(레티나급)로 녹화·합성한다. */
+      deviceScaleFactor: z.number().min(1).max(3).default(1),
     })
     .default({}),
   /** Optional authentication — restores browser session for logged-in pages. */
   auth: AuthConfigSchema.optional(),
+  /** Optional recording-time runtime injection (hide/mock/freezeTime/...). */
+  prepare: PrepareConfigSchema.optional(),
   effects: EffectsConfigSchema.default({}),
   output: OutputConfigSchema.default({}),
   /** Optional audio narration — muxed into MP4 output. */
   audio: AudioConfigSchema.optional(),
-  steps: z.array(StepSchema).min(1),
+  /** steps 기반(클래식) 시나리오. scenes가 있으면 생략 가능. */
+  steps: z.array(StepSchema).default([]),
+  /** Scene System (v0.9 preview) — motion/screen/vignette 타임라인. */
+  scenes: z.array(SceneSchema).optional(),
+}).superRefine((s, ctx) => {
+  if (s.steps.length === 0 && !s.scenes?.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["steps"],
+      message: "Array must contain at least 1 element(s) — provide steps or scenes",
+    });
+  }
 });
 
 export type Scenario = z.infer<typeof ScenarioSchema>;

@@ -10,6 +10,7 @@ import type {
 } from "../script/types.js";
 import { interpolatePath } from "./cursor-tracker.js";
 import { getElementCenter } from "./screenshot.js";
+import { applyPrepare } from "./prepare.js";
 
 const CLICK_EFFECT_DURATION_MS = 500;
 const REPAINT_INTERVAL_MS = 25;
@@ -143,6 +144,9 @@ export class ClipwiseRecorder {
     };
     this.targetFps = scenario.output.fps;
     this.cursorSpeed = scenario.effects.cursor.speed;
+    // HiDPI 캡처 — screencast maxWidth/maxHeight가 물리 픽셀(viewport×dpr)로 설정되어
+    // 프레임이 레티나 해상도로 도착한다 (합성 파이프라인은 frame.deviceScaleFactor로 인지)
+    this.deviceScaleFactor = scenario.viewport.deviceScaleFactor ?? 1;
     // Enable passive loader detection when smartSpeed is active
     this.loaderDetectionEnabled = scenario.effects.smartSpeed?.enabled ?? false;
 
@@ -151,6 +155,7 @@ export class ClipwiseRecorder {
     // storageState가 있으면 Playwright에 직접 전달 (쿠키+localStorage 복원)
     const contextOptions: Record<string, unknown> = {
       viewport: this.viewport,
+      deviceScaleFactor: this.deviceScaleFactor,
     };
     if (scenario.auth?.storageState) {
       contextOptions.storageState = scenario.auth.storageState;
@@ -160,6 +165,12 @@ export class ClipwiseRecorder {
     // 인라인 쿠키가 있으면 추가 (storageState 이후에 적용)
     if (scenario.auth?.cookies?.length) {
       await this.context.addCookies(scenario.auth.cookies);
+    }
+
+    // Prepare 주입 (hide/mock/freezeTime/storage/inject) — 페이지 생성 전에
+    // 컨텍스트 레벨로 등록해야 모든 페이지·네비게이션에 적용된다
+    if (scenario.prepare) {
+      await applyPrepare(this.context, scenario.prepare);
     }
 
     this.page = await this.context.newPage();

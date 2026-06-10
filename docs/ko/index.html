@@ -438,10 +438,10 @@ steps:
 
   <div class="code-block">
     <div class="code-header">yaml — Clipwise 전체 스키마 레퍼런스</div>
-    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.7.2)
+    <pre><code id="ai-schema-content"># Clipwise YAML Schema Reference (v0.9.0)
 # 스크립터블 시네마틱 스크린 레코더 — YAML 작성, MP4 출력
-# 설치: npm install -D clipwise
-# 녹화: npx clipwise record scenario.yaml -f mp4
+# 실행 (설치 불필요): npx clipwise@latest record scenario.yaml -f mp4
+# 스캐폴딩:           npx clipwise@latest init   (.clipwise/ 생성 — 삭제하면 모든 흔적 제거)
 
 # ─── 최상위 구조 ──────────────────────────────────────
 name: "시나리오 이름"             # 필수
@@ -470,6 +470,28 @@ auth:
       httpOnly: false            # 기본: false
       secure: false              # 기본: false
       sameSite: Lax              # Strict | Lax | None (기본: Lax)
+
+# ─── Prepare (선택) — 녹화 시 런타임 주입 ────────────
+# 앱 코드를 건드리지 않고 데모용으로 페이지를 조정한다.
+# 녹화 브라우저에만 적용 (소스/빌드/DB 무접촉).
+prepare:
+  hide:                          # 녹화 중 숨길 CSS 셀렉터
+    - "#cookie-banner"
+    - "[data-nextjs-toast]"
+  freezeTime: "2026-06-10T09:00:00Z"  # Date/Date.now 동결 (ISO 8601)
+  seedRandom: 42                 # Math.random 결정론화
+  storage:                       # 앱 부팅 전 시드
+    localStorage:
+      onboarding_done: "true"
+  mock:                          # 네트워크 목 — DB 시드 없이 데모 데이터
+    - url: "/api/dashboard/stats"     # URL 부분 문자열 매칭
+      fixture: ../fixtures/stats.json # JSON 파일 (이 YAML 기준 상대 경로)
+      # body: { inline: "data" }      # 또는 인라인 body
+      status: 200                # 기본: 200
+      contentType: application/json   # 기본
+  inject:                        # 임의 CSS/JS (이 YAML 기준 상대 경로)
+    css: ../prepare/demo.css
+    js: ../prepare/demo.js
 
 # ─── 오디오 (MP4 전용) ───────────────────────────────
 audio:
@@ -597,6 +619,7 @@ effects:
     enabled: false               # 기본: false
     type: browser                # browser | iphone | ipad | android | none
     darkMode: false              # 기본: false
+    url: "app.example.com"       # 주소창 표시 URL (기본: localhost)
   keystroke:
     enabled: false               # 기본: false
     showTyping: false            # 타이핑 표시 (기본: false — 단축키만)

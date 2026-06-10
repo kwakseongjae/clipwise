@@ -13,17 +13,17 @@ Scriptable cinematic screen recorder for product demos — YAML in, polished MP4
 ## Quick Start
 
 ```bash
-# Install
-npm install -D clipwise
-
-# Try the built-in demo instantly
-npx clipwise demo
+# No install needed — run straight from npx (your package.json stays untouched)
+npx clipwise@latest demo                       # Try the built-in demo instantly
 
 # Or create your own scenario
-npx clipwise init                              # Creates clipwise.yaml template
-# Edit clipwise.yaml — change URL to your site
-npx clipwise record clipwise.yaml -f mp4       # Record!
+npx clipwise@latest init                       # Scaffolds .clipwise/ (single footprint dir)
+# Edit .clipwise/scenarios/demo.yaml — change the URL to your site
+npx clipwise@latest record .clipwise/scenarios/demo.yaml
 ```
+
+**Zero footprint**: everything Clipwise touches lives in one `.clipwise/` directory —
+scenarios, fixtures, auth state, output. Remove every trace with `rm -rf .clipwise`.
 
 ## Requirements
 
@@ -54,11 +54,11 @@ npx clipwise demo --device android         # Android mockup
 npx clipwise demo --device ipad            # iPad mockup
 npx clipwise demo --url https://my-app.com # Your deployed site
 
-# Record from YAML scenario
-npx clipwise record <scenario.yaml> -f mp4 -o ./output
-npx clipwise record <scenario.yaml> -f gif -o ./output
+# Record from YAML scenario (output defaults to .clipwise/output)
+npx clipwise record <scenario.yaml> -f mp4
+npx clipwise record <scenario.yaml> -f gif -o ./custom-dir
 
-# Initialize a template
+# Scaffold .clipwise/ (scenarios, fixtures, prepare assets, auth — one dir, zero footprint)
 npx clipwise init
 
 # Validate without recording
@@ -107,9 +107,11 @@ Claude will:
 2. Run `npx clipwise validate` to check for errors
 3. Run `npx clipwise record` to produce the MP4
 
-### Update
+### Update / Remove
 
 Re-run `npx clipwise install-skill` after upgrading clipwise to get the latest skill.
+Remove it anytime with `npx clipwise install-skill --remove` — the skill file is the
+only thing Clipwise leaves outside `.clipwise/`.
 
 ## YAML Scenario Format
 
@@ -235,8 +237,96 @@ auth:
 Generate a `storageState` file by logging in interactively:
 
 ```bash
-npx playwright codegen --save-storage=auth-state.json https://my-app.com
+npx playwright codegen --save-storage=.clipwise/auth/auth-state.json https://my-app.com
 ```
+
+### Prepare — Recording-Time Injection
+
+Tweak the page for the demo **without touching your app code**. Everything in
+`prepare` is injected only into the recording browser — your source, build, and
+database stay untouched, and all referenced files live in `.clipwise/`.
+
+```yaml
+prepare:
+  # Hide elements that don't belong in a demo (cookie banners, dev overlays)
+  hide:
+    - "#cookie-banner"
+    - "[data-nextjs-toast]"
+
+  # Freeze the clock — dates render identically on every recording
+  freezeTime: "2026-06-10T09:00:00Z"
+
+  # Make Math.random deterministic — same charts/data every run
+  seedRandom: 42
+
+  # Seed web storage before the app boots (skip onboarding, set flags)
+  storage:
+    localStorage:
+      onboarding_done: "true"
+
+  # Mock API responses — demo data without seeding your database
+  mock:
+    - url: "/api/dashboard/stats"      # URL substring match
+      fixture: ../fixtures/stats.json  # relative to this YAML
+    - url: "/api/user"
+      body: { name: "Demo User" }      # or inline
+
+  # Inject arbitrary CSS/JS for anything else
+  inject:
+    css: ../prepare/demo.css
+```
+
+| Pressure to modify app code | Prepare replacement |
+|------------------------------|---------------------|
+| Hide dev overlays / cookie banners conditionally | `hide:` |
+| Build a "demo mode" with seeded data | `mock:` |
+| Stub dates and randomness for consistent demos | `freezeTime:` + `seedRandom:` |
+| Pre-complete onboarding for recordings | `storage:` |
+
+Combined with `freezeTime` + `seedRandom`, recordings become **deterministic** —
+the same scenario produces byte-identical frames run after run.
+
+### Scenes — Keynote-style launch videos <sup>v0.9</sup>
+
+Declare a `scenes:` timeline and one `clipwise record` renders a complete
+launch video: kinetic typography → footage vignettes (crop / push-in / split,
+selector-anchored line annotations) → outro — connected by an ink thread that
+travels across cuts.
+
+```yaml
+viewport: { width: 1280, height: 800, deviceScaleFactor: 2 }  # 2 = retina output
+
+scenes:
+  - type: screen            # footage take — recorded once, quoted by vignettes
+    id: demo
+    steps: [...]            # the same steps you already know
+
+  - type: motion            # kinetic typography (built-in templates)
+    template: kinetic-type
+    duration: 2200
+    props: { lines: "Ship *demos*,||not edits.", size: 86 }
+
+  - type: vignette          # footage as a layer — camera is declarative
+    footage: demo
+    duration: 4200
+    layout: crop                                   # hero | crop | split
+    label: "Smart Speed"
+    caption: "Loading compressed, *results crisp*"
+    crop: { selector: ".panel", pad: 14 }          # selectors, not pixels
+    push: { from: 1.05, to: 1 }
+    start: { step: 3 }                             # quote from a step boundary
+    rate: 1.15
+    fx: [{ kind: circle, selector: "#revenue", delay: 2500 }]
+```
+
+**Quality recipe** (what makes the showcase videos look the way they do):
+1. `viewport.deviceScaleFactor: 2` — retina-resolution capture (footage, type, everything)
+2. `prepare:` — hide banners, freeze time, seed randomness, mock APIs
+3. `.clipwise/brand.yaml` — tone preset, accent, font preset (`editorial` = Inter + Fraunces), catchphrases; line annotations + the connecting thread switch on automatically
+4. Structure: kinetic hook → hero push-in → close-up vignettes → interstitial → split (YAML × footage) → outro
+
+The fastest path: install the Claude Code skill (`npx clipwise install-skill`)
+and ask `/clipwise` in natural language — it generates this YAML for you.
 
 ## Effects
 
@@ -309,6 +399,7 @@ deviceFrame:
   enabled: true
   type: browser          # browser | iphone | ipad | android | none
   darkMode: true
+  url: "app.example.com"   # address-bar display URL (default: localhost)
 ```
 
 | Type | Description |

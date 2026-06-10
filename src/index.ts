@@ -1,6 +1,16 @@
 // Core recorder
 export { ClipwiseRecorder } from "./core/recorder.js";
 
+// Prepare — 녹화 시 런타임 주입 (hide/mock/freezeTime/storage/inject)
+export {
+  applyPrepare,
+  buildHideCss,
+  buildCssInjectionScript,
+  buildFreezeTimeScript,
+  buildSeedRandomScript,
+  buildStorageScript,
+} from "./core/prepare.js";
+
 // Composition & encoding
 export { CanvasRenderer } from "./compose/canvas-renderer.js";
 export type { FrameContext } from "./compose/canvas-renderer.js";
@@ -29,8 +39,12 @@ export { renderKeystrokeHud } from "./effects/keystroke.js";
 export { applyCrossfade, applySlide, applyBlur, applyTransition } from "./effects/transition.js";
 export { renderWatermark } from "./effects/watermark.js";
 
+// Scene System (v0.9 preview)
+export { renderScenesTimeline } from "./scenes/runner.js";
+export type { SceneProgress } from "./scenes/runner.js";
+
 // Scenario parsing & validation
-export { parseScenario, loadScenario } from "./script/parser.js";
+export { parseScenario, loadScenario, resolvePreparePaths } from "./script/parser.js";
 export { validateScenario } from "./script/validator.js";
 
 // Types
@@ -41,6 +55,13 @@ export type {
   StepEffectsOverride,
   TransitionType,
   AuthConfig,
+  PrepareConfig,
+  MockRoute,
+  Scene,
+  MotionScene,
+  ScreenScene,
+  VignetteScene,
+  SceneFx,
   AudioConfig,
   EffectsConfig,
   OutputConfig,

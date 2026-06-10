@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<!--
+  keynote/vignette — Composite Scene 템플릿 (Anthropic 키노트 문법)
+
+  녹화 푸티지(프레임 시퀀스)를 HTML 레이어로 합성한다:
+  - 고정된 아이보리 무대 위에 떠 있는 카드 속 푸티지
+  - 카메라는 CSS가 담당: 푸시인(push), 크롭(crop), 분할(split)
+  - __clipwiseSeek(t)가 CSS 애니메이션 + 푸티지 프레임 인덱스를 동시 구동
+
+  Props (query):
+    layout: hero | crop | split
+    num, label, caption     — 좌상단 넘버/레이블, 하단 캡션
+    base, count, fps        — 푸티지 프레임 서버 base URL, 프레임 수, fps
+    start, rate             — 푸티지 시작 오프셋(초), 재생 배속
+    cropX, cropY, cropW, cropH — 푸티지 원본(1280×800) 내 크롭 영역
+    cardW                   — 카드 표시 너비(px)
+    pushFrom, pushTo        — 푸시인 스케일
+    accent                  — 브랜드 악센트
+    code                    — split 레이아웃의 코드 라인들 (||로 구분)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..900&family=Space+Grotesk:wght@400..700&family=Fraunces:ital,opsz,wght@1,9..144,400..700&family=JetBrains+Mono:wght@400;600&display=block" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" rel="stylesheet" />
+<style>
+  /* Anthropic 키노트 팔레트 */
+  :root {
+    --ivory: #faf9f5; --ink: #141413; --sub: #6e6c64;
+    --hairline: #e8e6dc; --accent: #6366f1;
+  }
+  /* 폰트 프리셋 — kinetic-type.html과 동일한 토큰 체계 */
+  :root {
+    --sans: "Inter", "Pretendard Variable", -apple-system, sans-serif;
+    --em: "Fraunces", Georgia, serif;
+    --em-style: italic;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  html[data-font="grotesk"] {
+    --sans: "Space Grotesk", "Pretendard Variable", -apple-system, sans-serif;
+    --em: "Space Grotesk", "Pretendard Variable", sans-serif;
+    --em-style: normal;
+  }
+  html[data-font="system"] {
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
+    --em: Georgia, "Times New Roman", serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ivory);
+    font-family: var(--sans);
+    /* 한글 폴백(Pretendard)에 가짜 기울임/볼드 합성 금지 */
+    font-synthesis: none; }
+
+  /* 종이 그레인 + 비네팅 — kinetic-type.html과 동일한 무대 질감 */
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/></filter><rect width="220" height="220" filter="url(%23n)" opacity="0.5"/></svg>');
+    opacity: 0.05; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    background: radial-gradient(ellipse 130% 110% at 50% 42%, transparent 62%, rgba(20,20,19,0.07) 100%); }
+
+  .stage { width: 100%; height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 22px; position: relative; }
+
+  /* 스레드 — 카드 뒤를 지나는 연결 선 (kinetic-type.html과 동일 경로/문법) */
+  .thread { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+  .thread path { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0.55;
+    stroke-linecap: round; animation: thread-go linear both; }
+  @keyframes thread-go {
+    from { stroke-dasharray: var(--tf) 1; }
+    to   { stroke-dasharray: var(--tt) 1; }
+  }
+  .thread-dot { position: absolute; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+    z-index: 1; offset-rotate: 0deg; animation: dot-go linear both; }
+  @keyframes dot-go {
+    from { offset-distance: calc(var(--tf) * 100%); }
+    to   { offset-distance: calc(var(--tt) * 100%); }
+  }
+
+  .label-row { display: flex; align-items: baseline; gap: 12px; align-self: center;
+    position: relative; z-index: 3;
+    opacity: 0; animation: fade-up 700ms cubic-bezier(0.16,1,0.3,1) 150ms both; }
+  .num { font-size: 13px; font-weight: 700; letter-spacing: 0.14em; color: var(--accent);
+    font-variant-numeric: tabular-nums; }
+  .label { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; color: var(--ink); }
+
+  /* 푸티지 카드 — 아이보리 위에 떠 있는 다크 윈도우 */
+  .card {
+    position: relative; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 1px 0 rgba(20,20,19,0.04), 0 24px 64px -16px rgba(20,20,19,0.28);
+    opacity: 0; animation: card-in 800ms cubic-bezier(0.16,1,0.3,1) both;
+    background: #0b0d13;
+  }
+  .titlebar { position: absolute; top: 0; left: 0; right: 0; height: 30px; z-index: 3;
+    display: flex; align-items: center; gap: 7px; padding-left: 13px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); }
+  .titlebar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.22); }
+  .viewport { position: absolute; inset: 0; overflow: hidden; }
+  .pusher { position: absolute; inset: 0; transform-origin: 50% 42%;
+    animation: push linear both; }
+  .footage { position: absolute; transform-origin: 0 0; image-rendering: auto; }
+
+  /* 캡션은 산세리프 정자 — 세리프 이탤릭은 라틴 디스플레이(키네틱·워드마크) 전용 */
+  .caption { font-size: 17.5px; color: var(--sub); letter-spacing: -0.005em;
+    font-family: var(--sans); font-weight: 450;
+    opacity: 0; animation: fade-up 700ms cubic-bezier(0.16,1,0.3,1) 350ms both; }
+  .caption b { color: var(--ink); font-weight: 680; }
+  .caption { position: relative; z-index: 3; }
+
+  /* ── 선 드로잉 주석 레이어 (fx=circle@…;arrow@…) — 카드 위에 그려짐 ── */
+  .annotations { position: absolute; inset: 0; z-index: 5; pointer-events: none;
+    overflow: visible; }
+  .annotations .stroke { stroke: var(--accent); fill: none; stroke-width: 3.5;
+    stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 1; stroke-dashoffset: 1;
+    animation: draw 600ms cubic-bezier(0.4, 0, 0.2, 1) both;
+    filter: drop-shadow(0 1px 4px rgba(20,20,19,0.35)); }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  /* split — 좌: 코드 카드, 우: 푸티지 */
+  .split { display: flex; gap: 36px; align-items: center; position: relative; z-index: 3; }
+  .code-card { width: 380px; border-radius: 14px; background: #141413; padding: 22px 24px;
+    box-shadow: 0 24px 64px -16px rgba(20,20,19,0.28);
+    opacity: 0; animation: card-in 800ms cubic-bezier(0.16,1,0.3,1) both;
+    font-family: var(--mono); font-size: 12.5px;
+    line-height: 1.85; color: #d8d6cd; }
+  .code-card .fname { font-size: 11px; color: #8a887e; margin-bottom: 10px;
+    letter-spacing: 0.04em; }
+  .code-line { display: block; overflow: hidden; white-space: nowrap; width: 0;
+    animation: typeline 420ms steps(28, end) forwards; }
+  .code-line .k { color: #8fa0f5; }
+  .code-line .c { color: #6e6c64; }
+
+  @keyframes fade-up { from { opacity: 0; transform: translateY(14px); }
+                       to   { opacity: 1; transform: translateY(0); } }
+  @keyframes card-in { from { opacity: 0; transform: translateY(18px) scale(0.985); }
+                       to   { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes push { from { transform: scale(var(--push-from, 1)); }
+                    to   { transform: scale(var(--push-to, 1)); } }
+  @keyframes typeline { from { width: 0; } to { width: 100%; } }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="label-row"><span class="num">01</span><span class="label">Label</span></div>
+    <div class="split" id="content"></div>
+    <div class="caption" id="caption">Caption</div>
+  </div>
+
+  <script>
+    const P = new URLSearchParams(location.search);
+    const num = (k, d) => parseFloat(P.get(k) ?? d);
+    const SRC_W = 1280, SRC_H = 800;
+
+    document.documentElement.style.setProperty("--accent", P.get("accent") || "#6366f1");
+    document.documentElement.dataset.font = P.get("font") || "editorial";
+    document.querySelector(".num").textContent = P.get("num") || "";
+    document.querySelector(".label").textContent = P.get("label") || "";
+    // 캡션: *텍스트* → 강조
+    const cap = (P.get("caption") || "").split("*");
+    document.getElementById("caption").innerHTML =
+      cap.map((s, i) => (i % 2 ? `<b>${s}</b>` : s)).join("");
+
+    // ── 푸티지 카드 구성 ──
+    const cardW = num("cardW", 920);
+    const cx = num("cropX", 0), cy = num("cropY", 0);
+    const cw = num("cropW", SRC_W), ch = num("cropH", SRC_H);
+    const cardH = cardW * (ch / cw);
+    const scale = cardW / cw;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.width = cardW + "px";
+    card.style.height = cardH + "px";
+    card.style.setProperty("--push-from", P.get("pushFrom") || "1");
+    card.style.setProperty("--push-to", P.get("pushTo") || "1");
+    const fullCrop = cw >= SRC_W;
+    card.innerHTML = `
+      ${fullCrop ? '<div class="titlebar"><i></i><i></i><i></i></div>' : ""}
+      <div class="viewport"><div class="pusher" style="animation-duration:${num("dur", 4)}s">
+        <img class="footage" id="footage"
+             style="width:${SRC_W * scale}px;height:${SRC_H * scale}px;left:${-cx * scale}px;top:${-cy * scale}px" />
+      </div></div>`;
+
+    const content = document.getElementById("content");
+    if (P.get("layout") === "split") {
+      const codeCard = document.createElement("div");
+      codeCard.className = "code-card";
+      const lines = (P.get("code") || "").split("||");
+      codeCard.innerHTML = `<div class="fname">.clipwise/scenarios/demo.yaml</div>` +
+        lines.map((l, i) =>
+          `<span class="code-line" style="animation-delay:${500 + i * 260}ms">${l
+            .replace(/^(\s*)([\w]+):/, '$1<span class="k">$2</span>:')
+            .replace(/(#.*)$/, '<span class="c">$1</span>')}</span>`).join("");
+      content.appendChild(codeCard);
+      card.style.width = "620px";
+      card.style.height = 620 * (ch / cw) + "px";
+      const s2 = 620 / cw;
+      const img = card.querySelector(".footage");
+      img.style.width = SRC_W * s2 + "px";
+      img.style.height = SRC_H * s2 + "px";
+      img.style.left = -cx * s2 + "px";
+      img.style.top = -cy * s2 + "px";
+    }
+    // 카드를 홀더로 감싼다 — 주석(타원 오버슈트)이 카드의 overflow:hidden에
+    // 잘리지 않도록 주석 레이어는 홀더에 부착
+    const holder = document.createElement("div");
+    holder.style.position = "relative";
+    holder.appendChild(card);
+    content.appendChild(holder);
+
+    // ── 선 드로잉 주석 — fx=circle@x,y,w,h@delay;arrow@x1,y1,x2,y2@delay ──
+    // 좌표는 푸티지 원본(1280×800) 기준 → 카드 공간으로 변환해 그린다
+    const fxSpecs = (P.get("fx") || "").split(";").filter(Boolean);
+    if (fxSpecs.length) {
+      const effScale = P.get("layout") === "split" ? 620 / cw : scale;
+      const toCard = (px, py) => [(px - cx) * effScale, (py - cy) * effScale];
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "annotations");
+      let inner = "";
+      for (const spec of fxSpecs) {
+        const [kind, coords, delay = "0"] = spec.split("@");
+        const n = coords.split(",").map(Number);
+        if (kind === "circle") {
+          // 손그림 느낌: 살짝 큰 타원 + 미세 회전
+          const [x0, y0] = toCard(n[0], n[1]);
+          const w0 = n[2] * effScale, h0 = n[3] * effScale;
+          const cx0 = x0 + w0 / 2, cy0 = y0 + h0 / 2;
+          inner += `<ellipse class="stroke" cx="${cx0}" cy="${cy0}"
+            rx="${(w0 / 2) * 1.18 + 6}" ry="${(h0 / 2) * 1.45 + 5}" pathLength="1"
+            transform="rotate(-4 ${cx0} ${cy0})" style="animation-delay:${delay}ms"/>`;
+        } else if (kind === "arrow") {
+          const [x1, y1] = toCard(n[0], n[1]);
+          const [x2, y2] = toCard(n[2], n[3]);
+          // 진행 방향에 수직으로 휘는 곡선 + 화살촉(지연 드로잉)
+          const mx = (x1 + x2) / 2 - (y2 - y1) * 0.22;
+          const my = (y1 + y2) / 2 + (x2 - x1) * 0.22;
+          const ang = Math.atan2(y2 - my, x2 - mx);
+          const head = (da) => `${x2 - 13 * Math.cos(ang + da)},${y2 - 13 * Math.sin(ang + da)}`;
+          inner += `<path class="stroke" d="M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}"
+              pathLength="1" style="animation-delay:${delay}ms"/>
+            <polyline class="stroke" points="${head(0.45)} ${x2},${y2} ${head(-0.45)}"
+              pathLength="1" style="animation-delay:${Number(delay) + 320}ms;animation-duration:250ms"/>`;
+        }
+      }
+      svg.innerHTML = inner;
+      // .pusher에 부착 — 푸시인 transform을 푸티지와 함께 타므로
+      // 동그라미/화살표가 대상 픽셀에 정확히 앵커링된다 (드리프트 제거)
+      card.querySelector(".pusher").appendChild(svg);
+    }
+
+    // ── 푸티지 시킹 — CSS 애니메이션과 동일한 시간축으로 구동 ──
+    const BASE = P.get("base"), COUNT = num("count", 1), FPS = num("fps", 30);
+    const START = num("start", 0), RATE = num("rate", 1);
+    const img = document.getElementById("footage");
+
+    // ── 스레드 — 모든 신이 공유하는 동일 경로, 구간(threadFrom→threadTo)만 전진 ──
+    const THREAD_PATH = "M -6 716 C 150 704, 320 730, 480 714 S 770 724, 940 706 S 1180 728, 1286 712";
+    const tf = P.get("threadFrom"), tt = P.get("threadTo");
+    if (tf !== null && tt !== null) {
+      const durS = parseFloat(P.get("dur") || "4");
+      const stage = document.querySelector(".stage");
+      const tsvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      tsvg.setAttribute("class", "thread");
+      tsvg.setAttribute("viewBox", "0 0 1280 800");
+      tsvg.innerHTML = `<path d="${THREAD_PATH}" pathLength="1"
+        style="--tf:${tf};--tt:${tt};animation-duration:${durS}s"/>`;
+      stage.appendChild(tsvg);
+      const dot = document.createElement("div");
+      dot.className = "thread-dot";
+      dot.style.cssText = `--tf:${tf};--tt:${tt};offset-path:path('${THREAD_PATH}');animation-duration:${durS}s`;
+      stage.appendChild(dot);
+    }
+
+    window.__clipwiseSeek = async (t) => {
+      for (const a of document.getAnimations()) { a.pause(); a.currentTime = t; }
+      if (BASE) {
+        const idx = Math.max(0, Math.min(COUNT - 1, Math.round((START + (t / 1000) * RATE) * FPS)));
+        img.src = `${BASE}/${idx}.png`;
+        await img.decode();
+      }
+    };
+  </script>
+</body>
+</html>

@@ -13,17 +13,17 @@ YAML 시나리오를 작성하면 시네마틱 데모 영상(MP4/GIF)을 자동�
 ## 빠른 시작
 
 ```bash
-# 설치
-npm install -D clipwise
-
-# 내장 데모 즉시 실행
-npx clipwise demo
+# 설치 불필요 — npx로 바로 실행 (package.json 무수정)
+npx clipwise@latest demo                       # 내장 데모 즉시 실행
 
 # 또는 직접 시나리오 작성
-npx clipwise init                              # clipwise.yaml 템플릿 생성
-# clipwise.yaml 편집 — URL을 내 사이트로 변경
-npx clipwise record clipwise.yaml -f mp4       # 녹화!
+npx clipwise@latest init                       # .clipwise/ 스캐폴딩 생성
+# .clipwise/scenarios/demo.yaml 편집 — URL을 내 사이트로 변경
+npx clipwise@latest record .clipwise/scenarios/demo.yaml
 ```
+
+**Zero footprint**: Clipwise가 남기는 모든 것(시나리오, 픽스처, 인증 상태, 출력물)은
+`.clipwise/` 디렉토리 하나에 담깁니다. `rm -rf .clipwise` 한 줄로 모든 흔적이 사라집니다.
 
 ## 요구사항
 
@@ -54,11 +54,11 @@ npx clipwise demo --device android         # Android 목업
 npx clipwise demo --device ipad            # iPad 목업
 npx clipwise demo --url https://my-app.com # 내 사이트 데모
 
-# YAML 시나리오로 녹화
-npx clipwise record <scenario.yaml> -f mp4 -o ./output
-npx clipwise record <scenario.yaml> -f gif -o ./output
+# YAML 시나리오로 녹화 (출력 기본 위치: .clipwise/output)
+npx clipwise record <scenario.yaml> -f mp4
+npx clipwise record <scenario.yaml> -f gif -o ./custom-dir
 
-# 템플릿 초기화
+# .clipwise/ 스캐폴딩 (시나리오, 픽스처, prepare 에셋, 인증 — 단일 디렉토리)
 npx clipwise init
 
 # 녹화 없이 검증만
@@ -107,9 +107,11 @@ Claude가 자동으로:
 2. `npx clipwise validate`로 검증
 3. `npx clipwise record`로 MP4 녹화
 
-### 업데이트
+### 업데이트 / 제거
 
 clipwise 업그레이드 후 `npx clipwise install-skill`을 다시 실행하면 최신 스킬로 업데이트됩니다.
+`npx clipwise install-skill --remove`로 언제든 제거할 수 있습니다 — 스킬 파일은
+Clipwise가 `.clipwise/` 밖에 남기는 유일한 파일입니다.
 
 ## YAML 시나리오 형식
 
@@ -212,6 +214,118 @@ steps:
 - `holdDuration: 1500-2500` ms
 - `type.delay: 40-60` ms/글자
 
+### 인증
+
+브라우저 세션을 복원해 로그인 뒤 페이지를 녹화합니다. Playwright `storageState`
+파일(권장) 또는 인라인 쿠키를 지원합니다.
+
+```yaml
+# 방법 1: Playwright storageState 파일 (쿠키 + localStorage)
+auth:
+  storageState: ../auth/auth-state.json
+
+# 방법 2: 인라인 쿠키
+auth:
+  cookies:
+    - name: session_id
+      value: abc123
+      domain: .example.com
+```
+
+대화형 로그인으로 `storageState` 파일 생성:
+
+```bash
+npx playwright codegen --save-storage=.clipwise/auth/auth-state.json https://my-app.com
+```
+
+### Prepare — 녹화 시 런타임 주입
+
+**앱 코드를 건드리지 않고** 데모용으로 페이지를 조정합니다. `prepare`의 모든
+항목은 녹화 브라우저에만 주입됩니다 — 소스, 빌드, DB는 무접촉이며 참조 파일은
+전부 `.clipwise/` 안에 둡니다.
+
+```yaml
+prepare:
+  # 데모에 어울리지 않는 요소 숨김 (쿠키 배너, dev 오버레이)
+  hide:
+    - "#cookie-banner"
+    - "[data-nextjs-toast]"
+
+  # 시계 동결 — 매 녹화마다 동일한 날짜 표시
+  freezeTime: "2026-06-10T09:00:00Z"
+
+  # Math.random 결정론화 — 매번 같은 차트/데이터
+  seedRandom: 42
+
+  # 앱 부팅 전 웹 스토리지 시드 (온보딩 건너뛰기, 플래그 설정)
+  storage:
+    localStorage:
+      onboarding_done: "true"
+
+  # API 응답 목(mock) — DB 시드 없이 데모 데이터 제공
+  mock:
+    - url: "/api/dashboard/stats"      # URL 부분 문자열 매칭
+      fixture: ../fixtures/stats.json  # 이 YAML 기준 상대 경로
+    - url: "/api/user"
+      body: { name: "Demo User" }      # 또는 인라인
+
+  # 그 외 모든 것 — 임의 CSS/JS 주입
+  inject:
+    css: ../prepare/demo.css
+```
+
+| 앱 코드를 수정하게 되는 압력 | Prepare 대체 |
+|------------------------------|--------------|
+| dev 오버레이/쿠키 배너 조건부 숨김 코드 | `hide:` |
+| 시드 데이터를 가진 "데모 모드" 구현 | `mock:` |
+| 일관된 데모를 위한 날짜/랜덤 스텁 | `freezeTime:` + `seedRandom:` |
+| 녹화용 온보딩 사전 완료 분기 | `storage:` |
+
+`freezeTime` + `seedRandom`을 함께 쓰면 녹화가 **결정론적**이 됩니다 —
+같은 시나리오는 몇 번을 돌려도 바이트 단위로 동일한 프레임을 만듭니다.
+
+### Scenes — 키노트 스타일 런치 영상 <sup>v0.9</sup>
+
+`scenes:` 타임라인을 선언하면 `clipwise record` 한 번으로 완성된 런치 영상이
+렌더됩니다: 키네틱 타이포 → 푸티지 비네트(크롭/푸시인/분할, 셀렉터 기반 선
+드로잉 주석) → 아웃트로 — 컷을 넘어 이어지는 잉크 스레드로 연결됩니다.
+
+```yaml
+viewport: { width: 1280, height: 800, deviceScaleFactor: 2 }  # 2 = 레티나 출력
+
+scenes:
+  - type: screen            # 푸티지 테이크 — 1회 녹화, 비네트들이 인용
+    id: demo
+    steps: [...]            # 기존 steps 문법 그대로
+
+  - type: motion            # 키네틱 타이포 (내장 템플릿)
+    template: kinetic-type
+    duration: 2200
+    props: { lines: "Ship *demos*,||not edits.", size: 86 }
+
+  - type: vignette          # 푸티지를 레이어로 — 카메라를 선언으로
+    footage: demo
+    duration: 4200
+    layout: crop                                   # hero | crop | split
+    label: "Smart Speed"
+    caption: "로딩은 빠르게, *결과는 또렷하게*"
+    crop: { selector: ".panel", pad: 14 }          # 픽셀이 아니라 셀렉터
+    push: { from: 1.05, to: 1 }
+    start: { step: 3 }                             # step 경계에서 인용 시작
+    rate: 1.15
+    fx: [{ kind: circle, selector: "#revenue", delay: 2500 }]
+```
+
+**고퀄리티 레시피** (쇼케이스 영상이 이렇게 나오는 이유):
+1. `viewport.deviceScaleFactor: 2` — 레티나 해상도 캡처 (푸티지·타이포 전부)
+2. `prepare:` — 배너 숨김, 시간 동결, 랜덤 시드, API 목킹
+3. `.clipwise/brand.yaml` — 톤 프리셋, accent, 폰트 프리셋(`editorial` = Inter + Fraunces),
+   캐치프레이즈. 선 드로잉 주석 + 연결 스레드는 자동 적용
+4. 구성: 키네틱 훅 → 히어로 푸시인 → 클로즈업 비네트 → 인터스티셜 → 분할(YAML × 푸티지) → 아웃트로
+
+가장 빠른 길: Claude Code 스킬 설치(`npx clipwise install-skill`) 후
+`/clipwise`에 자연어로 요청하면 — 이 YAML을 대신 만들어줍니다.
+
 ## 이펙트
 
 모든 이펙트는 선택사항이며 합리적인 기본값이 있습니다.
@@ -279,6 +393,7 @@ deviceFrame:
   enabled: true
   type: browser          # browser | iphone | ipad | android | none
   darkMode: true
+  url: "app.example.com"   # 주소창 표시 URL (기본: localhost)
 ```
 
 | 타입 | 설명 |

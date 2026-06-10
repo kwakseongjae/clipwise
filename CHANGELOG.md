@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-11
+
+Scene System — Keynote 연출 문법(고정 무대 + 푸티지 레이어 합성)을 엔진에 편입.
+`scenes:` 타임라인을 YAML로 선언하면 `clipwise record` 한 명령으로
+인트로 타이포 → 비네트(크롭·푸시인·분할·배속) → 아웃트로 영상을 렌더한다.
+장면을 관통하는 잉크 스레드, 선 드로잉 주석, 폰트 프리셋, 레티나(2×) 캡처 포함.
+(v0.8.0 항목과 함께 이번 릴리스로 배포)
+
+### Added
+- **`scenes:` 스키마** — `motion`(템플릿 seek 캡처) / `screen`(클린 푸티지 테이크) /
+  `vignette`(푸티지 인용: crop·push·start·rate·fx) 3종 + validator 검증
+- **Scene 런너** (`renderScenesTimeline`) — 셀렉터 실측 크롭/주석 좌표(`boundingBox`),
+  step 경계 anchor 자동 산출, 푸티지 프레임 서버, 하드컷 concat
+- **내장 모션 템플릿 출하** — `templates/motion/`(intro-title, feature-callout,
+  kinetic-type, vignette)이 npm 패키지에 포함; 폰트 프리셋(editorial/grotesk/system)과
+  선 드로잉 주석(underline/marker/circle/arrow) 내장
+- CLI `record`가 scenes 타임라인을 자동 감지해 전용 런너로 렌더
+
+### Added (화질)
+- **`viewport.deviceScaleFactor`** — HiDPI 캡처 배율 (1–3). 2면 녹화·합성·모션 캡처가
+  전부 물리 픽셀 2배(레티나급)로 수행된다. 기존 레코더의 dpr 인프라를 스키마로 노출
+- **세대 손실 제거** — scenes 세그먼트는 준무손실(archive)로 인코딩하고
+  최종 concat에서 1회만 손실 인코딩 (libx264 crf 16 slow)
+
+### Changed
+- `steps`는 `scenes`가 있으면 생략 가능 (없으면 기존대로 필수)
+- 모션 템플릿 한글 폴백에 가짜 기울임 합성 금지(`font-synthesis: none`),
+  비네트 캡션은 산세리프 정자로
+
+---
+
+## [0.8.0] - 2026-06-10
+
+Zero-Footprint & Prepare — "내 repo를 더럽히지 않는 데모 도구". 모든 흔적은
+`.clipwise/` 하나에 담기고, 데모를 위해 앱 코드를 수정하던 압력은 녹화 시
+런타임 주입으로 대체된다. 설계 문서: `docs/research/design-introduce-pipeline.md`
+
+### Added
+- **`prepare:` 시스템** — 녹화 브라우저에만 적용되는 런타임 주입 (소스/빌드/DB 무접촉):
+  - `hide:` — 쿠키 배너, dev 오버레이 등 셀렉터 목록을 CSS로 숨김
+  - `mock:` — 네트워크 응답을 픽스처 JSON 또는 인라인 body로 대체 (URL 부분 문자열 매칭)
+  - `freezeTime:` — `Date`/`Date.now()`를 ISO 8601 시각으로 동결
+  - `seedRandom:` — `Math.random()`을 시드 기반 결정론적 PRNG(mulberry32)로 대체
+  - `storage:` — 페이지 부팅 전 localStorage/sessionStorage 시드
+  - `inject:` — 임의 CSS/JS 파일 주입
+- **`install-skill --remove`** — 설치된 Claude Code 스킬의 대칭적 제거 경로
+- **Brand Kit 스캐폴딩** — `init`이 `.clipwise/brand.yaml` 생성: 톤앤매너 프리셋(midnight/daylight/neon), accent, 캐치프레이즈, 폰트 프리셋(editorial/grotesk/system), 선 드로잉 강조 토글(annotations)
+- **`deviceFrame.url`** — browser 크롬 주소창 표시 URL 옵션 + 크롬 리얼리즘 개선 (내비게이션 아이콘, 패드락 URL 필, 아바타)
+- prepare 상대 경로(fixture, inject)는 시나리오 파일 위치 기준으로 해석
+- public API: `applyPrepare`, `build*Script` 빌더, `resolvePreparePaths`, `PrepareConfig`/`MockRoute` 타입
+
+### Changed
+- **`clipwise init`** — 루트 `clipwise.yaml` 대신 `.clipwise/` 스캐폴딩 생성
+  (scenarios/, prepare/, fixtures/, auth/ + 자동 .gitignore). `rm -rf .clipwise` 한 줄로 모든 흔적 제거
+- **기본 출력 경로** — `./output` → `.clipwise/output` (BREAKING: outputDir을 명시하지 않은 시나리오의 출력 위치가 바뀜)
+- **`record -o`** — 미지정 시 시나리오의 `outputDir`을 존중 (이전: 무조건 `./output`으로 덮어씀)
+- README 설치 권장 — `npm install -D clipwise` → `npx clipwise@latest` (package.json 무수정)
+
+---
+
 ## [0.7.2] - 2026-03-28
 
 ### Added

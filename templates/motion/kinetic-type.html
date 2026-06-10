@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<!--
+  keynote/kinetic-type — 키네틱 타이포 인터스티셜 (Anthropic 키노트 문법)
+
+  아이보리 무대 위 짧은 선언문. 단어 단위 스태거 등장, *단어*는 악센트 세리프 이탤릭.
+  Props (query): lines ("||"로 줄 구분), accent, size, font, fx, sub,
+                 threadFrom/threadTo (0..1 — 장면을 관통하는 연결 선의 진행 구간)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..900&family=Space+Grotesk:wght@400..700&family=Fraunces:ital,opsz,wght@1,9..144,400..700&family=JetBrains+Mono:wght@400;600&display=block" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" rel="stylesheet" />
+<style>
+  :root { --ivory: #faf9f5; --ink: #141413; --accent: #6366f1; }
+
+  /* ── 폰트 프리셋 (Brand Kit `font:`) ──
+     editorial(기본): Inter 800 + Fraunces 이탤릭 강조 — 곡선이 풍부한 디스플레이 세리프
+     grotesk: Space Grotesk 디스플레이 — 테크 런치 무드
+     system: 시스템 스택 (네트워크 불필요 폴백) */
+  :root {
+    --sans: "Inter", "Pretendard Variable", -apple-system, sans-serif;
+    --em: "Fraunces", Georgia, serif;
+    --em-style: italic;
+    --em-weight: 560;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  html[data-font="grotesk"] {
+    --sans: "Space Grotesk", "Pretendard Variable", -apple-system, sans-serif;
+    --em: "Space Grotesk", "Pretendard Variable", sans-serif;
+    --em-style: normal;
+    --em-weight: 700;
+  }
+  html[data-font="system"] {
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
+    --em: Georgia, "Times New Roman", serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ivory);
+    font-family: var(--sans);
+    /* 한글 폴백에 가짜 기울임 합성 금지 — 강조 단어가 한글이면 정자 + 색/주석만 */
+    font-synthesis: none; }
+
+  /* 종이 그레인 + 비네팅 — 무대에 필름 질감 (정적, 비용 0) */
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/></filter><rect width="220" height="220" filter="url(%23n)" opacity="0.5"/></svg>');
+    opacity: 0.05; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    background: radial-gradient(ellipse 130% 110% at 50% 42%, transparent 62%, rgba(20,20,19,0.07) 100%); }
+
+  .stage { width: 100%; height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 6px; position: relative; }
+  .line { display: flex; gap: 0.28em; position: relative; z-index: 3; }
+  .w { font-size: var(--size, 76px); font-weight: 800; letter-spacing: -0.035em;
+    color: var(--ink); line-height: 1.18;
+    opacity: 0; animation: word-in 650ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .w.em { position: relative; color: var(--accent); font-family: var(--em);
+    font-style: var(--em-style); font-weight: var(--em-weight);
+    font-size: calc(var(--size, 76px) * 1.05); letter-spacing: -0.015em; }
+
+  /* ── 선 드로잉 강조 (fx=underline) — 폰트 로딩 후 px 공간에서 단일 곡선으로
+     그린다 (비균등 viewBox 확대 + non-scaling-stroke는 선이 끊겨 보였음) ── */
+  .w.em svg.underline { position: absolute; overflow: visible; pointer-events: none; }
+  .w.em svg.underline path { stroke: var(--accent); stroke-width: 4; fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 1; stroke-dashoffset: 1;
+    animation: draw 460ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+  /* ── 마커 스와이프 강조 (fx=marker) — 형광펜이 칠해짐 ── */
+  .w.em .marker { position: absolute; inset: 0.04em -0.12em -0.02em -0.12em; z-index: -1;
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+    border-radius: 0.08em; transform: scaleX(0) skewX(-2deg); transform-origin: left center;
+    animation: swipe 420ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes swipe { to { transform: scaleX(1) skewX(-2deg); } }
+  .sub { margin-top: 30px; font-family: var(--mono);
+    font-size: 19px; color: var(--ink); background: #ffffff;
+    border: 1px solid #e8e6dc; border-radius: 12px; padding: 13px 26px;
+    box-shadow: 0 10px 30px -12px rgba(20, 20, 19, 0.18);
+    opacity: 0; animation: word-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    position: relative; z-index: 3; }
+  .sub .dollar { color: var(--accent); margin-right: 9px; }
+  @keyframes word-in { from { opacity: 0; transform: translateY(0.45em) rotate(0.4deg); }
+                       to   { opacity: 1; transform: translateY(0) rotate(0); } }
+
+  /* ── 스레드 — 영상 전체를 관통하는 한 줄의 잉크 선.
+     threadFrom→threadTo 구간을 신 길이 동안 선형으로 전진시키면
+     하드컷을 넘어도 같은 경로 위에서 끊김 없이 이어진다. ── */
+  .thread { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+  .thread path { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0.55;
+    stroke-linecap: round;
+    animation: thread-go linear both; }
+  @keyframes thread-go {
+    from { stroke-dasharray: var(--tf) 1; }
+    to   { stroke-dasharray: var(--tt) 1; }
+  }
+  .thread-dot { position: absolute; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+    z-index: 2; offset-rotate: 0deg;
+    animation: dot-go linear both; }
+  @keyframes dot-go {
+    from { offset-distance: calc(var(--tf) * 100%); }
+    to   { offset-distance: calc(var(--tt) * 100%); }
+  }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage"></div>
+  <script>
+    const P = new URLSearchParams(location.search);
+    document.documentElement.style.setProperty("--accent", P.get("accent") || "#6366f1");
+    if (P.get("size")) document.documentElement.style.setProperty("--size", P.get("size") + "px");
+    document.documentElement.dataset.font = P.get("font") || "editorial";
+    const FX = P.get("fx") || "underline"; // underline | marker | off
+
+    const stage = document.getElementById("stage");
+    const emWords = []; // 폰트 로딩 후 px 공간에서 밑줄을 그릴 대상
+    let delay = 120;
+    for (const lineText of (P.get("lines") || "Lines missing").split("||")) {
+      const line = document.createElement("div");
+      line.className = "line";
+      for (const token of lineText.split(" ")) {
+        const w = document.createElement("span");
+        // *단어* 강조 — 뒤따르는 구두점(쉼표/마침표 등)은 강조 밖으로
+        const m = token.match(/^\*(.+)\*(.*)$/);
+        w.className = m ? "w em" : "w";
+        w.textContent = m ? m[1] : token;
+        w.style.animationDelay = delay + "ms";
+        if (m && FX === "underline") {
+          emWords.push({ el: w, delay: delay + 420 });
+        } else if (m && FX === "marker") {
+          const mk = document.createElement("i");
+          mk.className = "marker";
+          mk.style.animationDelay = delay + 380 + "ms";
+          w.appendChild(mk);
+        }
+        delay += 90;
+        line.appendChild(w);
+        if (m && m[2]) {
+          const tail = document.createElement("span");
+          tail.className = "w";
+          tail.textContent = m[2];
+          tail.style.animationDelay = delay - 90 + "ms";
+          tail.style.marginLeft = "-0.22em";
+          line.appendChild(tail);
+        }
+      }
+      stage.appendChild(line);
+      delay += 60;
+    }
+
+    // 아웃트로용 커맨드 필 (sub 파라미터)
+    if (P.get("sub")) {
+      const sub = document.createElement("div");
+      sub.className = "sub";
+      sub.innerHTML = `<span class="dollar">$</span>${P.get("sub")}`;
+      sub.style.animationDelay = delay + 350 + "ms";
+      stage.appendChild(sub);
+    }
+
+    // ── 스레드: 모든 신이 공유하는 동일 경로 — 구간만 다르게 전진 ──
+    const THREAD_PATH = "M -6 716 C 150 704, 320 730, 480 714 S 770 724, 940 706 S 1180 728, 1286 712";
+    const tf = P.get("threadFrom"), tt = P.get("threadTo");
+    if (tf !== null && tt !== null) {
+      const durS = parseFloat(P.get("dur") || "3");
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "thread");
+      svg.setAttribute("viewBox", "0 0 1280 800");
+      svg.innerHTML = `<path d="${THREAD_PATH}" pathLength="1"
+        style="--tf:${tf};--tt:${tt};animation-duration:${durS}s"/>`;
+      stage.appendChild(svg);
+      const dot = document.createElement("div");
+      dot.className = "thread-dot";
+      dot.style.cssText = `--tf:${tf};--tt:${tt};offset-path:path('${THREAD_PATH}');animation-duration:${durS}s`;
+      stage.appendChild(dot);
+    }
+
+    // ── 밑줄: 폰트 로딩 후 실측 너비로 단일 곡선을 그린다 ──
+    const ready = document.fonts.ready.then(() => {
+      for (const { el, delay: d } of emWords) {
+        const w = el.getBoundingClientRect().width;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "underline");
+        svg.setAttribute("width", String(w + 12));
+        svg.setAttribute("height", "16");
+        svg.style.left = "-6px";
+        svg.style.bottom = "-0.16em";
+        svg.innerHTML = `<path d="M 3 10 Q ${(w + 12) / 2} ${10 - Math.min(7, w * 0.03)} ${w + 9} 8"
+          pathLength="1" style="animation-delay:${d}ms"/>`;
+        el.appendChild(svg);
+      }
+    });
+
+    window.__clipwiseSeek = async (t) => {
+      await ready;
+      for (const a of document.getAnimations()) { a.pause(); a.currentTime = t; }
+    };
+  </script>
+</body>
+</html>

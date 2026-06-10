@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!--
+  feature-callout — 챕터 구분 설명 카드 (motion scene 템플릿)
+
+  데모 신 사이에 들어가 "지금부터 보여줄 것"을 설명한다.
+  규약: CSS @keyframes만 사용, animation-fill-mode: both (deterministic seek 호환)
+
+  Props (query param): num, title, desc, accent
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root { --accent: #6366f1; --bg: #0a0a0f; --fg: #f5f5f7;
+    --dim: rgba(245, 245, 247, 0.55); --glow-op: 0.09; }
+  html[data-tone="daylight"] { --bg: #faf9f7; --fg: #18181c;
+    --dim: rgba(24, 24, 28, 0.55); --glow-op: 0.06; }
+  html[data-tone="neon"] { --bg: #0c0616; --fg: #ffffff;
+    --dim: rgba(255, 255, 255, 0.6); --glow-op: 0.2; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif; }
+
+  .stage { width: 100%; height: 100%; display: flex; align-items: center; }
+  .inner { padding-left: 14%; max-width: 76%; }
+
+  .num-row { display: flex; align-items: center; gap: 18px; margin-bottom: 22px;
+    animation: rise 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms both; }
+  .num { font-size: 15px; font-weight: 700; letter-spacing: 0.18em; color: var(--accent);
+    font-variant-numeric: tabular-nums; }
+  .num-line { width: 0; height: 1.5px; background: var(--accent); opacity: 0.6;
+    animation: grow 900ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both; }
+
+  .title { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
+    margin-bottom: 18px; animation: rise 1000ms cubic-bezier(0.16, 1, 0.3, 1) 280ms both; }
+
+  .desc { font-size: 21px; font-weight: 400; line-height: 1.55;
+    color: var(--dim);
+    animation: rise 1000ms cubic-bezier(0.16, 1, 0.3, 1) 480ms both; }
+
+  html[data-tone="neon"] .title {
+    background: linear-gradient(92deg, var(--accent), #22d3ee);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .glow { position: absolute; right: -200px; top: 50%; width: 700px; height: 700px;
+    margin-top: -350px; border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, transparent 62%);
+    animation: glow-in 2200ms ease-out both; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(26px); }
+                    to   { opacity: 1; transform: translateY(0); } }
+  @keyframes grow { from { width: 0; } to { width: 56px; } }
+  @keyframes glow-in { 0% { opacity: 0; transform: scale(0.7); }
+                       100% { opacity: var(--glow-op); transform: scale(1); } }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="glow"></div>
+    <div class="inner">
+      <div class="num-row"><span class="num">01</span><span class="num-line"></span></div>
+      <div class="title">Title</div>
+      <div class="desc">Description</div>
+    </div>
+  </div>
+
+  <script>
+    const p = new URLSearchParams(location.search);
+    if (p.get("num")) document.querySelector(".num").textContent = p.get("num");
+    if (p.get("title")) document.querySelector(".title").textContent = p.get("title");
+    if (p.get("desc")) document.querySelector(".desc").textContent = p.get("desc");
+    if (p.get("accent")) document.documentElement.style.setProperty("--accent", p.get("accent"));
+    if (p.get("tone")) document.documentElement.dataset.tone = p.get("tone");
+
+    window.__clipwiseSeek = (t) => {
+      for (const a of document.getAnimations()) { a.pause(); a.currentTime = t; }
+    };
+  </script>
+</body>
+</html>

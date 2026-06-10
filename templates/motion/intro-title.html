@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!--
+  intro-title — motion scene 프로토타입 템플릿
+
+  규약 (deterministic seek 캡처 호환):
+  - 애니메이션은 CSS @keyframes / WAAPI 만 사용 (rAF 루프 금지)
+  - 모든 애니메이션에 animation-fill-mode: both (seek 시 in-effect 유지)
+  - 시스템 폰트만 사용 (웹폰트 로딩 비결정성 제거)
+
+  Props는 query param으로 주입: ?title=...&subtitle=...&accent=%236366f1
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<style>
+  /* ── 톤앤매너 프리셋 (Brand Kit) ──
+     midnight(기본): 딥블랙 + 소프트 글로우 — 발표 영상 톤
+     daylight: 라이트 에디토리얼 — 문서/블로그 톤
+     neon: 딥퍼플 + 그라데이션 타이포 — 런치 하이프 톤 */
+  :root {
+    --accent: #6366f1;
+    --bg: #0a0a0f;
+    --fg: #f5f5f7;
+    --fg-dim: rgba(245, 245, 247, 0.55);
+    --glow-op: 0.10;
+    --title-weight: 700;
+  }
+  html[data-tone="daylight"] {
+    --bg: #faf9f7;
+    --fg: #18181c;
+    --fg-dim: rgba(24, 24, 28, 0.55);
+    --glow-op: 0.07;
+  }
+  html[data-tone="neon"] {
+    --bg: #0c0616;
+    --fg: #ffffff;
+    --fg-dim: rgba(255, 255, 255, 0.6);
+    --glow-op: 0.22;
+    --title-weight: 800;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
+  }
+
+  .stage {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    position: relative;
+  }
+
+  /* 은은한 배경 글로우 — 천천히 확장 */
+  .glow {
+    position: absolute;
+    width: 900px;
+    height: 900px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, transparent 60%);
+    opacity: 0;
+    animation: glow-in 2500ms ease-out both;
+  }
+  @keyframes glow-in {
+    0%   { opacity: 0; transform: scale(0.6); }
+    100% { opacity: var(--glow-op); transform: scale(1); }
+  }
+
+  .accent-line {
+    width: 0;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    animation: line-grow 900ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
+  }
+  @keyframes line-grow {
+    from { width: 0; opacity: 0; }
+    to   { width: 64px; opacity: 1; }
+  }
+
+  .title {
+    font-size: 72px;
+    font-weight: var(--title-weight);
+    letter-spacing: -0.02em;
+    color: var(--fg);
+    opacity: 0;
+    animation: rise-in 1100ms cubic-bezier(0.16, 1, 0.3, 1) 350ms both;
+  }
+  /* neon 톤: 그라데이션 타이포 */
+  html[data-tone="neon"] .title {
+    background: linear-gradient(92deg, var(--accent), #22d3ee);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .subtitle {
+    font-size: 26px;
+    font-weight: 400;
+    color: var(--fg-dim);
+    opacity: 0;
+    animation: rise-in 1100ms cubic-bezier(0.16, 1, 0.3, 1) 600ms both;
+  }
+
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(28px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="glow"></div>
+    <div class="accent-line"></div>
+    <h1 class="title">Title</h1>
+    <p class="subtitle">Subtitle</p>
+  </div>
+
+  <script>
+    // Props 주입 (애니메이션 seek 전, 로드 시 1회)
+    const params = new URLSearchParams(location.search);
+    if (params.get("title")) document.querySelector(".title").textContent = params.get("title");
+    if (params.get("subtitle")) document.querySelector(".subtitle").textContent = params.get("subtitle");
+    if (params.get("accent")) document.documentElement.style.setProperty("--accent", params.get("accent"));
+    if (params.get("tone")) document.documentElement.dataset.tone = params.get("tone");
+
+    // deterministic seek 훅 — Scene System의 핵심 메커니즘.
+    // 모든 문서 애니메이션을 pause 상태로 고정하고 currentTime만 외부에서 제어한다.
+    window.__clipwiseSeek = (t) => {
+      for (const a of document.getAnimations()) {
+        a.pause();
+        a.currentTime = t;
+      }
+    };
+  </script>
+</body>
+</html>

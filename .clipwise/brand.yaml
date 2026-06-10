@@ -1,0 +1,38 @@
+# Clipwise Brand Kit — 영상의 톤앤매너와 카피를 한 곳에서 관리한다.
+# 모션 템플릿(타이틀/챕터 카드)과 스크린 신의 배경·크롬이 모두 이 설정을 따른다.
+
+product: "Clipwise"
+
+# 톤앤매너 프리셋: midnight | daylight | neon
+#   midnight — 딥블랙 + 소프트 글로우 (발표 영상 톤, 기본)
+#   daylight — 라이트 에디토리얼 (문서/블로그 톤)
+#   neon     — 딥퍼플 + 그라데이션 타이포 (런치 하이프 톤)
+tone: midnight
+
+accent: "#6366f1"
+
+# 폰트 프리셋: editorial | grotesk | system
+#   editorial — Inter + Instrument Serif 이탤릭 강조 (Tiempos 무드, 기본)
+#   grotesk   — Space Grotesk 디스플레이 (테크 런치 무드)
+#   system    — 시스템 폰트 (네트워크 불필요)
+font: editorial
+
+# 선 드로잉 강조 — 밑줄/동그라미/화살표/마커가 그어지는 키네틱 주석
+annotations: true
+
+# 자주 쓰는 캐치프레이즈 / 한 줄 문구
+tagline: "흔적 없는 시네마틱 데모 레코더"
+catchphrases:
+  intro: "Zero-Footprint Recording"
+  introSub: "앱 코드를 건드리지 않는 시네마틱 데모 — Clipwise v0.8"
+  outro: "Clipwise"
+  outroSub: "npx clipwise@latest init"
+
+# introduce 영상의 챕터 카피 (설명 카드)
+chapters:
+  - num: "01"
+    title: "시네마틱 대시보드 투어"
+    desc: "스프링 줌과 커서 추적이 자동으로 따라갑니다 — 후편집 없이."
+  - num: "02"
+    title: "AI 리포트, 기다림 없이"
+    desc: "로딩은 Smart Speed로 빠르게 감고, 결과는 또렷하게 보여줍니다."
