@@ -17,8 +17,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: '22'
+
+      # npm Trusted Publishing(OIDC)은 npm >= 11.5 필요 — 토큰 없이 배포
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -32,10 +35,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Trusted Publishing — npmjs.com 패키지 설정 > Trusted Publisher에
+      # (GitHub Actions: kwakseongjae/clipwise · publish.yml) 1회 등록 필요. 토큰 불필요.
       - name: Publish
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes

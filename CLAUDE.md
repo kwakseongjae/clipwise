@@ -35,6 +35,10 @@ npx tsx scripts/production-score.ts   # 프로덕션 스코어카드 (게이트+
 npm ci → typecheck → test → build → npm publish → gh release create
 ```
 
+npm 인증은 **Trusted Publishing(OIDC)** — 토큰 없음(만료 사고 원천 차단).
+npmjs.com 패키지 설정 > Trusted Publisher에 `kwakseongjae/clipwise · publish.yml`이
+등록되어 있어야 한다. NPM_TOKEN 시크릿은 더 이상 사용하지 않는다.
+
 ### Release 체크리스트
 
 1. `package.json` 버전 업데이트
