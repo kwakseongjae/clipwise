@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-06-11
+
+### Changed
+- README(EN/KO) — v0.10–0.11 기능 동기화: prepare.mask 행, scenes 예시에
+  spotlight/매치컷/BGM(URL+bpm)/captions/aspects 추가
+- `init` keynote 스캐폴드에 audio/captions/aspects 주석 예시 추가
+- 설계 문서 — TTS 내레이션은 BYOK 방식으로 보류 결정 기록 (무료 TTS 품질 미달;
+  엔진은 audio.file+captions 프리미티브로 이미 준비됨)
+
+---
+
 ## [0.11.0] - 2026-06-11
 
 소셜 배포 2종 — 전부 무료/의존성 0.

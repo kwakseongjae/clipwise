@@ -22,7 +22,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.11.0");
+  .version("0.11.1");
 
 program
   .command("record")
@@ -366,6 +366,11 @@ steps:
 name: "My Launch Video"
 viewport: { width: 1280, height: 800, deviceScaleFactor: 2 }   # 2 = retina quality
 
+# Optional extras (uncomment to use):
+# audio: { file: "https://assets.mixkit.co/music/132/132.mp3", bpm: 120, volume: 0.32, fadeOut: 2000 }
+# captions:
+#   - { text: "Recorded from a real app", start: 0.4, end: 2.4 }
+
 effects:
   cursor: { enabled: true, clickEffect: true, highlight: false, trail: false }
 
@@ -374,6 +379,7 @@ output:
   fps: 30
   preset: balanced
   filename: keynote
+  # aspects: ["9:16"]        # also render a reels-format file in the same run
 
 scenes:
   # footage take — recorded once; vignettes below quote it by step

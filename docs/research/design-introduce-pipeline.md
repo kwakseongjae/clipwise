@@ -481,7 +481,13 @@ role/text 기반(`getByRole` 의미론) 셀렉터를 1급으로 지원하면 코
 | **v0.9** | Scene System | deterministic motion 캡처(`__clipwiseSeek`), `scenes` YAML, 템플릿 3종, callout 오버레이, 프레임 스트림 타임라인 합성 |
 | **v0.10** | Agent-Ready Engine | `probe`(+`--capture-fixtures`), `--draft` + 콘택트 시트, `validate --against`, 구조화 에러 |
 | **v1.0** | Director | skill introduce 워크플로 (Discover→Probe→Storyboard→Draft&Review) |
-| v1.1+ | 확장 | MCP 서버, TTS 내레이션(기존 audio mux 활용), CI 통합(GitHub Action) |
+| v1.1+ | 확장 | MCP 서버, CI 통합(GitHub Action), 레코더 스트리밍화(장편 테이크) |
+
+**내레이션(TTS) — 보류 (2026-06-11 결정)**: 무료 TTS(macOS `say` 등)는 품질이
+기준 미달이라 채택하지 않는다. 추후 **BYOK**(사용자 API 키 — OpenAI/ElevenLabs 등)로
+지원하되, 엔진은 변경 불필요: TTS 어댑터가 `audio.file`(음성)과
+`captions`(단어 타이밍)를 생성해 기존 프리미티브에 꽂는 구조. whisper.cpp 자동
+전사도 같은 이유로 우선순위 하향(선언형 captions로 에이전트 경로는 이미 충족).
 
 Zero-Footprint를 첫 마일스톤으로 두는 이유: 구현 위험이 가장 낮으면서 모든 후속
 레이어의 기반(경로 계약, 픽스처 디렉토리, brand 설정 위치)이 되고, 기존 사용자

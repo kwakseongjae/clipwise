@@ -296,6 +296,7 @@ prepare:
 | Build a "demo mode" with seeded data | `mock:` |
 | Stub dates and randomness for consistent demos | `freezeTime:` + `seedRandom:` |
 | Pre-complete onboarding for recordings | `storage:` |
+| Blur sensitive data (emails, amounts) | `mask:` — element-level, follows scrolling |
 
 Combined with `freezeTime` + `seedRandom`, recordings become **deterministic** —
 the same scenario produces byte-identical frames run after run.
@@ -330,11 +331,22 @@ scenes:
     push: { from: 1.05, to: 1 }
     start: { step: 3 }                             # quote from a step boundary
     rate: 1.15
-    fx: [{ kind: circle, selector: "#revenue", delay: 2500 }]
+    fx:
+      - { kind: circle, selector: "#revenue", delay: 2500 }     # hand-drawn circle
+      - { kind: spotlight, selector: "#revenue", delay: 2500 }  # dim everything else
+    # push: { from: 1.0, to: 1.2, origin: ".panel" }            # match-cut toward a selector
+
+# Optional — free BGM by URL (downloaded on your machine) + beat-synced cuts
+audio: { file: "https://assets.mixkit.co/music/132/132.mp3", bpm: 120, volume: 0.32, fadeOut: 2000 }
+
+# Optional — caption pills (timeline-absolute seconds), burned into every aspect
+captions:
+  - { text: "Recorded from a real app", start: 0.4, end: 2.4 }
 ```
 
 **Quality recipe** (what makes the showcase videos look the way they do):
 1. `viewport.deviceScaleFactor: 2` — retina-resolution capture (footage, type, everything)
+0. `output.aspects: ["9:16", "1:1"]` — reels/feed files from the same run (footage recorded once)
 2. `prepare:` — hide banners, freeze time, seed randomness, mock APIs
 3. `.clipwise/brand.yaml` — tone preset, accent, font preset (`editorial` = Inter + Fraunces), catchphrases; line annotations + the connecting thread switch on automatically
 4. Structure: kinetic hook → hero push-in → close-up vignettes → interstitial → split (YAML × footage) → outro

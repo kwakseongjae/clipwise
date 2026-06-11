@@ -294,6 +294,7 @@ prepare:
 | 시드 데이터를 가진 "데모 모드" 구현 | `mock:` |
 | 일관된 데모를 위한 날짜/랜덤 스텁 | `freezeTime:` + `seedRandom:` |
 | 녹화용 온보딩 사전 완료 분기 | `storage:` |
+| 민감 정보(이메일·금액) 블러 | `mask:` — 요소 단위, 스크롤 추적 |
 
 `freezeTime` + `seedRandom`을 함께 쓰면 녹화가 **결정론적**이 됩니다 —
 같은 시나리오는 몇 번을 돌려도 바이트 단위로 동일한 프레임을 만듭니다.
@@ -327,11 +328,22 @@ scenes:
     push: { from: 1.05, to: 1 }
     start: { step: 3 }                             # step 경계에서 인용 시작
     rate: 1.15
-    fx: [{ kind: circle, selector: "#revenue", delay: 2500 }]
+    fx:
+      - { kind: circle, selector: "#revenue", delay: 2500 }     # 손그림 동그라미
+      - { kind: spotlight, selector: "#revenue", delay: 2500 }  # 주변 디밍
+    # push: { from: 1.0, to: 1.2, origin: ".panel" }            # 셀렉터를 향한 매치컷
+
+# 선택 — 무료 BGM을 URL로 (사용자 머신에서 다운로드) + 비트 싱크 컷
+audio: { file: "https://assets.mixkit.co/music/132/132.mp3", bpm: 120, volume: 0.32, fadeOut: 2000 }
+
+# 선택 — 캡션 필 (타임라인 절대 초), 모든 비율에 번인
+captions:
+  - { text: "실제 앱을 그대로 녹화했습니다", start: 0.4, end: 2.4 }
 ```
 
 **고퀄리티 레시피** (쇼케이스 영상이 이렇게 나오는 이유):
 1. `viewport.deviceScaleFactor: 2` — 레티나 해상도 캡처 (푸티지·타이포 전부)
+0. `output.aspects: ["9:16", "1:1"]` — 같은 실행에서 릴스/피드 파일까지 (푸티지는 1회 녹화)
 2. `prepare:` — 배너 숨김, 시간 동결, 랜덤 시드, API 목킹
 3. `.clipwise/brand.yaml` — 톤 프리셋, accent, 폰트 프리셋(`editorial` = Inter + Fraunces),
    캐치프레이즈. 선 드로잉 주석 + 연결 스레드는 자동 적용
