@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-06-11
+
+소셜 배포 2종 — 전부 무료/의존성 0.
+
+### Added
+- **멀티 아스펙트 동시 출력** — `output.aspects: ["9:16", "1:1"]` 지정 시 같은 실행에서
+  릴스/피드용 파일을 추가 생성 (`name-9x16.mp4` 등). 푸티지는 1회 녹화, 무대(타이포·
+  카드·스레드)만 비율별 재합성 — 템플릿이 무대 크기에 반응(스레드 경로 동적 생성,
+  타이포 스케일, 카드 핏)
+- **캡션 트랙** — 최상위 `captions: [{ text, start, end }]` (타임라인 절대 초).
+  ffmpeg 자막 필터(libass — homebrew ffmpeg 8에 미포함) 대신 **모션 템플릿 레이어로
+  렌더**해 어떤 ffmpeg 빌드에서도 동작하고 Pretendard/브랜드 토큰을 그대로 쓴다.
+  모든 아스펙트에 자동 적용 — 무음 재생(소셜) 대응
+
+---
+
 ## [0.10.1] - 2026-06-11
 
 ### Added

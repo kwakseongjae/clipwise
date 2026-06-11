@@ -48,6 +48,17 @@ export function validateScenario(scenario: Scenario): ValidationResult {
     }
   }
 
+  // 캡션 트랙 검증
+  for (let i = 0; i < scenario.captions.length; i++) {
+    const c = scenario.captions[i];
+    if (c.end <= c.start) {
+      errors.push(`captions #${i + 1} ("${c.text.slice(0, 20)}"): end must be greater than start`);
+    }
+  }
+  if (scenario.captions.length > 0 && !scenario.scenes?.length) {
+    warnings.push("captions are only rendered in scenes timelines (ignored for classic steps recordings)");
+  }
+
   // Check that the first step contains a navigate action
   if (scenario.steps.length > 0) {
     const firstStep = scenario.steps[0];

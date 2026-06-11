@@ -435,3 +435,49 @@
 </details>
 
 ---
+## Run: v0.11.0 release — 2026-06-11 05:33:48
+
+**버전**: v0.11.0 · **점수**: 100/100 · **판정**: **Production-Ready**
+
+| 카테고리 | 점수 |
+|----------|------|
+| G 게이트 | 15/15 |
+| F Prepare | 20/20 |
+| M 모션/브랜드 | 10/10 |
+| D 결정론 | 15/15 |
+| P 성능 | 20/20 |
+| Q 품질 | 20/20 |
+| X CLI/DX | 10/10 |
+
+<details><summary>세부 체크 (24개)</summary>
+
+| 체크 | 점수 | 상세 |
+|------|------|------|
+| G 게이트 · typecheck (tsc --noEmit) | 4/4 | 통과 (932ms) |
+| G 게이트 · unit tests (vitest) | 5/5 | 117개 통과 |
+| G 게이트 · build (tsup ESM+DTS) | 3/3 | 통과 (1412ms) |
+| G 게이트 · npm audit | 3/3 | 0 vulnerabilities |
+| F Prepare · hide — 쿠키 배너 숨김 | 4/4 | display: none |
+| F Prepare · freezeTime — 날짜 동결 | 4/4 | 페이지 날짜: 2026-06-10 |
+| F Prepare · storage — localStorage 시드 | 4/4 | 환영 배지 표시됨 |
+| F Prepare · mock — API 픽스처 대체 | 4/4 | revenue: $128,400 (fixture) |
+| F Prepare · seedRandom — 재로드 차트 동일 | 4/4 | 차트: [60,45,85,67,17,53] vs [60,45,85,67,17,53] |
+| M 모션/브랜드 · Brand Kit 적용 (tone 토큰·카피·accent) | 5/5 | daylight bg=rgb(250, 249, 247), 카피·accent 일치 |
+| M 모션/브랜드 · tone 3종 변별 + 모션 캡처 결정론 | 5/5 | 변별: 3/3 고유 · 재캡처: byte-identical |
+| D 결정론 · 2회 녹화 최종 프레임 콘텐츠 일치 | 10/10 | byte-identical |
+| D 결정론 · 프레임 수 편차 ≤10% | 5/5 | 310 vs 309 (0.3%) |
+| P 성능 · compose+encode ms/frame (≤35 만점) | 10/10 | 16.1ms/frame (272 frames, 4.4s) |
+| P 성능 · 녹화 오버헤드비 (녹화시간/영상길이, ≤2.0 만점) | 5/5 | 8.4s 녹화 → 9.1s 영상 (0.93×) |
+| P 성능 · 총 wall-clock (≤4× 영상길이 만점) | 5/5 | 12.8s 총 (1.41×) |
+| Q 품질 · MP4 생성 + ffprobe 파싱 | 4/4 | 3778 KB |
+| Q 품질 · 해상도 = 출력 설정 (1280×800) | 4/4 | 1280×800 |
+| Q 품질 · fps = 30 (±0.5) | 4/4 | 30.00 fps |
+| Q 품질 · 길이 정합 (프레임수/fps 대비 ±10%) | 4/4 | 9.1s (기대 9.1s) |
+| Q 품질 · 파일 크기 envelope (10–750 KB/s) | 4/4 | 417 KB/s |
+| X CLI/DX · init — .clipwise/ 스캐폴딩 완전성 (brand.yaml 포함) | 3/3 | scenarios/brand.yaml/prepare/fixtures/auth + .gitignore |
+| X CLI/DX · validate — prepare 오류 2건 감지 + 비정상 종료코드 | 4/4 | freezeTime/mock 오류 모두 보고 |
+| X CLI/DX · install-skill 설치/제거 왕복 | 3/3 | 설치 → 제거 모두 확인 |
+
+</details>
+
+---

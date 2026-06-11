@@ -142,3 +142,40 @@ scenes:
     expect(r.valid).toBe(true);
   });
 });
+
+describe("captions & aspects (v0.11)", () => {
+  it("parses captions track and aspects list", () => {
+    const s = parseScenario(`
+name: "Caps"
+output: { aspects: ["9:16", "1:1"] }
+captions:
+  - { text: "hello", start: 0.5, end: 2.0 }
+scenes:
+  - { type: motion, template: kinetic-type, duration: 2000 }
+`);
+    expect(s.captions).toHaveLength(1);
+    expect(s.output.aspects).toEqual(["9:16", "1:1"]);
+  });
+
+  it("errors when caption end <= start", () => {
+    const s = parseScenario(`
+name: "Bad cap"
+captions: [{ text: "x", start: 2, end: 1 }]
+scenes:
+  - { type: motion, template: kinetic-type, duration: 2000 }
+`);
+    const r = validateScenario(s);
+    expect(r.errors.some((e) => e.includes("end must be greater"))).toBe(true);
+  });
+
+  it("rejects unknown aspect values", () => {
+    expect(() =>
+      parseScenario(`
+name: "Bad aspect"
+output: { aspects: ["4:3"] }
+scenes:
+  - { type: motion, template: kinetic-type, duration: 2000 }
+`),
+    ).toThrow("Scenario validation failed");
+  });
+});

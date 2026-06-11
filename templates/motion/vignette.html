@@ -64,6 +64,24 @@
   .stage { width: 100%; height: 100%; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 22px; position: relative; }
 
+
+  /* ── 전역 캡션 트랙 — 타임라인 절대시각 기준, 신 경계를 넘어 이어진다.
+     ffmpeg 자막 필터(libass) 의존 없이 템플릿 레이어로 렌더 — 어떤 ffmpeg
+     빌드에서도 동작하고 폰트·브랜드 토큰을 그대로 쓴다. ── */
+  .gcap { position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: 2.4%; z-index: 8; max-width: 86%;
+    font-family: var(--sans); font-weight: 600; color: var(--ink);
+    background: rgba(255, 255, 255, 0.82); border: 1px solid rgba(20, 20, 19, 0.08);
+    border-radius: 12px; padding: 0.5em 1.1em; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; animation: gcap-show linear both; }
+  @keyframes gcap-show {
+    0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    7% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    93% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(0); }
+  }
+
   /* 스레드 — 카드 뒤를 지나는 연결 선 (kinetic-type.html과 동일 경로/문법) */
   .thread { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
   .thread path { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0.55;
@@ -279,14 +297,18 @@
     const img = document.getElementById("footage");
 
     // ── 스레드 — 모든 신이 공유하는 동일 경로, 구간(threadFrom→threadTo)만 전진 ──
-    const THREAD_PATH = "M -6 716 C 150 704, 320 730, 480 714 S 770 724, 940 706 S 1180 728, 1286 712";
+    // 스레드 경로 — 스테이지 크기에서 동적 생성. 두 템플릿이 동일 공식을 쓰므로
+    // 어떤 비율(16:9/9:16/1:1)에서도 신 간 연속성이 유지된다.
+    const _W = innerWidth, _H = innerHeight, _ty = _H * 0.895, _a = _H * 0.016;
+    const _f = (n) => n.toFixed(1);
+    const THREAD_PATH = `M -6 ${_f(_ty - _a * 0.3)} C ${_f(_W * 0.12)} ${_f(_ty - _a)}, ${_f(_W * 0.25)} ${_f(_ty + _a)}, ${_f(_W * 0.375)} ${_f(_ty - _a * 0.2)} S ${_f(_W * 0.6)} ${_f(_ty + _a * 0.6)}, ${_f(_W * 0.734)} ${_f(_ty - _a * 1.1)} S ${_f(_W * 0.92)} ${_f(_ty + _a)}, ${_f(_W + 6)} ${_f(_ty - _a * 0.4)}`;
     const tf = P.get("threadFrom"), tt = P.get("threadTo");
     if (tf !== null && tt !== null) {
       const durS = parseFloat(P.get("dur") || "4");
       const stage = document.querySelector(".stage");
       const tsvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       tsvg.setAttribute("class", "thread");
-      tsvg.setAttribute("viewBox", "0 0 1280 800");
+      tsvg.setAttribute("viewBox", `0 0 ${_W} ${_H}`);
       tsvg.innerHTML = `<path d="${THREAD_PATH}" pathLength="1"
         style="--tf:${tf};--tt:${tt};animation-duration:${durS}s"/>`;
       stage.appendChild(tsvg);
@@ -294,6 +316,25 @@
       dot.className = "thread-dot";
       dot.style.cssText = `--tf:${tf};--tt:${tt};offset-path:path('${THREAD_PATH}');animation-duration:${durS}s`;
       stage.appendChild(dot);
+    }
+
+
+    // 전역 캡션 — capsJson(절대 start/end 초) + capsOffset(이 신의 절대 시작 초)
+    if (P.get("capsJson")) {
+      const offset = parseFloat(P.get("capsOffset") || "0");
+      const sceneDur = parseFloat(P.get("dur") || "4");
+      const capFs = Math.max(15, innerHeight * 0.026);
+      for (const c of JSON.parse(P.get("capsJson"))) {
+        const s = c.start - offset, e = c.end - offset;
+        if (e <= 0 || s >= sceneDur) continue; // 이 신과 무관
+        const el = document.createElement("div");
+        el.className = "gcap";
+        el.textContent = c.text;
+        el.style.fontSize = capFs.toFixed(1) + "px";
+        el.style.animationDelay = Math.max(0, s).toFixed(3) + "s";
+        el.style.animationDuration = (Math.min(e, sceneDur) - Math.max(0, s)).toFixed(3) + "s";
+        document.querySelector(".stage").appendChild(el);
+      }
     }
 
     window.__clipwiseSeek = async (t) => {

@@ -22,7 +22,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.10.1");
+  .version("0.11.0");
 
 program
   .command("record")
@@ -110,7 +110,7 @@ program
         const outDir2 = scenario.output.outputDir;
         await mkdir(outDir2, { recursive: true });
         spinner.start(`Rendering ${scenario.scenes.length}-scene timeline...`);
-        const buf = await renderScenesTimeline(scenario, scenarioDir, ({ scene, total, label }) => {
+        const { buffer: buf, extras } = await renderScenesTimeline(scenario, scenarioDir, ({ scene, total, label }) => {
           spinner.text = scene === 0
             ? `Recording footage — ${label}...`
             : `Rendering scene ${scene}/${total} — ${label}...`;
@@ -118,6 +118,11 @@ program
         const outputPath = join(outDir2, `${scenario.output.filename}.mp4`);
         await writeFile(outputPath, buf);
         spinner.succeed(`Timeline saved to ${chalk.bold(outputPath)} (${(buf.length / 1048576).toFixed(2)} MB)`);
+        for (const extra of extras) {
+          const extraPath = join(outDir2, `${scenario.output.filename}-${extra.label}.mp4`);
+          await writeFile(extraPath, extra.buffer);
+          spinner.succeed(`  + ${chalk.bold(extraPath)} (${(extra.buffer.length / 1048576).toFixed(2)} MB)`);
+        }
         console.log(chalk.green("\nDone! 🎬"));
         return;
       }

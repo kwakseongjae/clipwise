@@ -317,6 +317,9 @@ export const OutputConfigSchema = z.object({
   // Zero-Footprint 계약 (v0.8): 모든 산출물은 .clipwise/ 아래로.
   outputDir: z.string().default(".clipwise/output"),
   filename: z.string().default("clipwise-recording"),
+  /** scenes 전용 — 추가 출력 비율. 푸티지는 1회 녹화, 무대만 비율별 재합성해
+   *  소셜 배포용 파일을 동시 생성한다 (예: ["9:16", "1:1"]). */
+  aspects: z.array(z.enum(["16:9", "9:16", "1:1"])).default([]),
 });
 
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
@@ -555,6 +558,14 @@ export type VignetteScene = z.infer<typeof VignetteSceneSchema>;
 export type SceneFx = z.infer<typeof SceneFxSchema>;
 export type Scene = z.infer<typeof SceneSchema>;
 
+/** 캡션 한 줄 — 타임라인 절대 시각(초) 기준, 최종 인코딩에서 번인된다. */
+export const CaptionSchema = z.object({
+  text: z.string().min(1),
+  start: z.number().min(0),
+  end: z.number().min(0),
+});
+export type Caption = z.infer<typeof CaptionSchema>;
+
 export const ScenarioSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -578,6 +589,8 @@ export const ScenarioSchema = z.object({
   steps: z.array(StepSchema).default([]),
   /** Scene System (v0.9 preview) — motion/screen/vignette 타임라인. */
   scenes: z.array(SceneSchema).optional(),
+  /** scenes 전용 — 선언형 캡션 트랙 (스타일은 brand accent를 따른다). */
+  captions: z.array(CaptionSchema).default([]),
 }).superRefine((s, ctx) => {
   if (s.steps.length === 0 && !s.scenes?.length) {
     ctx.addIssue({

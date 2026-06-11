@@ -399,6 +399,10 @@ scenes:
 6. Keep one screen take (~12-15s) and let vignettes quote segments via `start: { step: N }`
 7. **Sensitive data**: `prepare.mask: [".email", ".amount"]` blurs elements at record time
    (follows scrolling — never ask the user to fake their data)
+9. **Social formats**: `output.aspects: ["9:16", "1:1"]` renders extra reels/feed files in the
+   same run — footage is recorded once, only the stage re-composes. Files: `name-9x16.mp4` etc.
+10. **Captions**: top-level `captions: [{ text, start, end }]` (timeline-absolute seconds)
+   burns styled caption pills into every aspect — great for sound-off social playback
 8. **Music**: `audio: { file: bgm.mp3, bpm: 122, fadeOut: 1500 }` muxes BGM into the final
    video AND snaps every scene cut onto the beat grid (beat-synced cuts).
    `file:` also accepts a URL (downloaded+cached on the user's machine — use license-free
