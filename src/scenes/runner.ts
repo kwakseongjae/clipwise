@@ -1,5 +1,6 @@
 import { chromium, type Page } from "playwright";
 import { createServer, type Server } from "http";
+import { createHash } from "crypto";
 import { execSync } from "child_process";
 import { readFile, writeFile, mkdtemp, rm } from "fs/promises";
 import { existsSync } from "fs";
@@ -46,7 +47,9 @@ interface BrandMotion {
 }
 
 interface FootageTake {
-  frames: Buffer[]; // PNG
+  /** 프레임 PNG가 저장된 디스크 디렉토리 — 메모리에 들지 않아 긴 테이크도 안전. */
+  framesDir: string;
+  count: number;
   anchors: number[]; // step k 시작 시각(초)
   boxes: Map<string, { x: number; y: number; width: number; height: number }>;
 }
@@ -210,27 +213,29 @@ async function recordFootageTake(
 
   // dpr 슈퍼샘플 해상도로 합성 — 2×면 비네트 크롭 확대 시 진짜 디테일이 남는다
   const renderer = new CanvasRenderer(takeScenario.effects, segmentOutput(scenario), scene.steps);
-  const composed: ComposedFrame[] = [];
-  for await (const f of renderer.composeStream(session.frames)) composed.push(f);
 
-  const frames = await Promise.all(
-    composed.map((f) =>
-      f.rawInfo
-        ? sharp(f.buffer, {
-            raw: { width: f.rawInfo.width, height: f.rawInfo.height, channels: f.rawInfo.channels },
-          })
-            .png()
-            .toBuffer()
-        : Promise.resolve(f.buffer),
-    ),
-  );
+  // 합성 → PNG → 디스크 스트리밍 — 프레임 배열을 메모리에 들지 않아
+  // 분 단위 긴 테이크에서도 메모리가 일정하다
+  const framesDir = await mkdtemp(join(tmpdir(), `clipwise-footage-${scene.id}-`));
+  let count = 0;
+  for await (const f of renderer.composeStream(session.frames)) {
+    const png = f.rawInfo
+      ? await sharp(f.buffer, {
+          raw: { width: f.rawInfo.width, height: f.rawInfo.height, channels: f.rawInfo.channels },
+        })
+          .png()
+          .toBuffer()
+      : f.buffer;
+    await writeFile(join(framesDir, `${count}.png`), png);
+    count++;
+  }
 
   const anchors: number[] = [];
   for (let k = 0; k < scene.steps.length; k++) {
     const idx = session.frames.findIndex((f) => (f.stepIndex ?? 0) >= k);
     anchors.push(Math.max(0, idx) / scenario.output.fps);
   }
-  return { frames, anchors, boxes };
+  return { framesDir, count, anchors, boxes };
 }
 
 /** 카드가 무대(레이블+캡션 포함)를 넘지 않도록 크롭 종횡비 기준 너비 산출. */
@@ -319,7 +324,7 @@ function vignetteProps(
     label: scene.label ?? "",
     caption: scene.caption ?? "",
     base: serverBase,
-    count: take.frames.length,
+    count: take.count,
     fps: scenario.output.fps,
     start,
     rate: scene.rate,
@@ -399,9 +404,16 @@ export async function renderScenesTimeline(
     const m = req.url?.match(/^\/([\w-]+)\/(\d+)\.png$/);
     const take = m ? takes.get(m[1]) : undefined;
     if (take) {
-      const idx = Math.min(take.frames.length - 1, parseInt(m![2], 10));
-      res.writeHead(200, { "content-type": "image/png", "cache-control": "max-age=3600" });
-      res.end(take.frames[idx]);
+      const idx = Math.min(take.count - 1, parseInt(m![2], 10));
+      readFile(join(take.framesDir, `${idx}.png`))
+        .then((png) => {
+          res.writeHead(200, { "content-type": "image/png", "cache-control": "max-age=3600" });
+          res.end(png);
+        })
+        .catch(() => {
+          res.writeHead(404);
+          res.end();
+        });
     } else {
       res.writeHead(404);
       res.end();
@@ -471,29 +483,46 @@ export async function renderScenesTimeline(
   const concatInputs = segments.map((_, i) => `[v${i}]`).join("");
   const outPath = join(tmp, "timeline.mp4");
 
-  // BGM 트랙 — audio.file 지정 시 최종 합성에 1회 뮤지컬화 (volume/fade 지원)
+  // BGM 트랙 — audio.file 지정 시 최종 합성에 1회 뮤지컬화 (volume/fade 지원).
+  // - URL 허용: 사용자 머신에서 직접 다운로드+캐시 (라이선스상 음원을 패키지에
+  //   동봉할 수 없는 무료 트랙들 — Mixkit 등 — 을 한 줄로 쓰게 한다)
+  // - 영상이 트랙보다 길면 트랙을 루프, 짧으면 -t로 잘라 영상 길이가 항상 기준
   let audioInput = "";
   let audioMap = "";
+  const totalSec = totalMs / 1000;
   if (scenario.audio) {
     const a = scenario.audio;
-    const audioPath = isAbsolute(a.file) ? a.file : resolve(scenarioDir, a.file);
-    const totalSec = totalMs / 1000;
+    let audioPath: string;
+    if (/^https?:\/\//.test(a.file)) {
+      const hash = createHash("sha256").update(a.file).digest("hex").slice(0, 16);
+      audioPath = join(tmpdir(), `clipwise-audio-${hash}${a.file.match(/\.\w{2,4}$/)?.[0] ?? ".mp3"}`);
+      if (!existsSync(audioPath)) {
+        execSync(`curl -sL -o "${audioPath}" "${a.file}"`, { stdio: ["ignore", "ignore", "pipe"] });
+      }
+    } else {
+      audioPath = isAbsolute(a.file) ? a.file : resolve(scenarioDir, a.file);
+    }
     const af: string[] = [];
     if (a.volume !== 1) af.push(`volume=${a.volume}`);
     if (a.fadeIn > 0) af.push(`afade=t=in:d=${a.fadeIn / 1000}`);
     if (a.fadeOut > 0) af.push(`afade=t=out:st=${Math.max(0, totalSec - a.fadeOut / 1000)}:d=${a.fadeOut / 1000}`);
-    audioInput = `-i "${audioPath}" `;
-    audioMap = `-map ${segments.length}:a ${af.length ? `-af "${af.join(",")}" ` : ""}-c:a aac -b:a 192k -shortest `;
+    audioInput = `-stream_loop -1 -i "${audioPath}" `;
+    audioMap = `-map ${segments.length}:a ${af.length ? `-af "${af.join(",")}" ` : ""}-c:a aac -b:a 192k `;
   }
 
-  // 세그먼트가 준무손실(archive)이므로 손실 인코딩은 여기서 1회만 발생
+  // 세그먼트가 준무손실(archive)이므로 손실 인코딩은 여기서 1회만 발생.
+  // -t는 영상 길이 — 루프된 오디오가 영상을 늘리지 못하게 고정한다
   execSync(
     `ffmpeg -y ${segments.map((s) => `-i "${s.path}"`).join(" ")} ${audioInput}` +
       `-filter_complex "${filters};${concatInputs}concat=n=${segments.length}:v=1:a=0[v]" ` +
-      `-map "[v]" ${audioMap}-c:v libx264 -crf 16 -preset slow -movflags +faststart "${outPath}"`,
+      `-map "[v]" ${audioMap}-t ${totalSec.toFixed(3)} ` +
+      `-c:v libx264 -crf 16 -preset slow -movflags +faststart "${outPath}"`,
     { stdio: ["ignore", "ignore", "pipe"] },
   );
   const buffer = await readFile(outPath);
   await rm(tmp, { recursive: true, force: true }).catch(() => {});
+  for (const take of takes.values()) {
+    await rm(take.framesDir, { recursive: true, force: true }).catch(() => {});
+  }
   return buffer;
 }

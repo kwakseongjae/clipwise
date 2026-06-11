@@ -400,7 +400,10 @@ scenes:
 7. **Sensitive data**: `prepare.mask: [".email", ".amount"]` blurs elements at record time
    (follows scrolling — never ask the user to fake their data)
 8. **Music**: `audio: { file: bgm.mp3, bpm: 122, fadeOut: 1500 }` muxes BGM into the final
-   video AND snaps every scene cut onto the beat grid (beat-synced cuts)
+   video AND snaps every scene cut onto the beat grid (beat-synced cuts).
+   `file:` also accepts a URL (downloaded+cached on the user's machine — use license-free
+   sources like Mixkit, e.g. `https://assets.mixkit.co/music/132/132.mp3`, ~120bpm).
+   Track shorter than the video loops automatically; video length is always authoritative
 
 ## Critical Rules
 

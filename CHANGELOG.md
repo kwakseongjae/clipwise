@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-06-11
+
+### Added
+- **`audio.file` URL 지원** — http(s) URL이면 사용자 머신에서 다운로드+캐시.
+  재배포 불가 무료 트랙(Mixkit 등)을 한 줄로 사용 — 음원은 패키지에 동봉하지 않는다
+
+### Fixed
+- **긴 영상에서 BGM보다 영상이 잘리던 결함** — `-shortest` 제거, 트랙이 짧으면
+  자동 루프(`-stream_loop`), 영상 길이(`-t`)가 항상 기준
+- **푸티지 메모리 폭발 방지** — screen 테이크 프레임을 메모리 배열 대신 디스크
+  스트리밍(임시 디렉토리)으로 — 분 단위 테이크에서도 메모리 일정
+
+---
+
 ## [0.10.0] - 2026-06-11
 
 연출 4종 — 경쟁 도구 리서치(Screen Studio·Remotion·HyperFrames 등) 기반,

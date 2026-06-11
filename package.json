@@ -1,6 +1,6 @@
 {
   "name": "clipwise",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Scriptable cinematic screen recorder for product demos — YAML in, polished MP4 out",
   "type": "module",
   "main": "dist/index.js",

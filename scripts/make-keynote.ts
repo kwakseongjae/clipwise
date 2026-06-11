@@ -20,8 +20,17 @@ import { loadScenario, validateScenario, renderScenesTimeline } from "../dist/in
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
-const SCENES_YAML = (port: number) => `name: "Clipwise Keynote"
+const SCENES_YAML = (port: number, bgmPath: string) => `name: "Clipwise Keynote"
 viewport: { width: 1280, height: 800, deviceScaleFactor: 2 }
+
+# BGM: Mixkit "Hazy After Hours" (Mixkit Stock Music Free License — 영상 사용 가능,
+# 원본 재배포 불가라 레포에 포함하지 않고 빌드 시 다운로드). 120bpm → 비트 싱크 컷.
+audio:
+  file: ${bgmPath}
+  bpm: 120
+  volume: 0.32
+  fadeIn: 300
+  fadeOut: 2200
 
 prepare:
   hide: ["#cookie-banner"]
@@ -151,6 +160,15 @@ scenes:
 `;
 
 async function main() {
+  // BGM 확보 (캐시) — Mixkit Free License 트랙
+  const bgmPath = join(tmpdir(), "clipwise-bgm-hazy-after-hours.mp3");
+  try {
+    await readFile(bgmPath);
+  } catch {
+    const { execSync } = await import("child_process");
+    execSync(`curl -s -o "${bgmPath}" https://assets.mixkit.co/music/132/132.mp3`);
+  }
+
   const pageHtml = await readFile(resolve(__dirname, "bench-assets/scorecard-page.html"), "utf-8");
   const server = createServer((req, res) => {
     if (req.url === "/api/stats") {
@@ -175,7 +193,7 @@ async function main() {
     ],
   }));
   const scenarioPath = join(dir, "keynote.yaml");
-  await writeFile(scenarioPath, SCENES_YAML(port));
+  await writeFile(scenarioPath, SCENES_YAML(port, bgmPath));
 
   const scenario = await loadScenario(scenarioPath);
   const validation = validateScenario(scenario);
