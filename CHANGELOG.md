@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2] - 2026-06-11
+
+### Fixed
+- **ffmpeg 사전 확인** — 인코딩 시점(녹화 완료 후 몇 분 뒤)이 아니라 record 시작
+  전에 검사. ffmpeg 없는 사용자가 녹화에 시간을 쓰고 나서야 실패를 보던 문제 해소.
+  플랫폼별 설치 안내 + "GIF는 ffmpeg 없이 가능(-f gif)" 팁 출력
+
+---
+
 ## [0.12.1] - 2026-06-11
 
 콜드 스타트 외부 검증 피드백 반영 (Node 22 + ffmpeg 깨끗한 환경에서

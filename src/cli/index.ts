@@ -9,11 +9,30 @@ import { CanvasRenderer } from "../compose/canvas-renderer.js";
 import { encodeGif, encodeMp4Stream, savePngSequence } from "../compose/video-encoder.js";
 import { StreamingSession, ConcurrentSession } from "../compose/streaming-session.js";
 import type { PipelineProgress } from "../compose/streaming-session.js";
+import { execSync } from "child_process";
 import { writeFile, mkdir, access, copyFile, readFile, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { pathToFileURL, fileURLToPath } from "url";
 import { homedir } from "os";
+
+/**
+ * ffmpeg 사전 확인 — 인코딩 시점(녹화 후 몇 분 뒤)이 아니라 시작 전에 검사해
+ * 사용자의 시간을 지킨다. MP4/scenes 출력에만 필요 (GIF는 gifenc 사용).
+ */
+function ensureFfmpeg(spinner: ReturnType<typeof ora>): void {
+  try {
+    execSync("ffmpeg -version", { stdio: "ignore" });
+  } catch {
+    spinner.fail("ffmpeg not found — required for MP4 output");
+    console.error(chalk.red("\nInstall ffmpeg first:"));
+    console.error("  macOS:   brew install ffmpeg");
+    console.error("  Ubuntu:  sudo apt install ffmpeg");
+    console.error("  Windows: choco install ffmpeg");
+    console.error(chalk.dim("\n(Tip: GIF output works without ffmpeg — try -f gif)\n"));
+    process.exit(1);
+  }
+}
 
 /**
  * Chromium 가용성 보장 — 설치 명령이 exit 0이어도 바이너리가 없을 수 있으므로
@@ -67,7 +86,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.12.1");
+  .version("0.12.2");
 
 program
   .command("record")
@@ -129,7 +148,10 @@ program
       }
       spinner.succeed("Scenario is valid");
 
-      // 3. Check browser availability (설치 후 launch 재검증 포함)
+      // 3. 의존성 사전 확인 — 녹화에 시간을 쓰기 전에 실패해야 한다
+      if (scenario.output.format === "mp4" || scenario.scenes?.length) {
+        ensureFfmpeg(spinner);
+      }
       await ensureBrowser(spinner);
 
       // Scene System (v0.9 preview): scenes 타임라인이 있으면 전용 런너로 렌더
@@ -611,7 +633,10 @@ program
 
       spinner.succeed(`Demo scenario ready: ${chalk.bold(scenario.name)}`);
 
-      // Check browser (설치 후 launch 재검증 포함)
+      // 의존성 사전 확인
+      if (options.format !== "gif") {
+        ensureFfmpeg(spinner);
+      }
       await ensureBrowser(spinner);
 
       // Compose & encode
