@@ -22,7 +22,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.11.1");
+  .version("0.12.0");
 
 program
   .command("record")

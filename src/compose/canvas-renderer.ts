@@ -603,6 +603,8 @@ export class CanvasRenderer {
    * Uses a notify-on-progress pattern (same as streamWithWorkers) extended
    * with an intake coroutine that feeds the growing frames[] buffer.
    */
+  private static readonly EMPTY_SCREENSHOT = Buffer.alloc(0);
+
   private async *streamOnlineWithWorkers(
     source: AsyncIterable<CapturedFrame>,
     workerCount: number,
@@ -617,20 +619,25 @@ export class CanvasRenderer {
     let sourceComplete = false;
     let workerError: Error | null = null;
 
-    // Single notify slot — both intake and worker callbacks call trigger()
-    let notify: (() => void) | null = null;
-    const trigger = (): void => { notify?.(); notify = null; };
+    // Multi-waiter notify — intake 게이트와 소비 루프가 동시에 대기할 수 있다
+    let waiters: Array<() => void> = [];
+    const trigger = (): void => { const ws = waiters; waiters = []; for (const w of ws) w(); };
     const waitForProgress = (): Promise<void> =>
-      new Promise<void>((r) => { notify = r; });
+      new Promise<void>((r) => { waiters.push(r); });
 
     const completed = new Map<number, ComposedFrame>();
     const idleWorkers: Worker[] = [];
     let nextToDispatch = 0;
     let nextToYield = 0;
 
+    // 백프레셔: 완료(RGBA, 프레임당 수십 MB)가 소비되지 않은 채 쌓이지 않도록
+    // 디스패치를 소비 위치(nextToYield) 기준으로 제한한다
+    const MAX_BACKLOG = workerCount * 3;
     // Frame i is ready to dispatch when its lookahead window is satisfied
     const canDispatch = (i: number): boolean =>
-      i < frames.length && (sourceComplete || frames.length > i + transitionFrames);
+      i < frames.length &&
+      (sourceComplete || frames.length > i + transitionFrames) &&
+      i - nextToYield < MAX_BACKLOG;
 
     const effectiveScale = resolveZoomScale(
       this.effects.zoom.scale,
@@ -675,6 +682,9 @@ export class CanvasRenderer {
           output: this.output,
           context: computeContext(i),
         });
+        // postMessage가 버퍼를 복사했으므로 입력 스크린샷은 즉시 해제 —
+        // 이후 단계는 좌표 메타데이터만 읽는다 (긴 테이크 메모리 상한의 핵심)
+        frames[i] = { ...frames[i], screenshot: CanvasRenderer.EMPTY_SCREENSHOT };
       } else {
         idleWorkers.push(worker);
       }
@@ -714,12 +724,17 @@ export class CanvasRenderer {
       idleWorkers.push(worker); // start idle, will be dispatched once frames arrive
     }
 
-    // Intake: consume source concurrently with worker dispatch
+    // Intake: consume source concurrently with worker dispatch.
+    // 소비 위치보다 과도하게 앞서가면 입력 PNG가 쌓이므로 게이트로 제한한다
+    const INTAKE_AHEAD = Math.max(MAX_BACKLOG, transitionFrames + workerCount) + 16;
     const intakeTask = (async (): Promise<void> => {
       for await (const frame of source) {
         frames.push(frame);
         dispatchToIdle(); // new frame may satisfy lookahead for pending tasks
         trigger();
+        while (!workerError && frames.length - nextToYield > INTAKE_AHEAD) {
+          await waitForProgress();
+        }
       }
       sourceComplete = true;
       dispatchToIdle(); // flush: remaining frames no longer need lookahead
@@ -739,6 +754,8 @@ export class CanvasRenderer {
           const frame = completed.get(nextToYield)!;
           completed.delete(nextToYield); // free memory
           nextToYield++;
+          dispatchToIdle(); // 백로그 게이트가 풀렸으니 유휴 워커 재가동
+          trigger(); // 인테이크 게이트 해제
           yield frame;
           continue;
         }

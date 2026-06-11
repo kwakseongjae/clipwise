@@ -636,6 +636,11 @@ export interface CapturedFrame {
   isWaitingPhase?: boolean;
   /** Speed multiplier for this frame when in a smartWait phase. */
   displaySpeed?: number;
+  /**
+   * low-memory 스트리밍 녹화에서 이 프레임이 참조하는 원본(채널) 프레임 인덱스.
+   * screenshot이 빈 버퍼일 때, 소비자가 디스크에 받아둔 원본을 이 인덱스로 찾는다.
+   */
+  sourceIndex?: number;
 }
 
 export interface ComposedFrame {

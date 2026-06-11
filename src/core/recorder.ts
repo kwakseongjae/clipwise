@@ -133,6 +133,9 @@ export class ClipwiseRecorder {
   // Set during recordToChannel(); null in normal record() mode.
   private frameChannel: FrameChannel | null = null;
   private channelIndex = 0; // sequential index for channel-pushed frames
+  /** low-memory 채널 모드 — 버퍼는 스트림으로만 내보내고 내부에는 메타데이터만
+   *  보관한다. done의 frames는 빈 screenshot + sourceIndex(원본 참조)를 갖는다. */
+  private channelLowMemory = false;
 
   /**
    * Launch the browser and create a page with the scenario viewport.
@@ -193,6 +196,7 @@ export class ClipwiseRecorder {
     this.dedupStats = { received: 0, stored: 0, skipped: 0 };
     this.frameChannel = null;
     this.channelIndex = 0;
+    this.channelLowMemory = false;
   }
 
   /**
@@ -249,6 +253,11 @@ export class ClipwiseRecorder {
               this.channelIndex++,
             );
             this.frameChannel.push(frame);
+            // low-memory: 버퍼는 채널로 넘겼으니 내부에는 보관하지 않는다 —
+            // 분 단위 긴 테이크에서도 레코더 메모리가 일정해진다
+            if (this.channelLowMemory) {
+              rawFrame.buffer = Buffer.alloc(0);
+            }
           }
         }
 
@@ -422,13 +431,14 @@ export class ClipwiseRecorder {
    * Use this with CanvasRenderer.composeStreamOnline() to overlap recording
    * time with composition time — total wall-clock ≈ max(recordingMs, composeMs).
    */
-  recordToChannel(scenario: Scenario): RecordingHandle {
+  recordToChannel(scenario: Scenario, options?: { lowMemory?: boolean }): RecordingHandle {
     const channel = new FrameChannel();
 
     const done = (async (): Promise<RecordingSession> => {
       try {
         await this.init(scenario);
         this.frameChannel = channel;
+        this.channelLowMemory = options?.lowMemory ?? false;
 
         const startTime = Date.now();
 
@@ -1131,8 +1141,10 @@ export class ClipwiseRecorder {
       Math.round((recordingDurationMs / 1000) * this.targetFps),
     );
 
-    // If we already have enough frames, return as-is
-    if (targetFrameCount <= frames.length) return frames;
+    // If we already have enough frames, return as-is (sourceIndex = 자기 위치)
+    if (targetFrameCount <= frames.length) {
+      return frames.map((f, idx) => ({ ...f, sourceIndex: idx }));
+    }
 
     const startTime = frames[0].timestamp;
     const endTime = frames[frames.length - 1].timestamp;
@@ -1177,6 +1189,7 @@ export class ClipwiseRecorder {
       resampled.push({
         index: i,
         screenshot: frames[nearestIdx].screenshot,
+        sourceIndex: nearestIdx,
         timestamp: targetTimestamp,
         cursorPosition: cursorPos,
         clickPosition: clickEvent?.position ?? null,

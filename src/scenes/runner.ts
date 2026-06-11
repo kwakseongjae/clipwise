@@ -209,7 +209,10 @@ async function recordFootageTake(
     await browser.close();
   }
 
-  // 2. 녹화 — smartSpeed/speedRamp가 꺼져 있으므로 composed 프레임은 1:1
+  // 2. 녹화 — 전 구간 스트리밍 (메모리 O(1)):
+  //    레코더(lowMemory 채널) → 원본 PNG 디스크 → 리샘플 플랜(sourceIndex) →
+  //    디스크에서 읽어 온라인 합성 → 합성 PNG 디스크.
+  //    분 단위 긴 테이크에서도 프레임이 메모리에 쌓이지 않는다.
   const takeScenario: Scenario = {
     ...scenario,
     steps: scene.steps,
@@ -217,7 +220,15 @@ async function recordFootageTake(
     effects: footageEffects(scenario.effects),
   };
   const recorder = new ClipwiseRecorder();
-  const session = await recorder.record(takeScenario);
+  const handle = recorder.recordToChannel(takeScenario, { lowMemory: true });
+
+  // 2a. 원본 프레임을 도착 즉시 디스크로
+  const rawDir = await mkdtemp(join(tmpdir(), `clipwise-raw-${scene.id}-`));
+  for await (const frame of handle.frameStream) {
+    await writeFile(join(rawDir, `${frame.index}.png`), frame.screenshot);
+  }
+  // 2b. 리샘플 플랜 — frames는 빈 screenshot + sourceIndex(원본 참조)
+  const session = await handle.done;
 
   // dpr 슈퍼샘플 해상도로 합성 — 2×면 비네트 크롭 확대 시 진짜 디테일이 남는다
   const renderer = new CanvasRenderer(
@@ -226,11 +237,19 @@ async function recordFootageTake(
     scene.steps,
   );
 
-  // 합성 → PNG → 디스크 스트리밍 — 프레임 배열을 메모리에 들지 않아
-  // 분 단위 긴 테이크에서도 메모리가 일정하다
+  // 2c. 플랜 순서대로 원본을 디스크에서 읽어 한 프레임씩 온라인 합성
+  const planStream = (async function* () {
+    for (const f of session.frames) {
+      yield { ...f, screenshot: await readFile(join(rawDir, `${f.sourceIndex ?? f.index}.png`)) };
+    }
+  })();
+
   const framesDir = await mkdtemp(join(tmpdir(), `clipwise-footage-${scene.id}-`));
   let count = 0;
-  for await (const f of renderer.composeStream(session.frames)) {
+  const composed = renderer.canStreamOnline()
+    ? renderer.composeStreamOnline(planStream)
+    : renderer.composeStream(session.frames); // footageEffects상 도달 불가 폴백
+  for await (const f of composed) {
     const png = f.rawInfo
       ? await sharp(f.buffer, {
           raw: { width: f.rawInfo.width, height: f.rawInfo.height, channels: f.rawInfo.channels },
@@ -241,6 +260,7 @@ async function recordFootageTake(
     await writeFile(join(framesDir, `${count}.png`), png);
     count++;
   }
+  await rm(rawDir, { recursive: true, force: true }).catch(() => {});
 
   const anchors: number[] = [];
   for (let k = 0; k < scene.steps.length; k++) {

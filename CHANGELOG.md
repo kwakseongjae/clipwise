@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-06-11
+
+레코더 스트리밍화 — 분 단위 롱테이크 대응. 70초 테이크(dpr 2) 실측:
+**최대 RSS 16.2GB → 2.3GB**, 이제 메모리가 테이크 길이와 무관한 상수 상한.
+
+### Added
+- **레코더 low-memory 채널 모드** — `recordToChannel(scenario, { lowMemory: true })`:
+  프레임 버퍼는 스트림으로만 내보내고 내부에는 메타데이터만 보관.
+  리샘플 결과에 `sourceIndex`(원본 프레임 참조) 부착 — 소비자가 디스크에 받아둔
+  원본을 참조해 합성한다 (`CapturedFrame.sourceIndex` 신설)
+- scenes 푸티지 테이크가 전 구간 스트리밍으로 전환: 레코더 → 원본 PNG 디스크 →
+  리샘플 플랜 → 디스크 읽기 온라인 합성 → 합성 PNG 디스크
+
+### Fixed
+- **온라인 합성 파이프라인 백프레셔** — `composeStreamOnline` 워커 경로가
+  ① 입력 프레임을 무한 누적하고 ② 소비자가 느리면 완료 RGBA(프레임당 수십 MB)를
+  무한 적체하던 문제. 디스패치 백로그 게이트(소비 위치 기준) + 인테이크 게이트
+  (다중 대기자 notify로 교착 없이) + 워커 전달 후 입력 버퍼 즉시 해제
+
+---
+
 ## [0.11.1] - 2026-06-11
 
 ### Changed
