@@ -375,6 +375,8 @@ export const AudioConfigSchema = z.object({
   fadeIn: z.number().min(0).default(0),
   /** Fade-out duration in milliseconds. */
   fadeOut: z.number().min(0).default(0),
+  /** 트랙 BPM — scenes 타임라인에서 지정 시 신 길이를 비트 격자에 스냅(비트 싱크 컷). */
+  bpm: z.number().min(40).max(220).optional(),
 });
 
 export type AudioConfig = z.infer<typeof AudioConfigSchema>;
@@ -436,6 +438,8 @@ export type MockRoute = z.infer<typeof MockRouteSchema>;
 export const PrepareConfigSchema = z.object({
   /** 녹화에서 숨길 요소의 CSS 셀렉터 (쿠키 배너, dev 오버레이 등). */
   hide: z.array(z.string().min(1)).default([]),
+  /** 블러 처리할 요소의 CSS 셀렉터 (이메일, 금액 등 민감 정보) — 스크롤·이동을 따라간다. */
+  mask: z.array(z.string().min(1)).default([]),
   /** Date/Date.now를 이 시각으로 고정 (ISO 8601, 예: "2026-06-10T09:00:00Z"). */
   freezeTime: z.string().optional(),
   /** Math.random을 이 시드의 결정론적 PRNG로 대체. */
@@ -483,9 +487,10 @@ export const ScreenSceneSchema = z.object({
   steps: z.array(StepSchema).min(1),
 });
 
-/** 선 드로잉 주석 — 좌표는 셀렉터 실측(권장) 또는 푸티지 원본 px. */
+/** 푸티지 주석 — circle/arrow(선 드로잉), spotlight(주변 디밍).
+ *  좌표는 셀렉터 실측(권장) 또는 푸티지 원본 px. */
 export const SceneFxSchema = z.object({
-  kind: z.enum(["circle", "arrow"]),
+  kind: z.enum(["circle", "arrow", "spotlight"]),
   /** 대상 요소 셀렉터 — bounding box를 실측해 좌표로 사용. */
   selector: z.string().optional(),
   /** 명시 좌표 — circle: [x,y,w,h], arrow: [x1,y1,x2,y2]. */
@@ -519,8 +524,16 @@ export const VignetteSceneSchema = z.object({
       maxH: z.number().optional(),
     })
     .optional(),
-  /** 푸시인 카메라 (스케일 from→to). */
-  push: z.object({ from: z.number().default(1), to: z.number().default(1) }).optional(),
+  /** 푸시인 카메라 (스케일 from→to).
+   *  origin: 푸시 중심점 — 셀렉터(실측) 지정 시 그 요소를 향해 밀어 들어가
+   *  다음 신의 크롭과 이어지는 매치컷을 만든다. 기본은 화면 중앙 약간 위. */
+  push: z
+    .object({
+      from: z.number().default(1),
+      to: z.number().default(1),
+      origin: z.string().optional(),
+    })
+    .optional(),
   /** 푸티지 인용 시작점 — 초(number) 또는 step 경계 anchor. */
   start: z
     .union([z.number(), z.object({ step: z.number().int().min(0), offset: z.number().default(0) })])

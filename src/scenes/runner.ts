@@ -281,6 +281,7 @@ function vignetteProps(
   serverBase: string,
   scenario: Scenario,
   brand: BrandMotion,
+  durMs: number,
 ): Record<string, string | number> {
   const W = scenario.viewport.width;
   const H = scenario.viewport.height;
@@ -312,7 +313,7 @@ function vignetteProps(
   const props: Record<string, string | number> = {
     accent: brand.accent,
     font: brand.font,
-    dur: scene.duration / 1000,
+    dur: durMs / 1000,
     layout: scene.layout,
     num: scene.num ?? "",
     label: scene.label ?? "",
@@ -332,6 +333,14 @@ function vignetteProps(
   };
   if (scene.code?.length) props.code = scene.code.join("||");
 
+  // 매치컷 — push 중심점을 셀렉터 실측 좌표로 (다음 신의 크롭을 향해 밀어 들어감)
+  if (scene.push?.origin) {
+    const box = take.boxes.get(scene.push.origin);
+    if (!box) throw new Error(`vignette push.origin selector "${scene.push.origin}" not found in footage "${scene.footage}"`);
+    props.pushOx = Math.max(0, Math.min(100, ((box.x + box.width / 2 - crop.x) / crop.w) * 100)).toFixed(1);
+    props.pushOy = Math.max(0, Math.min(100, ((box.y + box.height / 2 - crop.y) / crop.h) * 100)).toFixed(1);
+  }
+
   if (brand.annotations && scene.fx.length > 0) {
     props.fx = scene.fx
       .map((fx) => {
@@ -340,9 +349,9 @@ function vignetteProps(
           const box = take.boxes.get(fx.selector);
           if (!box) throw new Error(`vignette fx selector "${fx.selector}" not found in footage "${scene.footage}"`);
           coords =
-            fx.kind === "circle"
-              ? [box.x, box.y, box.width, box.height]
-              : [box.x - 160, box.y + 120, box.x - 12, box.y + box.height / 2];
+            fx.kind === "arrow"
+              ? [box.x - 160, box.y + 120, box.x - 12, box.y + box.height / 2]
+              : [box.x, box.y, box.width, box.height]; // circle | spotlight
         }
         return `${fx.kind}@${coords!.join(",")}@${fx.delay}`;
       })
@@ -370,6 +379,7 @@ export async function renderScenesTimeline(
     if (scene.type !== "vignette") continue;
     const set = selectorsByFootage.get(scene.footage) ?? new Set<string>();
     if (scene.crop?.selector) set.add(scene.crop.selector);
+    if (scene.push?.origin) set.add(scene.push.origin);
     for (const fx of scene.fx) if (fx.selector) set.add(fx.selector);
     selectorsByFootage.set(scene.footage, set);
   }
@@ -401,33 +411,41 @@ export async function renderScenesTimeline(
   const port = (server.address() as { port: number }).port;
 
   // 3. 타임라인 신 캡처
+  // 비트 싱크 컷 — audio.bpm 지정 시 신 길이를 비트 격자(60000/bpm ms)에 스냅해
+  // 모든 하드컷이 비트 위에 떨어진다
+  const beatMs = scenario.audio?.bpm ? 60000 / scenario.audio.bpm : 0;
+  const durations = timeline.map((sc) =>
+    beatMs ? Math.max(beatMs, Math.round(sc.duration / beatMs) * beatMs) : sc.duration,
+  );
+
   // 스레드(연결 선): 영상 전체 길이 대비 각 신의 진행 구간을 선형 배분 —
   // 하드컷을 넘어도 같은 경로 위에서 끊김 없이 전진한다
-  const totalMs = timeline.reduce((s, sc) => s + sc.duration, 0);
+  const totalMs = durations.reduce((s, d) => s + d, 0);
   let elapsedMs = 0;
   const segments: { path: string; seconds: number }[] = [];
   const tmp = await mkdtemp(join(tmpdir(), "clipwise-scenes-"));
   try {
     for (let i = 0; i < timeline.length; i++) {
       const scene = timeline[i];
+      const dur = durations[i];
       const label = scene.type === "motion" ? scene.template : `vignette(${scene.footage})`;
       onProgress?.({ scene: i + 1, total: timeline.length, label });
 
       const thread: Record<string, string | number> = brand.annotations
         ? {
             threadFrom: (elapsedMs / totalMs).toFixed(4),
-            threadTo: ((elapsedMs + scene.duration) / totalMs).toFixed(4),
+            threadTo: ((elapsedMs + dur) / totalMs).toFixed(4),
           }
         : {};
-      elapsedMs += scene.duration;
+      elapsedMs += dur;
 
       let segment: { buffer: Buffer; seconds: number };
       if (scene.type === "motion") {
         const url = resolveMotionTemplate(scene.template, scenarioDir);
         segment = await captureMotionSegment(
           url,
-          { accent: brand.accent, font: brand.font, dur: scene.duration / 1000, ...scene.props, ...thread },
-          scene.duration,
+          { accent: brand.accent, font: brand.font, dur: dur / 1000, ...scene.props, ...thread },
+          dur,
           scenario,
         );
       } else {
@@ -435,8 +453,8 @@ export async function renderScenesTimeline(
         const url = resolveMotionTemplate("vignette", scenarioDir);
         segment = await captureMotionSegment(
           url,
-          { ...vignetteProps(scene, take, `http://localhost:${port}/${scene.footage}`, scenario, brand), ...thread },
-          scene.duration,
+          { ...vignetteProps(scene, take, `http://localhost:${port}/${scene.footage}`, scenario, brand, dur), ...thread },
+          dur,
           scenario,
         );
       }
@@ -452,11 +470,27 @@ export async function renderScenesTimeline(
   const filters = segments.map((_, i) => `[${i}:v]format=yuv420p[v${i}]`).join(";");
   const concatInputs = segments.map((_, i) => `[v${i}]`).join("");
   const outPath = join(tmp, "timeline.mp4");
+
+  // BGM 트랙 — audio.file 지정 시 최종 합성에 1회 뮤지컬화 (volume/fade 지원)
+  let audioInput = "";
+  let audioMap = "";
+  if (scenario.audio) {
+    const a = scenario.audio;
+    const audioPath = isAbsolute(a.file) ? a.file : resolve(scenarioDir, a.file);
+    const totalSec = totalMs / 1000;
+    const af: string[] = [];
+    if (a.volume !== 1) af.push(`volume=${a.volume}`);
+    if (a.fadeIn > 0) af.push(`afade=t=in:d=${a.fadeIn / 1000}`);
+    if (a.fadeOut > 0) af.push(`afade=t=out:st=${Math.max(0, totalSec - a.fadeOut / 1000)}:d=${a.fadeOut / 1000}`);
+    audioInput = `-i "${audioPath}" `;
+    audioMap = `-map ${segments.length}:a ${af.length ? `-af "${af.join(",")}" ` : ""}-c:a aac -b:a 192k -shortest `;
+  }
+
   // 세그먼트가 준무손실(archive)이므로 손실 인코딩은 여기서 1회만 발생
   execSync(
-    `ffmpeg -y ${segments.map((s) => `-i "${s.path}"`).join(" ")} ` +
+    `ffmpeg -y ${segments.map((s) => `-i "${s.path}"`).join(" ")} ${audioInput}` +
       `-filter_complex "${filters};${concatInputs}concat=n=${segments.length}:v=1:a=0[v]" ` +
-      `-map "[v]" -c:v libx264 -crf 16 -preset slow -movflags +faststart "${outPath}"`,
+      `-map "[v]" ${audioMap}-c:v libx264 -crf 16 -preset slow -movflags +faststart "${outPath}"`,
     { stdio: ["ignore", "ignore", "pipe"] },
   );
   const buffer = await readFile(outPath);

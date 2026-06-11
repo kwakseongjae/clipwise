@@ -18,6 +18,15 @@ export function buildHideCss(selectors: string[]): string {
 }
 
 /**
+ * mask 셀렉터 목록 → 블러 CSS.
+ * 합성 단계의 박스 블러와 달리 요소에 직접 적용되므로 스크롤·리스트 재정렬을
+ * 자동으로 따라간다 — 셀렉터를 아는 도구만이 가능한 방식.
+ */
+export function buildMaskCss(selectors: string[]): string {
+  return `${selectors.join(",\n")} {\n  filter: blur(10px) !important;\n  border-radius: 4px;\n}`;
+}
+
+/**
  * CSS 텍스트 → init script.
  * document_start 시점에는 head가 없을 수 있으므로 readyState에 따라
  * DOMContentLoaded까지 지연한다. 모든 네비게이션에서 재적용된다.
@@ -136,6 +145,9 @@ export async function applyPrepare(
   const cssChunks: string[] = [];
   if (prepare.hide.length > 0) {
     cssChunks.push(buildHideCss(prepare.hide));
+  }
+  if (prepare.mask.length > 0) {
+    cssChunks.push(buildMaskCss(prepare.mask));
   }
   if (prepare.inject?.css) {
     const cssFiles = Array.isArray(prepare.inject.css) ? prepare.inject.css : [prepare.inject.css];

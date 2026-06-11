@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-06-11
+
+연출 4종 — 경쟁 도구 리서치(Screen Studio·Remotion·HyperFrames 등) 기반,
+셀렉터·결정론이라는 구조적 우위를 살린 기능들.
+
+### Added
+- **`prepare.mask`** — 셀렉터 블러 마스크. 민감 정보(이메일·금액)를 녹화 시점에
+  요소 단위로 블러 — 스크롤·이동을 자동으로 따라간다
+- **`fx: spotlight`** — 대상만 남기고 주변을 디밍 (악센트 림 포함, 카메라 추적)
+- **`push.origin`(매치컷)** — 셀렉터를 향해 푸시인 → 다음 신의 크롭으로 카메라가 이어짐
+- **BGM + 비트 싱크 컷** — `audio: { file, bpm }` 지정 시 BGM이 최종 영상에 뮤지컬화되고
+  모든 신 길이가 비트 격자(60000/bpm ms)에 스냅되어 컷이 비트 위에 떨어진다
+  (volume/fadeIn/fadeOut 지원)
+
+---
+
 ## [0.9.1] - 2026-06-11
 
 온보딩 — "설치 후 헤매지 않게".

@@ -375,12 +375,14 @@ scenes:
     label: "Smart Speed"
     caption: "Loading compressed, *results crisp*"
     crop: { selector: ".panel", pad: 14, maxH: 250 }   # selector-measured, never guess pixels
-    push: { from: 1.05, to: 1 }        # push-in/out camera
+    push: { from: 1.05, to: 1, origin: ".panel" }  # origin: match-cut — push toward
+                                       # a selector so the NEXT scene's crop continues the move
     start: { step: 3, offset: 0 }      # quote footage from a step boundary (or seconds)
     rate: 1.15                         # playback speed of the quoted footage
-    fx:                                # line-draw annotations on the footage
-      - { kind: circle, selector: "#revenue", delay: 2500 }
-      - { kind: arrow, selector: ".panel", delay: 2900 }
+    fx:                                # annotations on the footage
+      - { kind: circle, selector: "#revenue", delay: 2500 }    # hand-drawn circle
+      - { kind: arrow, selector: ".panel", delay: 2900 }       # drawn arrow
+      - { kind: spotlight, selector: "#revenue", delay: 2400 } # dim everything else
     # code: ["prepare:", "  hide: [...]"]   # split layout left code card
 ```
 
@@ -395,6 +397,10 @@ scenes:
 5. **Footage effects**: in scenes mode set only `cursor:` (highlight: false) — zoom/frame/background
    are handled by the vignette compositor, not the recorder
 6. Keep one screen take (~12-15s) and let vignettes quote segments via `start: { step: N }`
+7. **Sensitive data**: `prepare.mask: [".email", ".amount"]` blurs elements at record time
+   (follows scrolling — never ask the user to fake their data)
+8. **Music**: `audio: { file: bgm.mp3, bpm: 122, fadeOut: 1500 }` muxes BGM into the final
+   video AND snaps every scene cut onto the beat grid (beat-synced cuts)
 
 ## Critical Rules
 

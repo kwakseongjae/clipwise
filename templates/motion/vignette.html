@@ -113,6 +113,15 @@
   /* ── 선 드로잉 주석 레이어 (fx=circle@…;arrow@…) — 카드 위에 그려짐 ── */
   .annotations { position: absolute; inset: 0; z-index: 5; pointer-events: none;
     overflow: visible; }
+  /* 스포트라이트 — 대상만 남기고 주변을 디밍 (fx kind: spotlight) */
+  .spotlight { position: absolute; z-index: 4; pointer-events: none;
+    /* spread가 너무 크면 Chromium이 그림자를 클램프하므로 카드 크기 수준으로 */
+    box-shadow: 0 0 0 1400px rgba(12, 12, 16, 0.52); border-radius: 10px;
+    /* 다크 UI에서도 컷아웃이 인지되도록 은은한 악센트 림 */
+    outline: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    outline-offset: 3px;
+    opacity: 0; animation: spot-in 550ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+  @keyframes spot-in { to { opacity: 1; } }
   .annotations .stroke { stroke: var(--accent); fill: none; stroke-width: 3.5;
     stroke-linecap: round; stroke-linejoin: round;
     stroke-dasharray: 1; stroke-dashoffset: 1;
@@ -178,9 +187,12 @@
     card.style.setProperty("--push-from", P.get("pushFrom") || "1");
     card.style.setProperty("--push-to", P.get("pushTo") || "1");
     const fullCrop = cw >= SRC_W;
+    // push origin — 매치컷: 다음 신의 크롭 중심을 향해 밀어 들어가도록 중심점 지정
+    const pushOx = num("pushOx", 50), pushOy = num("pushOy", 42);
     card.innerHTML = `
       ${fullCrop ? '<div class="titlebar"><i></i><i></i><i></i></div>' : ""}
-      <div class="viewport"><div class="pusher" style="animation-duration:${num("dur", 4)}s">
+      <div class="viewport"><div class="pusher"
+        style="animation-duration:${num("dur", 4)}s; transform-origin:${pushOx}% ${pushOy}%">
         <img class="footage" id="footage"
              style="width:${SRC_W * scale}px;height:${SRC_H * scale}px;left:${-cx * scale}px;top:${-cy * scale}px" />
       </div></div>`;
@@ -224,6 +236,15 @@
       for (const spec of fxSpecs) {
         const [kind, coords, delay = "0"] = spec.split("@");
         const n = coords.split(",").map(Number);
+        if (kind === "spotlight") {
+          // 푸시 레이어 안에 디밍 컷아웃 — 푸티지에 앵커링되어 카메라를 따라간다
+          const [sx, sy] = toCard(n[0], n[1]);
+          const spot = document.createElement("div");
+          spot.className = "spotlight";
+          spot.style.cssText = `left:${sx - 6}px;top:${sy - 6}px;width:${n[2] * effScale + 12}px;height:${n[3] * effScale + 12}px;animation-delay:${delay}ms`;
+          card.querySelector(".pusher").appendChild(spot);
+          continue;
+        }
         if (kind === "circle") {
           // 손그림 느낌: 살짝 큰 타원 + 미세 회전
           const [x0, y0] = toCard(n[0], n[1]);
