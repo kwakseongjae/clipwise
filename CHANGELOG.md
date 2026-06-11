@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-06-11
+
+콜드 스타트 외부 검증 피드백 반영 (Node 22 + ffmpeg 깨끗한 환경에서
+init→record 전 과정 실측 리포트 기반).
+
+### Fixed
+- **Chromium 설치 거짓 성공** — 설치 명령이 exit 0이어도 바이너리가 없을 수 있는
+  환경(프록시/오프라인)에서 "installed successfully"를 출력하고 직후 죽던 버그.
+  설치 후 실제 launch 재검증을 통과해야만 성공 선언, 실패 시 우회 안내 출력
+
+### Changed
+- `validate` 성공 출력에 범위 명시 — "스키마/논리 검증만, 셀렉터는 라이브 페이지
+  대조 안 함" (에이전트가 validate 통과를 record 성공 보장으로 과신하는 것 방지)
+- 스킬 — 같은 validate 주의 + **CSR 앱 셀렉터 탐색 가이드**(curl은 hydration 전
+  빈 셸을 받으므로 소스 코드/브라우저 도구로 찾을 것)
+- `init` 출력에 기대치 안내 — 첫 실행 Chromium ~100MB 다운로드, 23초 키노트
+  렌더 시간(macOS ~3분 / Linux·Windows 8–12분)
+
+---
+
 ## [0.12.0] - 2026-06-11
 
 레코더 스트리밍화 — 분 단위 롱테이크 대응. 70초 테이크(dpr 2) 실측:

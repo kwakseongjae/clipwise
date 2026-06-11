@@ -466,6 +466,9 @@ npx clipwise validate <scenario.yaml>
 2. If `.clipwise/` doesn't exist, run `npx clipwise init` first
 3. Generate a complete scenario at `.clipwise/scenarios/<name>.yaml`
 4. Run `npx clipwise validate .clipwise/scenarios/<name>.yaml` to check for errors
+   — NOTE: validate covers schema/logic only; it does NOT check selectors against a live
+   page. A passing validate does not guarantee record will succeed. Treat record's
+   timeout errors (they name the failing selector) as your correction signal
 5. If valid, run `npx clipwise record .clipwise/scenarios/<name>.yaml -f mp4`
 6. If the user has specific selectors, use them. Otherwise suggest inspecting the page first
 7. If the page shows cookie banners, dev overlays, live dates, or random data — add a `prepare:` block instead of asking the user to change their app
@@ -473,6 +476,11 @@ npx clipwise validate <scenario.yaml>
 ## Selector Discovery
 
 If the user doesn't know selectors, help them find them:
+
+**CSR apps (React/Next/Vue SPA): do NOT rely on `curl`** — the HTML is an empty shell
+before hydration. Instead: (1) read the project's source code for ids/classNames/test-ids
+(you usually have it open), (2) or load the page with a browser tool and inspect the
+rendered DOM. `curl` only works for server-rendered/static pages.
 ```bash
 # Open the target URL in a browser and inspect elements
 npx playwright open <url>

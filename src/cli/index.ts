@@ -15,6 +15,51 @@ import { join, resolve, dirname } from "path";
 import { pathToFileURL, fileURLToPath } from "url";
 import { homedir } from "os";
 
+/**
+ * Chromium 가용성 보장 — 설치 명령이 exit 0이어도 바이너리가 없을 수 있으므로
+ * (프록시/오프라인 환경) 설치 후 반드시 실제 launch로 재검증한다.
+ */
+async function ensureBrowser(spinner: ReturnType<typeof ora>): Promise<void> {
+  const { chromium } = await import("playwright");
+  const tryLaunch = async (): Promise<void> => {
+    const b = await chromium.launch({ headless: true });
+    await b.close();
+  };
+
+  spinner.start("Checking browser...");
+  try {
+    await tryLaunch();
+    spinner.succeed("Browser ready");
+    return;
+  } catch {
+    spinner.fail("Chromium not found");
+  }
+
+  console.log(chalk.yellow("\nInstalling Chromium (one-time setup, ~100 MB download)...\n"));
+  const { execSync } = await import("child_process");
+  const installFailed = (): never => {
+    console.error(chalk.red(
+      "\nChromium is still not runnable after install.\n" +
+      "If you are behind a proxy or offline, download manually:\n" +
+      "  npx playwright install chromium\n" +
+      "or point PLAYWRIGHT_BROWSERS_PATH at an existing installation.\n",
+    ));
+    process.exit(1);
+  };
+  try {
+    execSync("npx playwright install chromium", { stdio: "inherit" });
+  } catch {
+    installFailed();
+  }
+  // 설치 명령 성공 ≠ 설치 성공 — 재검증 통과 시에만 성공을 선언한다
+  try {
+    await tryLaunch();
+    console.log(chalk.green("\nChromium installed and verified.\n"));
+  } catch {
+    installFailed();
+  }
+}
+
 const program = new Command();
 
 program
@@ -22,7 +67,7 @@ program
   .description(
     "Playwright-based cinematic screen recorder for product demos",
   )
-  .version("0.12.0");
+  .version("0.12.1");
 
 program
   .command("record")
@@ -84,25 +129,8 @@ program
       }
       spinner.succeed("Scenario is valid");
 
-      // 3. Check browser availability
-      spinner.start("Checking browser...");
-      try {
-        const { chromium } = await import("playwright");
-        const testBrowser = await chromium.launch({ headless: true });
-        await testBrowser.close();
-        spinner.succeed("Browser ready");
-      } catch {
-        spinner.fail("Chromium not found");
-        console.log(chalk.yellow("\nInstalling Chromium (one-time setup)...\n"));
-        const { execSync } = await import("child_process");
-        try {
-          execSync("npx playwright install chromium", { stdio: "inherit" });
-          console.log(chalk.green("\nChromium installed successfully!\n"));
-        } catch {
-          console.error(chalk.red("\nFailed to install Chromium. Run manually:\n  npx playwright install chromium\n"));
-          process.exit(1);
-        }
-      }
+      // 3. Check browser availability (설치 후 launch 재검증 포함)
+      await ensureBrowser(spinner);
 
       // Scene System (v0.9 preview): scenes 타임라인이 있으면 전용 런너로 렌더
       if (scenario.scenes?.length) {
@@ -268,6 +296,9 @@ program
       if (result.valid) {
         console.log(
           chalk.green("\nScenario is valid and ready to record."),
+        );
+        console.log(
+          chalk.dim("Note: validation covers schema & logic only — selectors are not checked against a live page."),
         );
       } else {
         console.log(
@@ -518,6 +549,7 @@ catchphrases:
     console.log(`  1. Edit ${chalk.bold("keynote.yaml")} — swap the url + selectors for your app`);
     console.log(`  2. Edit ${chalk.bold("brand.yaml")} — your accent color & catchphrases`);
     console.log(`  3. Or let AI write scenarios: ${chalk.bold("clipwise install-skill")} → ask ${chalk.bold("/clipwise")} in Claude Code`);
+    console.log(chalk.dim("\nFirst run downloads Chromium (~100 MB). Rendering a ~23s keynote takes ~3 min on macOS (8-12 min on Linux/Windows)."));
     console.log(`\nOutput lands in ${chalk.bold(".clipwise/output/")} · remove every trace: ${chalk.bold("rm -rf .clipwise")}`);
     console.log(`Docs: ${chalk.bold("https://kwakseongjae.github.io/clipwise/")}\n`);
   });
@@ -579,24 +611,8 @@ program
 
       spinner.succeed(`Demo scenario ready: ${chalk.bold(scenario.name)}`);
 
-      // Check browser
-      spinner.start("Checking browser...");
-      try {
-        const { chromium } = await import("playwright");
-        const testBrowser = await chromium.launch({ headless: true });
-        await testBrowser.close();
-        spinner.succeed("Browser ready");
-      } catch {
-        spinner.fail("Chromium not found");
-        console.log(chalk.yellow("\nInstalling Chromium (one-time setup)...\n"));
-        const { execSync } = await import("child_process");
-        try {
-          execSync("npx playwright install chromium", { stdio: "inherit" });
-        } catch {
-          console.error(chalk.red("\nFailed to install Chromium. Run: npx playwright install chromium\n"));
-          process.exit(1);
-        }
-      }
+      // Check browser (설치 후 launch 재검증 포함)
+      await ensureBrowser(spinner);
 
       // Compose & encode
       await mkdir(options.output, { recursive: true });
